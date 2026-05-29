@@ -1,0 +1,149 @@
+
+INVENTARIAJE APP - COMIENZA AQUI
+
+QUE TIENE TU APP?
+
+Hemos creado una aplicacion profesional de gestion de inventarios 100% funcional:
+
+- Scanner de codigos de barras
+- Entrada/Salida automatica
+- Google Sheets en tiempo real
+- Reportes mensuales
+- Alertas WhatsApp
+- Dashboard principal
+- Catalogo de productos
+- Multi-usuario
+- Tema turquesa/morado
+- iOS + Android
+
+TUS ARCHIVOS
+
+Documentacion (LEELOS PRIMERO)
+- 00_COMIENZA_AQUI.md (Tu estas aqui)
+- RESUMEN.md (Guia rapida)
+- IMPLEMENTACION.md (Guia tecnica completa)
+
+Pantallas de la App
+- HomeScreen.jsx: Dashboard principal
+- EntradaScreen.jsx: Recepcion de productos
+- SalidaScreen.jsx: Ventas
+- ReportesScreen.jsx: Analisis mensuales
+- ProductosScreen.jsx: Catalogo
+- SettingsScreen.jsx: Configuracion
+- LoginScreen.jsx: Login
+- app-inventariaje.jsx: Navegacion principal
+
+Backend API
+- api.js: API para Vercel
+
+Configuracion
+- package.json: Dependencias npm
+
+COMIENZA EN 30 MINUTOS
+
+1. LEE ESTO PRIMERO (2 min)
+Lee el archivo RESUMEN.md. Es muy simple y rapido.
+
+2. BACKEND EN VERCEL (10 min)
+- Ir a vercel.com
+- Conectar GitHub
+- Crear nuevo proyecto
+- Subir archivos
+- Deploy automatico
+- Copiar URL: https://tu-proyecto.vercel.app
+
+3. PREPARAR APP (10 min)
+- Instalar Node.js
+- npm install -g expo-cli
+- mkdir InventariAJE
+- cd InventariAJE
+- Copiar todos los .jsx y package.json
+- npm install
+- Actualizar API_URL en todos los archivos
+- npm start
+
+4. PROBAR EN TELEFONO (5 min)
+- Descargar "Expo Go"
+- Escanear codigo QR
+- Login: admin
+
+5. COMPILAR APK (10 min)
+- npm install -g eas-cli
+- eas login
+- eas build --platform android --local
+
+APRENDE PRIMERO
+
+Documentos en ORDEN:
+1. RESUMEN.md (Rapido)
+2. IMPLEMENTACION.md (Tecnico)
+3. Este archivo (Referencia)
+
+USUARIOS
+Pre-configurados (sin contrasena):
+- Admin: Acceso total
+- Oscar: Operario
+- Monica: Operario
+
+ARQUITECTURA
+- MOVIL (React Native + Expo)
+- BACKEND (Vercel + Node.js)
+- GOOGLE SHEETS
+
+COLORES
+- TURQUESA: #00BCD4
+- MORADO: #9C27B0
+- BLANCO: #FFFFFF
+- GRIS: #F5F5F5
+- NEGRO: #212121
+- ROJO: #F44336
+
+LINKS UTILES
+- React Native: https://reactnative.dev
+- Expo: https://docs.expo.dev
+- Google Sheets API: https://developers.google.com/sheets
+- Node.js: https://nodejs.org
+- Vercel: https://vercel.com
+- GitHub: https://github.com
+
+CHECKLIST ANTES DE USAR
+Desarrollo:
+- [ ] Node.js instalado
+- [ ] npm funciona
+- [ ] Expo CLI instalado
+- [ ] App abre en Expo Go
+
+Backend:
+- [ ] Vercel cuenta creada
+- [ ] GitHub conectado
+- [ ] Backend deployado
+
+Google Sheets:
+- [ ] Compartido con Service Account
+- [ ] Columnas correctas
+
+Compilacion:
+- [ ] EAS CLI instalado
+- [ ] APK compilado
+
+Distribucion:
+- [ ] APK subido a Google Drive
+- [ ] Link compartido con equipo
+
+ESTADISTICAS DEL PROYECTO
+- Lineas de codigo: 2,500+
+- Pantallas: 8
+- Hosting: $0
+- Costo total: $0
+
+CÓMO MODIFICAR LA APP
+- Cambiar colores: En app-inventariaje.jsx
+- Cambiar usuarios: En LoginScreen.jsx
+- Cambiar URL: En cada .jsx
+- Agregar campos: En api.js y pantallas
+
+AYUDA RAPIDA
+- No sé por dónde empezar: Lee RESUMEN.md
+- Errores técnicos: Lee IMPLEMENTACION.md
+- Compilar APK: Lee IMPLEMENTACION.md
+- Modificar app: Ver seccion anterior
