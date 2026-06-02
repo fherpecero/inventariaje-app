@@ -17,7 +17,7 @@ import { BarCodeScanner } from 'expo-barcode-scanner';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../app-inventariaje';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = 'https://inventariaje-app.vercel.app';
 
 export default function SalidaScreen() {
   const [hasPermission, setHasPermission] = useState(null);
