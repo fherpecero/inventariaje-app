@@ -1,13 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>📦 InventariAJE App</Text>
-      <Text style={styles.subtitle}>Versión 1.0.0</Text>
-      <StatusBar style="auto" />
+      <Text style={styles.text}>InventariAJE App v1.0</Text>
     </View>
   );
 }
@@ -19,14 +16,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 28,
+  text: {
+    color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#fff',
   },
 });
