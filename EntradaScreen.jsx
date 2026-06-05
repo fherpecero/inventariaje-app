@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
   FlatList,
   SafeAreaView,
+  Keyboard,
 } from 'react-native';
-import { getImagenProducto } from './productosData';
-import { getTimestamp, filtrarClientes } from './utils';
+import { getTimestamp } from './utils';
 
 const COLORS = {
   turquesa: '#00BCD4',
@@ -22,36 +22,6 @@ const COLORS = {
   rojo: '#f44336',
 };
 
-const PRODUCTOS_LISTA = [
-  { codigo: '783495591689', nombre: 'V-DAILY', cantidad: 1, precioCosto: 800, precioVenta: 1600 },
-  { codigo: '704001043645', nombre: 'V-CURCUMAX', cantidad: 1, precioCosto: 425, precioVenta: 850 },
-  { codigo: '742761499890', nombre: 'V-LATTEKAFFE', cantidad: 1, precioCosto: 600, precioVenta: 1200 },
-  { codigo: '789232455740', nombre: 'KETO + BHB', cantidad: 2, precioCosto: 900, precioVenta: 1800 },
-  { codigo: '782706461339', nombre: 'V-TEDETOX', cantidad: 23, precioCosto: 175, precioVenta: 350 },
-  { codigo: '782706461278', nombre: 'GLUTATION PLUS', cantidad: 1, precioCosto: 700, precioVenta: 1400 },
-  { codigo: '782706461254', nombre: 'V-ASCULAX', cantidad: 0, precioCosto: 350, precioVenta: 700 },
-  { codigo: '782706461209', nombre: 'V-ITALAY', cantidad: 2, precioCosto: 350, precioVenta: 700 },
-  { codigo: '782706461407', nombre: 'V-NITRO', cantidad: 4, precioCosto: 600, precioVenta: 1200 },
-  { codigo: '782706461261', nombre: 'V-GLUCALOSE', cantidad: 3, precioCosto: 350, precioVenta: 700 },
-  { codigo: '782706461193', nombre: 'V-ORGANEX', cantidad: 4, precioCosto: 350, precioVenta: 700 },
-  { codigo: '782706461186', nombre: 'V-ITAREN', cantidad: 4, precioCosto: 350, precioVenta: 700 },
-  { codigo: '723326333682', nombre: 'GENIUS SHAKE', cantidad: 2, precioCosto: 700, precioVenta: 1400 },
-  { codigo: '742761499937', nombre: 'V-SMOOTHIE', cantidad: 1, precioCosto: 450, precioVenta: 900 },
-  { codigo: '782706461384', nombre: 'V-KETOKAFE BHB', cantidad: 2, precioCosto: 625, precioVenta: 1250 },
-  { codigo: '782706461360', nombre: 'V-LOVKAFE', cantidad: 3, precioCosto: 450, precioVenta: 900 },
-  { codigo: '782706461230', nombre: 'VITARLY-L', cantidad: 2, precioCosto: 375, precioVenta: 750 },
-  { codigo: '782706461247', nombre: 'V-ITALBOOST', cantidad: 3, precioCosto: 425, precioVenta: 850 },
-  { codigo: '789232464094', nombre: 'V-TEDETOX MORAS', cantidad: 8, precioCosto: 175, precioVenta: 350 },
-  { codigo: '782706461285', nombre: 'V-ITADOL', cantidad: 3, precioCosto: 350, precioVenta: 700 },
-  { codigo: '723326333675', nombre: 'SMART BIOTICS KIDS', cantidad: 2, precioCosto: 400, precioVenta: 800 },
-  { codigo: '723326333699', nombre: 'DFENCE KIDS', cantidad: 2, precioCosto: 400, precioVenta: 800 },
-  { codigo: '782706461322', nombre: 'V-FORTYFLORA', cantidad: 1, precioCosto: 350, precioVenta: 700 },
-  { codigo: '742968946739', nombre: 'V-NRGY TROPICAL', cantidad: 1, precioCosto: 400, precioVenta: 800 },
-  { codigo: '782706461292', nombre: 'V-control', cantidad: 2, precioCosto: 350, precioVenta: 700 },
-  { codigo: '782706461421', nombre: 'V-OMEGA3', cantidad: 0, precioCosto: 750, precioVenta: 1500 },
-  { codigo: '782706461346', nombre: 'V-NEUROKAFE', cantidad: 2, precioCosto: 450, precioVenta: 900 },
-];
-
 export default function EntradaScreen() {
   const [searchText, setSearchText] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -59,12 +29,34 @@ export default function EntradaScreen() {
   const [cantidad, setCantidad] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [allProducts, setAllProducts] = useState([]);
+
+  // Cargar productos al iniciar
+  useEffect(() => {
+    cargarProductos();
+  }, []);
+
+  // Obtener productos de Google Sheets via API
+  const cargarProductos = async () => {
+    try {
+      const response = await fetch(
+        'https://inventariaje-app.vercel.app/api/ventas'
+      );
+      const data = await response.json();
+
+      if (data.exito && data.productos) {
+        setAllProducts(data.productos);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Error al cargar productos: ' + error.message);
+    }
+  };
 
   // Filtrar productos por búsqueda
   const handleSearch = (text) => {
     setSearchText(text);
     if (text.trim().length > 0) {
-      const filtered = PRODUCTOS_LISTA.filter(p =>
+      const filtered = allProducts.filter(p =>
         p.nombre.toLowerCase().includes(text.toLowerCase())
       );
       setFilteredProducts(filtered);
@@ -86,25 +78,25 @@ export default function EntradaScreen() {
   // Agregar al inventario
   const agregarInventario = async () => {
     if (!cantidad || isNaN(cantidad) || parseInt(cantidad) <= 0) {
-      Alert.alert('Error', 'Ingresa una cantidad válida');
+      Alert.alert('Error', 'Pero cuantos quieres?');
       return;
     }
 
     setLoading(true);
     try {
-      const nuevaCantidad = selectedProduct.cantidad + parseInt(cantidad);
       const timestamp = getTimestamp();
 
       const response = await fetch(
-        'https://inventariaje-app.vercel.app/api/inventario',
+        'https://inventariaje-app.vercel.app/api/ventas',
         {
-          method: 'PUT',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            codigo: selectedProduct.codigo,
-            cantidad: nuevaCantidad,
-            tipoOperacion: 'Entrada',
-            timestamp: timestamp,
+            producto: selectedProduct.nombre,
+            cantidad: parseInt(cantidad),
+            precio: selectedProduct.precioVenta,
+            evento: 'ENTRADA',
+            lugar: 'Bodega',
           }),
         }
       );
@@ -112,9 +104,11 @@ export default function EntradaScreen() {
       const data = await response.json();
 
       if (data.exito) {
+        Keyboard.dismiss();
+        
         Alert.alert(
-          '✅ Éxito',
-          `${selectedProduct.nombre}\nNueva cantidad: ${nuevaCantidad}\nFecha: ${timestamp}`,
+          '✅ Éxito si pude',
+          `${selectedProduct.nombre}\nCantidad agregada: ${cantidad}\nFecha: ${timestamp}`,
           [
             {
               text: 'OK',
@@ -123,13 +117,14 @@ export default function EntradaScreen() {
                 setSearchText('');
                 setCantidad('');
                 setFilteredProducts([]);
+                cargarProductos(); // Recargar lista
               },
             },
           ]
         );
       }
     } catch (error) {
-      Alert.alert('Error', 'Error: ' + error.message);
+      Alert.alert('No pude', 'Error: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -148,7 +143,7 @@ export default function EntradaScreen() {
             <Text style={styles.label}>Buscar producto:</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ej: Vitamina, Proteína..."
+              placeholder="Ej: lo que dice despues del V-"
               value={searchText}
               onChangeText={handleSearch}
               editable={!loading}
