@@ -3,18 +3,10 @@
     "name": "inventariaje-app",
     "slug": "inventariaje-app",
     "version": "1.0.0",
-    "platforms": [
-      "android"
-    ],
+    "platforms": ["android"],
     "android": {
       "package": "com.fherpecero.inventariajeapp",
-      "versionCode": 1,
-      "buildType": "apk"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "62aaf181-4537-4cb6-bf95-530933accc6d"
-      }
+      "versionCode": 1
     }
   }
 }
