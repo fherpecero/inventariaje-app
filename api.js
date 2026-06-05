@@ -1,154 +1,163 @@
-// Backend API para gestión de inventario
-// Deploy en Vercel
-
 const { google } = require('googleapis');
 
-const SHEET_ID = process.env.SHEET_ID || '1FVEJVobtDtQ8yVM8KFHL5YkHGNoKWl9tgRLzKW8rjao';
-const SHEETS_RANGE = 'Inventario!A:H';
-const VENTAS_RANGE = 'ventas!A:J';
+// Credenciales de Google Cloud
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+const sheetId = process.env.SHEET_ID;
 
-// Inicializar auth
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+// Crear cliente de Google Sheets
+const sheets = google.sheets({
+  version: 'v4',
+  auth: new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  }),
 });
 
-const sheets = google.sheets({ version: 'v4', auth });
-
-// API Handler
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
+// Obtener todos los productos
+async function obtenerInventario() {
   try {
-    const { action, ...params } = req.body;
-
-    switch (action) {
-      case 'getProducts':
-        return res.json(await getProducts());
-      case 'getProductByBarcode':
-        return res.json(await getProductByBarcode(params.codigo));
-      case 'registerEntrada':
-        return res.json(await registerEntrada(params));
-      case 'registerSalida':
-        return res.json(await registerSalida(params));
-      case 'getReportesMonthly':
-        return res.json(await getReportesMonthly(params.mes, params.año));
-      default:
-        return res.status(400).json({ error: 'Action not found' });
-    }
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: 'Inventario!A2:H1000', // Desde fila 2 (sin encabezados)
+    });
+    return response.data.values || [];
   } catch (error) {
-    console.error('API Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener inventario:', error);
+    throw error;
   }
 }
 
-async function getProducts() {
+// Buscar producto por código de barras
+async function buscarProductoPorCodigo(codigo) {
   try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: SHEETS_RANGE,
-    });
-
-    const rows = response.data.values || [];
-    const products = [];
-
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (row[0]) {
-        products.push({
-          nombre: row[0],
-          codigo: row[1] || '',
-          descripcion: row[2] || '',
-          costo: parseFloat(row[4]) || 0,
-          precioVenta: parseFloat(row[5]) || 0,
-          stock: parseInt(row[7]) || 0,
-        });
+    const filas = await obtenerInventario();
+    
+    for (let i = 0; i < filas.length; i++) {
+      const fila = filas[i];
+      if (fila[2] === codigo) { // Columna C = Código
+        return {
+          existe: true,
+          id: fila[0],
+          nombre: fila[1],
+          codigo: fila[2],
+          cantidad: parseInt(fila[3]) || 0,
+          precioCosto: parseFloat(fila[4]) || 0,
+          precioVenta: parseFloat(fila[5]) || 0,
+          fechaActualizacion: fila[6],
+          usuarioActualizacion: fila[7],
+          fila: i + 2, // Número de fila para actualización
+        };
       }
     }
-
-    return { success: true, products };
+    
+    return { existe: false };
   } catch (error) {
-    throw new Error('Error fetching products: ' + error.message);
+    console.error('Error al buscar producto:', error);
+    throw error;
   }
 }
 
-async function getProductByBarcode(codigo) {
-  const productos = await getProducts();
-  const producto = productos.products.find(p => p.codigo === codigo);
-  return { success: !!producto, producto };
-}
-
-async function registerEntrada(params) {
+// Actualizar cantidad en inventario
+async function actualizarInventario(codigo, nuevaCantidad, usuario = 'admin') {
   try {
-    const { nombre, cantidad, usuario } = params;
-    const fecha = new Date().toLocaleDateString();
-    const hora = new Date().toLocaleTimeString();
+    const producto = await buscarProductoPorCodigo(codigo);
+    
+    if (!producto.existe) {
+      return {
+        exito: false,
+        mensaje: 'Producto no encontrado',
+      };
+    }
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: VENTAS_RANGE,
+    const fechaActual = new Date().toLocaleString('es-MX');
+    
+    // Actualizar en Google Sheets
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `Inventario!D${producto.fila}`, // Columna D = Cantidad
       valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[fecha, nombre, cantidad, 0, 0, 'ENTRADA', hora, '', 0, usuario]],
+        values: [[nuevaCantidad]],
       },
     });
 
-    return { success: true, message: 'Entrada registrada' };
-  } catch (error) {
-    throw new Error('Error registering entrada: ' + error.message);
-  }
-}
-
-async function registerSalida(params) {
-  try {
-    const { nombre, cantidad, precio, descuento, usuario, cliente } = params;
-    const fecha = new Date().toLocaleDateString();
-    const hora = new Date().toLocaleTimeString();
-    const ganancia = (precio * cantidad) - (precio * cantidad * (descuento / 100));
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: VENTAS_RANGE,
+    // Actualizar fecha
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `Inventario!G${producto.fila}`, // Columna G = Fecha
       valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[fecha, nombre, cantidad, precio, descuento, 'VENTA', hora, cliente || '', ganancia, usuario]],
+        values: [[fechaActual]],
       },
     });
 
-    return { success: true, message: 'Venta registrada', ganancia };
-  } catch (error) {
-    throw new Error('Error registering salida: ' + error.message);
-  }
-}
-
-async function getReportesMonthly(mes, año) {
-  try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: VENTAS_RANGE,
+    // Actualizar usuario
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `Inventario!H${producto.fila}`, // Columna H = Usuario
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[usuario]],
+      },
     });
 
-    const rows = response.data.values || [];
-    const reportes = {
-      ingresosTotales: 0,
-      egresosTotales: 0,
-      gananciaTotal: 0,
-      totalVentas: 0,
-      totalEntradas: 0,
-      productosTopVendidos: [],
-      productosBottomVendidos: [],
-      historico: [],
+    return {
+      exito: true,
+      mensaje: `Inventario actualizado a ${nuevaCantidad} unidades`,
+      codigo,
+      nuevaCantidad,
     };
-
-    return { success: true, ...reportes };
   } catch (error) {
-    throw new Error('Error generating reports: ' + error.message);
+    console.error('Error al actualizar inventario:', error);
+    throw error;
   }
 }
+
+// ENDPOINTS
+export default async (req, res) => {
+  try {
+    // GET: Buscar producto por código
+    if (req.method === 'GET') {
+      const { codigo } = req.query;
+
+      if (!codigo) {
+        return res.status(400).json({
+          exito: false,
+          mensaje: 'Código de barras requerido',
+        });
+      }
+
+      const producto = await buscarProductoPorCodigo(codigo);
+      return res.status(200).json(producto);
+    }
+
+    // PUT: Actualizar cantidad
+    if (req.method === 'PUT') {
+      const { codigo, cantidad } = req.body;
+      const usuario = req.headers['x-usuario'] || 'admin';
+
+      if (!codigo || !cantidad) {
+        return res.status(400).json({
+          exito: false,
+          mensaje: 'Código y cantidad son requeridos',
+        });
+      }
+
+      const resultado = await actualizarInventario(codigo, cantidad, usuario);
+      return res.status(200).json(resultado);
+    }
+
+    // Método no permitido
+    return res.status(405).json({
+      exito: false,
+      mensaje: 'Método no permitido',
+    });
+  } catch (error) {
+    console.error('Error en API:', error);
+    return res.status(500).json({
+      exito: false,
+      mensaje: 'Error interno del servidor',
+      error: error.message,
+    });
+  }
+};
