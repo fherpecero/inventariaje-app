@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
-  Image, 
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
   Alert,
-  ActivityIndicator 
+  ActivityIndicator,
+  FlatList,
+  SafeAreaView,
 } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
 import { getImagenProducto } from './productosData';
+import { getTimestamp, filtrarClientes } from './utils';
 
 const COLORS = {
   turquesa: '#00BCD4',
@@ -21,51 +22,68 @@ const COLORS = {
   rojo: '#f44336',
 };
 
+const PRODUCTOS_LISTA = [
+  { codigo: '783495591689', nombre: 'V-DAILY', cantidad: 1, precioCosto: 800, precioVenta: 1600 },
+  { codigo: '704001043645', nombre: 'V-CURCUMAX', cantidad: 1, precioCosto: 425, precioVenta: 850 },
+  { codigo: '742761499890', nombre: 'V-LATTEKAFFE', cantidad: 1, precioCosto: 600, precioVenta: 1200 },
+  { codigo: '789232455740', nombre: 'KETO + BHB', cantidad: 2, precioCosto: 900, precioVenta: 1800 },
+  { codigo: '782706461339', nombre: 'V-TEDETOX', cantidad: 23, precioCosto: 175, precioVenta: 350 },
+  { codigo: '782706461278', nombre: 'GLUTATION PLUS', cantidad: 1, precioCosto: 700, precioVenta: 1400 },
+  { codigo: '782706461254', nombre: 'V-ASCULAX', cantidad: 0, precioCosto: 350, precioVenta: 700 },
+  { codigo: '782706461209', nombre: 'V-ITALAY', cantidad: 2, precioCosto: 350, precioVenta: 700 },
+  { codigo: '782706461407', nombre: 'V-NITRO', cantidad: 4, precioCosto: 600, precioVenta: 1200 },
+  { codigo: '782706461261', nombre: 'V-GLUCALOSE', cantidad: 3, precioCosto: 350, precioVenta: 700 },
+  { codigo: '782706461193', nombre: 'V-ORGANEX', cantidad: 4, precioCosto: 350, precioVenta: 700 },
+  { codigo: '782706461186', nombre: 'V-ITAREN', cantidad: 4, precioCosto: 350, precioVenta: 700 },
+  { codigo: '723326333682', nombre: 'GENIUS SHAKE', cantidad: 2, precioCosto: 700, precioVenta: 1400 },
+  { codigo: '742761499937', nombre: 'V-SMOOTHIE', cantidad: 1, precioCosto: 450, precioVenta: 900 },
+  { codigo: '782706461384', nombre: 'V-KETOKAFE BHB', cantidad: 2, precioCosto: 625, precioVenta: 1250 },
+  { codigo: '782706461360', nombre: 'V-LOVKAFE', cantidad: 3, precioCosto: 450, precioVenta: 900 },
+  { codigo: '782706461230', nombre: 'VITARLY-L', cantidad: 2, precioCosto: 375, precioVenta: 750 },
+  { codigo: '782706461247', nombre: 'V-ITALBOOST', cantidad: 3, precioCosto: 425, precioVenta: 850 },
+  { codigo: '789232464094', nombre: 'V-TEDETOX MORAS', cantidad: 8, precioCosto: 175, precioVenta: 350 },
+  { codigo: '782706461285', nombre: 'V-ITADOL', cantidad: 3, precioCosto: 350, precioVenta: 700 },
+  { codigo: '723326333675', nombre: 'SMART BIOTICS KIDS', cantidad: 2, precioCosto: 400, precioVenta: 800 },
+  { codigo: '723326333699', nombre: 'DFENCE KIDS', cantidad: 2, precioCosto: 400, precioVenta: 800 },
+  { codigo: '782706461322', nombre: 'V-FORTYFLORA', cantidad: 1, precioCosto: 350, precioVenta: 700 },
+  { codigo: '742968946739', nombre: 'V-NRGY TROPICAL', cantidad: 1, precioCosto: 400, precioVenta: 800 },
+  { codigo: '782706461292', nombre: 'V-control', cantidad: 2, precioCosto: 350, precioVenta: 700 },
+  { codigo: '782706461421', nombre: 'V-OMEGA3', cantidad: 0, precioCosto: 750, precioVenta: 1500 },
+  { codigo: '782706461346', nombre: 'V-NEUROKAFE', cantidad: 2, precioCosto: 450, precioVenta: 900 },
+];
+
 export default function EntradaScreen() {
-  const [hasPermission, setHasPermission] = useState(null);
-  const [scanned, setScanned] = useState(false);
-  const [codigo, setCodigo] = useState('');
-  const [producto, setProducto] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [cantidad, setCantidad] = useState('');
   const [loading, setLoading] = useState(false);
-  const [scannerActive, setScannerActive] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  useEffect(() => {
-    const getBarCodeScannerPermissions = async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-    };
-    getBarCodeScannerPermissions();
-  }, []);
-
-  const handleBarCodeScanned = ({ type, data }) => {
-    setScanned(true);
-    setCodigo(data);
-    setScannerActive(false);
-    buscarProducto(data);
-  };
-
-  const buscarProducto = async (codigoBarras) => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `https://inventariaje-app.vercel.app/api/inventario?codigo=${codigoBarras}`
+  // Filtrar productos por búsqueda
+  const handleSearch = (text) => {
+    setSearchText(text);
+    if (text.trim().length > 0) {
+      const filtered = PRODUCTOS_LISTA.filter(p =>
+        p.nombre.toLowerCase().includes(text.toLowerCase())
       );
-      const data = await response.json();
-
-      if (data.existe) {
-        setProducto(data);
-        setCantidad('');
-      } else {
-        Alert.alert('Producto no encontrado', `El código ${codigoBarras} no existe.`);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Error al buscar: ' + error.message);
-    } finally {
-      setLoading(false);
+      setFilteredProducts(filtered);
+      setShowDropdown(true);
+    } else {
+      setFilteredProducts([]);
+      setShowDropdown(false);
     }
   };
 
+  // Seleccionar producto
+  const selectProduct = (producto) => {
+    setSelectedProduct(producto);
+    setSearchText(producto.nombre);
+    setShowDropdown(false);
+    setCantidad('');
+  };
+
+  // Agregar al inventario
   const agregarInventario = async () => {
     if (!cantidad || isNaN(cantidad) || parseInt(cantidad) <= 0) {
       Alert.alert('Error', 'Ingresa una cantidad válida');
@@ -74,18 +92,19 @@ export default function EntradaScreen() {
 
     setLoading(true);
     try {
-      const nuevaCantidad = producto.cantidad + parseInt(cantidad);
-      
+      const nuevaCantidad = selectedProduct.cantidad + parseInt(cantidad);
+      const timestamp = getTimestamp();
+
       const response = await fetch(
         'https://inventariaje-app.vercel.app/api/inventario',
         {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            codigo: producto.codigo,
+            codigo: selectedProduct.codigo,
             cantidad: nuevaCantidad,
+            tipoOperacion: 'Entrada',
+            timestamp: timestamp,
           }),
         }
       );
@@ -95,15 +114,15 @@ export default function EntradaScreen() {
       if (data.exito) {
         Alert.alert(
           '✅ Éxito',
-          `${producto.nombre}\nNueva cantidad: ${nuevaCantidad}`,
+          `${selectedProduct.nombre}\nNueva cantidad: ${nuevaCantidad}\nFecha: ${timestamp}`,
           [
             {
               text: 'OK',
               onPress: () => {
-                setProducto(null);
-                setCodigo('');
+                setSelectedProduct(null);
+                setSearchText('');
                 setCantidad('');
-                setScanned(false);
+                setFilteredProducts([]);
               },
             },
           ]
@@ -116,128 +135,113 @@ export default function EntradaScreen() {
     }
   };
 
-  if (scannerActive && hasPermission) {
-    return (
+  return (
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>📸 Escanear código</Text>
+          <Text style={styles.title}>📥 Agregar Inventario</Text>
         </View>
-        
-        <BarCodeScanner
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-          style={styles.scanner}
-        />
 
-        <View style={styles.scannerFooter}>
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => {
-              setScannerActive(false);
-              setScanned(false);
-            }}
-          >
-            <Text style={styles.cancelBtnText}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+        <View style={styles.content}>
+          {/* Búsqueda de producto */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Buscar producto:</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej: Vitamina, Proteína..."
+              value={searchText}
+              onChangeText={handleSearch}
+              editable={!loading}
+            />
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>📥 Entrada de Inventario</Text>
-      </View>
-
-      <View style={styles.content}>
-        <TouchableOpacity
-          style={styles.scannerBtn}
-          onPress={() => setScannerActive(true)}
-        >
-          <Text style={styles.scannerBtnText}>🔍 Abrir Scanner</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.divider}>O ingresa manualmente:</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Código de barras"
-          value={codigo}
-          onChangeText={setCodigo}
-          keyboardType="numeric"
-        />
-
-        <TouchableOpacity
-          style={styles.searchBtn}
-          onPress={() => buscarProducto(codigo)}
-          disabled={loading}
-        >
-          <Text style={styles.searchBtnText}>🔎 Buscar</Text>
-        </TouchableOpacity>
-
-        {loading && <ActivityIndicator size="large" color={COLORS.turquesa} style={styles.loader} />}
-
-        {producto && !loading && (
-          <View style={styles.productCard}>
-            <Text style={styles.productName}>{producto.nombre}</Text>
-            <Text style={styles.productCode}>Código: {producto.codigo}</Text>
-
-            <View style={styles.imageContainer}>
-              <Image
-                source={getImagenProducto(producto.codigo)}
-                style={styles.productImage}
-              />
-            </View>
-
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>Cantidad actual:</Text>
-              <Text style={styles.infoValue}>{producto.cantidad} unidades</Text>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Cantidad a agregar:</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: 5"
-                value={cantidad}
-                onChangeText={setCantidad}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={agregarInventario}
-              disabled={loading}
-            >
-              <Text style={styles.addBtnText}>✅ Agregar al inventario</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={() => {
-                setProducto(null);
-                setCodigo('');
-                setCantidad('');
-              }}
-            >
-              <Text style={styles.resetBtnText}>Limpiar</Text>
-            </TouchableOpacity>
+            {/* Dropdown de resultados */}
+            {showDropdown && filteredProducts.length > 0 && (
+              <View style={styles.dropdown}>
+                {filteredProducts.map((producto) => (
+                  <TouchableOpacity
+                    key={producto.codigo}
+                    style={styles.dropdownItem}
+                    onPress={() => selectProduct(producto)}
+                  >
+                    <Text style={styles.dropdownItemText}>
+                      {producto.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
-        )}
+
+          {/* Producto seleccionado */}
+          {selectedProduct && (
+            <View style={styles.productCard}>
+              <Text style={styles.productName}>{selectedProduct.nombre}</Text>
+              <Text style={styles.productCode}>
+                Código: {selectedProduct.codigo}
+              </Text>
+
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Cantidad actual:</Text>
+                <Text style={styles.infoValue}>{selectedProduct.cantidad}</Text>
+              </View>
+
+              {/* Cantidad a agregar */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Cantidad a agregar:</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: 5"
+                  value={cantidad}
+                  onChangeText={setCantidad}
+                  keyboardType="numeric"
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Botones */}
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={agregarInventario}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={COLORS.blanco} />
+                ) : (
+                  <Text style={styles.addBtnText}>✅ Agregar</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setSelectedProduct(null);
+                  setSearchText('');
+                  setCantidad('');
+                }}
+                disabled={loading}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.gris,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.gris,
   },
   header: {
     backgroundColor: COLORS.turquesa,
-    paddingTop: 40,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 15,
   },
@@ -250,87 +254,58 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
   },
-  scanner: {
-    flex: 1,
-  },
-  scannerFooter: {
-    backgroundColor: COLORS.blanco,
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#ccc',
-  },
-  scannerBtn: {
-    backgroundColor: COLORS.turquesa,
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+  formGroup: {
     marginBottom: 20,
   },
-  scannerBtnText: {
-    color: COLORS.blanco,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  divider: {
-    textAlign: 'center',
-    color: '#666',
-    marginVertical: 15,
+  label: {
     fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.negro,
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 10,
     fontSize: 16,
     backgroundColor: COLORS.blanco,
   },
-  searchBtn: {
-    backgroundColor: COLORS.turquesa,
+  dropdown: {
+    backgroundColor: COLORS.blanco,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    maxHeight: 200,
+  },
+  dropdownItem: {
     padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  searchBtnText: {
-    color: COLORS.blanco,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  loader: {
-    marginVertical: 20,
+  dropdownItemText: {
+    fontSize: 14,
+    color: COLORS.negro,
   },
   productCard: {
     backgroundColor: COLORS.blanco,
     borderRadius: 8,
     padding: 15,
-    marginTop: 20,
     borderWidth: 2,
     borderColor: COLORS.turquesa,
   },
   productName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.negro,
     marginBottom: 5,
   },
   productCode: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#999',
     marginBottom: 15,
-  },
-  imageContainer: {
-    alignItems: 'center',
-    marginVertical: 15,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
-  },
-  productImage: {
-    width: 150,
-    height: 150,
-    resizeMode: 'contain',
   },
   infoBox: {
     backgroundColor: '#f5f5f5',
@@ -344,18 +319,9 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   infoValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.turquesa,
-  },
-  inputGroup: {
-    marginBottom: 15,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.negro,
-    marginBottom: 8,
   },
   addBtn: {
     backgroundColor: COLORS.verde,
@@ -369,26 +335,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  resetBtn: {
+  cancelBtn: {
     backgroundColor: '#e0e0e0',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  resetBtnText: {
+  cancelBtnText: {
     color: COLORS.negro,
     fontSize: 14,
     fontWeight: '600',
-  },
-  cancelBtn: {
-    backgroundColor: COLORS.rojo,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    color: COLORS.blanco,
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

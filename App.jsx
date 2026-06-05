@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import HomeScreen from './HomeScreen';
 import EntradaScreen from './EntradaScreen';
+import SalidaScreen from './SalidaScreen';
 
 const COLORS = {
   turquesa: '#00BCD4',
@@ -12,49 +13,55 @@ const COLORS = {
 
 export default function App() {
   const [page, setPage] = useState('home');
-  const [usuario, setUsuario] = useState('admin'); // Usuario logueado
 
   return (
-    <View style={styles.container}>
-      {/* Mostrar pantalla según page */}
-      {page === 'home' && <HomeScreen />}
-      {page === 'entrada' && <EntradaScreen />}
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* Mostrar pantalla según page */}
+        {page === 'home' && <HomeScreen />}
+        {page === 'entrada' && <EntradaScreen />}
+        {page === 'salida' && <SalidaScreen />}
 
-      {/* Bottom Navigation */}
-      <View style={styles.navbar}>
-        <TouchableOpacity
-          style={[styles.navBtn, page === 'home' && styles.navBtnActive]}
-          onPress={() => setPage('home')}
-        >
-          <Text style={styles.navText}>📊 Inicio</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.navBtn, page === 'entrada' && styles.navBtnActive]}
-          onPress={() => setPage('entrada')}
-        >
-          <Text style={styles.navText}>📥 Entrada</Text>
-        </TouchableOpacity>
+        {/* Bottom Navigation */}
+        <View style={styles.navbar}>
+          <TouchableOpacity
+            style={[styles.navBtn, page === 'home' && styles.navBtnActive]}
+            onPress={() => setPage('home')}
+          >
+            <Text style={styles.navText}>📊 Inicio</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() => {}}
-        >
-          <Text style={styles.navText}>📤 Salida</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.navBtn, page === 'entrada' && styles.navBtnActive]}
+            onPress={() => setPage('entrada')}
+          >
+            <Text style={styles.navText}>📥 Entrada</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() => {}}
-        >
-          <Text style={styles.navText}>⚙️ Config</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.navBtn, page === 'salida' && styles.navBtnActive]}
+            onPress={() => setPage('salida')}
+          >
+            <Text style={styles.navText}>📤 Salida</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navBtn}
+            onPress={() => {}}
+          >
+            <Text style={styles.navText}>⚙️ Config</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.gris,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.gris,
