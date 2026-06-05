@@ -10,6 +10,7 @@ import {
   ActivityIndicator 
 } from 'react-native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
+import { getImagenProducto } from './productosData';
 
 const COLORS = {
   turquesa: '#00BCD4',
@@ -239,7 +240,7 @@ export default function EntradaScreen() {
             {/* Mostrar imagen */}
             <View style={styles.imageContainer}>
               <Image
-                source={require(`../assets/productos/${producto.codigo}.webp`)}
+                source={getImagenProducto(producto.codigo)}
                 style={styles.productImage}
                 onError={(error) => {
                   console.log('Error cargando imagen:', error);
