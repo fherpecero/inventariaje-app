@@ -12,7 +12,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>📦 InventariAJE</Text>
+        <Text style={styles.title}>📦 Inventariaje</Text>
       </View>
 
       <View style={styles.content}>
