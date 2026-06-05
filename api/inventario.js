@@ -1,10 +1,8 @@
 const { google } = require('googleapis');
 
-// Credenciales de Google Cloud
 const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 const sheetId = process.env.SHEET_ID;
 
-// Crear cliente de Google Sheets
 const sheets = google.sheets({
   version: 'v4',
   auth: new google.auth.GoogleAuth({
@@ -13,12 +11,11 @@ const sheets = google.sheets({
   }),
 });
 
-// Obtener todos los productos
 async function obtenerInventario() {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'Inventario!A2:H1000', // Desde fila 2 (sin encabezados)
+      range: 'Inventario!A2:H1000',
     });
     return response.data.values || [];
   } catch (error) {
@@ -27,25 +24,22 @@ async function obtenerInventario() {
   }
 }
 
-// Buscar producto por código de barras
 async function buscarProductoPorCodigo(codigo) {
   try {
     const filas = await obtenerInventario();
     
     for (let i = 0; i < filas.length; i++) {
       const fila = filas[i];
-      if (fila[2] === codigo) { // Columna C = Código
+      if (fila[1] === codigo) {
         return {
           existe: true,
           id: fila[0],
-          nombre: fila[1],
-          codigo: fila[2],
+          nombre: fila[0],
+          codigo: fila[1],
           cantidad: parseInt(fila[3]) || 0,
           precioCosto: parseFloat(fila[4]) || 0,
           precioVenta: parseFloat(fila[5]) || 0,
-          fechaActualizacion: fila[6],
-          usuarioActualizacion: fila[7],
-          fila: i + 2, // Número de fila para actualización
+          fila: i + 2,
         };
       }
     }
@@ -57,7 +51,6 @@ async function buscarProductoPorCodigo(codigo) {
   }
 }
 
-// Actualizar cantidad en inventario
 async function actualizarInventario(codigo, nuevaCantidad, usuario = 'admin') {
   try {
     const producto = await buscarProductoPorCodigo(codigo);
@@ -69,32 +62,36 @@ async function actualizarInventario(codigo, nuevaCantidad, usuario = 'admin') {
       };
     }
 
-    const fechaActual = new Date().toLocaleString('es-MX');
-    
-    // Actualizar en Google Sheets
+    const ahora = new Date();
+    const año = ahora.getFullYear();
+    const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+    const día = String(ahora.getDate()).padStart(2, '0');
+    const hora = String(ahora.getHours()).padStart(2, '0');
+    const minuto = String(ahora.getMinutes()).padStart(2, '0');
+    const segundo = String(ahora.getSeconds()).padStart(2, '0');
+    const timestamp = `${año}-${mes}-${día} ${hora}:${minuto}:${segundo}`;
+
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `Inventario!D${producto.fila}`, // Columna D = Cantidad
+      range: `Inventario!D${producto.fila}`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [[nuevaCantidad]],
       },
     });
 
-    // Actualizar fecha
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `Inventario!G${producto.fila}`, // Columna G = Fecha
+      range: `Inventario!G${producto.fila}`,
       valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[fechaActual]],
+        values: [[timestamp]],
       },
     });
 
-    // Actualizar usuario
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `Inventario!H${producto.fila}`, // Columna H = Usuario
+      range: `Inventario!H${producto.fila}`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [[usuario]],
@@ -113,10 +110,10 @@ async function actualizarInventario(codigo, nuevaCantidad, usuario = 'admin') {
   }
 }
 
-// ENDPOINTS
-export default async (req, res) => {
+module.exports = async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  
   try {
-    // GET: Buscar producto por código
     if (req.method === 'GET') {
       const { codigo } = req.query;
 
@@ -131,7 +128,6 @@ export default async (req, res) => {
       return res.status(200).json(producto);
     }
 
-    // PUT: Actualizar cantidad
     if (req.method === 'PUT') {
       const { codigo, cantidad } = req.body;
       const usuario = req.headers['x-usuario'] || 'admin';
@@ -147,7 +143,6 @@ export default async (req, res) => {
       return res.status(200).json(resultado);
     }
 
-    // Método no permitido
     return res.status(405).json({
       exito: false,
       mensaje: 'Método no permitido',
