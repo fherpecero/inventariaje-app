@@ -6,6 +6,11 @@
     "android": {
       "package": "com.fherpecero.inventariajeapp",
       "buildType": "apk"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "62aaf181-4537-4cb6-bf95-530933accc6d"
+      }
     }
   }
 }
