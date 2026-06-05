@@ -30,7 +30,6 @@ export default function EntradaScreen() {
   const [loading, setLoading] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
 
-  // Solicitar permisos de cámara
   useEffect(() => {
     const getBarCodeScannerPermissions = async () => {
       const { status } = await BarCodeScanner.requestPermissionsAsync();
@@ -39,7 +38,6 @@ export default function EntradaScreen() {
     getBarCodeScannerPermissions();
   }, []);
 
-  // Scanner detecta código
   const handleBarCodeScanned = ({ type, data }) => {
     setScanned(true);
     setCodigo(data);
@@ -47,7 +45,6 @@ export default function EntradaScreen() {
     buscarProducto(data);
   };
 
-  // Buscar producto en Google Sheets via API
   const buscarProducto = async (codigoBarras) => {
     setLoading(true);
     try {
@@ -60,64 +57,18 @@ export default function EntradaScreen() {
         setProducto(data);
         setCantidad('');
       } else {
-        Alert.alert(
-          'Producto no encontrado',
-          `El código ${codigoBarras} no existe en el inventario.\n\n¿Deseas crear un nuevo producto?`,
-          [
-            {
-              text: 'Cancelar',
-              onPress: () => {
-                setCodigo('');
-                setProducto(null);
-              },
-            },
-            {
-              text: 'Crear nuevo',
-              onPress: () => crearNuevoProducto(codigoBarras),
-            },
-          ]
-        );
+        Alert.alert('Producto no encontrado', `El código ${codigoBarras} no existe.`);
       }
     } catch (error) {
-      Alert.alert('Error', 'Error al buscar el producto: ' + error.message);
-      console.log('Error:', error);
+      Alert.alert('Error', 'Error al buscar: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Crear nuevo producto
-  const crearNuevoProducto = (codigoBarras) => {
-    Alert.prompt(
-      'Crear nuevo producto',
-      'Ingresa el nombre del producto:',
-      [
-        {
-          text: 'Cancelar',
-          onPress: () => {
-            setCodigo('');
-            setProducto(null);
-          },
-        },
-        {
-          text: 'Crear',
-          onPress: async (nombre) => {
-            if (nombre.trim()) {
-              // Aquí se crearía el producto en la API
-              Alert.alert('Éxito', `Producto "${nombre}" creado\n\nPróximamente: agregar precio y otras características`);
-              setCodigo('');
-              setProducto(null);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Agregar cantidad al inventario
   const agregarInventario = async () => {
     if (!cantidad || isNaN(cantidad) || parseInt(cantidad) <= 0) {
-      Alert.alert('Error', 'Ingresa una cantidad válida (mayor a 0)');
+      Alert.alert('Error', 'Ingresa una cantidad válida');
       return;
     }
 
@@ -144,7 +95,7 @@ export default function EntradaScreen() {
       if (data.exito) {
         Alert.alert(
           '✅ Éxito',
-          `Inventario actualizado\n\n${producto.nombre}\nNueva cantidad: ${nuevaCantidad} unidades`,
+          `${producto.nombre}\nNueva cantidad: ${nuevaCantidad}`,
           [
             {
               text: 'OK',
@@ -159,14 +110,12 @@ export default function EntradaScreen() {
         );
       }
     } catch (error) {
-      Alert.alert('Error', 'Error al actualizar inventario: ' + error.message);
-      console.log('Error:', error);
+      Alert.alert('Error', 'Error: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // UI: Scanner activo
   if (scannerActive && hasPermission) {
     return (
       <View style={styles.container}>
@@ -194,15 +143,13 @@ export default function EntradaScreen() {
     );
   }
 
-  // UI: Pantalla principal
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>📦 Entrada de Inventario</Text>
+        <Text style={styles.title}>📥 Entrada de Inventario</Text>
       </View>
 
       <View style={styles.content}>
-        {/* Botón Scanner */}
         <TouchableOpacity
           style={styles.scannerBtn}
           onPress={() => setScannerActive(true)}
@@ -210,7 +157,6 @@ export default function EntradaScreen() {
           <Text style={styles.scannerBtnText}>🔍 Abrir Scanner</Text>
         </TouchableOpacity>
 
-        {/* O manual */}
         <Text style={styles.divider}>O ingresa manualmente:</Text>
 
         <TextInput
@@ -229,7 +175,6 @@ export default function EntradaScreen() {
           <Text style={styles.searchBtnText}>🔎 Buscar</Text>
         </TouchableOpacity>
 
-        {/* Mostrar producto encontrado */}
         {loading && <ActivityIndicator size="large" color={COLORS.turquesa} style={styles.loader} />}
 
         {producto && !loading && (
@@ -237,14 +182,10 @@ export default function EntradaScreen() {
             <Text style={styles.productName}>{producto.nombre}</Text>
             <Text style={styles.productCode}>Código: {producto.codigo}</Text>
 
-            {/* Mostrar imagen */}
             <View style={styles.imageContainer}>
               <Image
                 source={getImagenProducto(producto.codigo)}
                 style={styles.productImage}
-                onError={(error) => {
-                  console.log('Error cargando imagen:', error);
-                }}
               />
             </View>
 
