@@ -13,28 +13,27 @@ const sheets = google.sheets({
 
 async function registrarVenta(data) {
   try {
-    // Formato de fecha: MM/DD/YYYY (como en tu Sheets)
+    // Formato de fecha: MM/DD/YYYY
     const ahora = new Date();
     const mes = String(ahora.getMonth() + 1).padStart(2, '0');
     const día = String(ahora.getDate()).padStart(2, '0');
     const año = ahora.getFullYear();
     const fechaFormato = `${mes}/${día}/${año}`;
 
-    // Preparar fila para agregar
+    // Preparar fila para agregar (SOLO 6 columnas)
     const nuevaFila = [
       fechaFormato,           // Columna A: Fecha
       data.producto,          // Columna B: Producto
       data.cantidad,          // Columna C: Cantidad
       data.precio || 0,       // Columna D: Precio
       data.descuento || 0,    // Columna E: % Descuento
-      data.cliente || '',     // Columna H: Nombre (cliente)
-
+      data.cliente || '',     // Columna F: Nombre (cliente)
     ];
 
     // Agregar fila a Ventas
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: 'Ventas!A:J',
+      range: 'Ventas!A:F',
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [nuevaFila],
@@ -98,7 +97,7 @@ module.exports = async (req, res) => {
 
     // POST: Registrar entrada o venta
     if (req.method === 'POST') {
-      const { producto, cantidad, precio, descuento, cliente, telefono, correo, evento, lugar } = req.body;
+      const { producto, cantidad, precio, descuento, cliente } = req.body;
 
       if (!producto || !cantidad) {
         return res.status(400).json({
@@ -113,10 +112,6 @@ module.exports = async (req, res) => {
         precio: parseFloat(precio) || 0,
         descuento: parseFloat(descuento) || 0,
         cliente: cliente || '',
-        telefono: telefono || '',
-        correo: correo || '',
-        evento: evento || '',
-        lugar: lugar || '',
       });
 
       return res.status(200).json(resultado);
