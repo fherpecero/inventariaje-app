@@ -191,42 +191,62 @@ export default function SalidaScreen() {
   try {
     const totales = calcularTotales();
 
+    console.log('=== INICIANDO REGISTRO DE VENTAS ===');
+    console.log('Total items en carrito:', carrito.length);
+    console.log('Cliente:', cliente);
+    console.log('Descuento:', descuentoPorcentaje);
+
     // Registrar cada item del carrito
-    for (const item of carrito) {
-      console.log('Registrando venta:', {
+    for (let i = 0; i < carrito.length; i++) {
+      const item = carrito[i];
+
+      const payload = {
         codigo: item.codigo,
         producto: item.nombre,
         cantidad: item.cantidad,
         descuento: descuentoPorcentaje || 0,
         cliente: cliente || 'Sin cliente',
-      });
+      };
+
+      console.log(`\n--- Item ${i + 1}/${carrito.length} ---`);
+      console.log('Enviando:', JSON.stringify(payload, null, 2));
 
       const response = await fetch(
         'https://inventariaje-app.vercel.app/api/salida',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            codigo: item.codigo,
-            producto: item.nombre,  // ← ES item.nombre (no ID)
-            cantidad: item.cantidad,
-            descuento: descuentoPorcentaje || 0,
-            cliente: cliente || 'Sin cliente',
-          }),
+          body: JSON.stringify(payload),
         }
       );
 
-      const data = await response.json();
-      console.log('Respuesta Firebase:', data);
+      const responseText = await response.text();
+      console.log('Response status:', response.status);
+      console.log('Response text:', responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Error parseando JSON:', e);
+        Alert.alert('Error', `Error en respuesta del servidor: ${responseText}`);
+        setLoading(false);
+        return;
+      }
+
+      console.log('Response data:', data);
 
       if (!data.exito) {
         Alert.alert('Error', `Error registrando ${item.nombre}: ${data.mensaje}`);
         setLoading(false);
         return;
       }
+
+      console.log(`✅ Item ${i + 1} registrado`);
     }
 
-    // Éxito - mostrar resumen
+    // Éxito
+    console.log('\n=== TODAS LAS VENTAS REGISTRADAS ===');
     Alert.alert(
       '✅ Venta registrada',
       `Total: $${totales.total.toFixed(2)}\nTipo de pago: ${tipoPago.toUpperCase()}\nCliente: ${cliente || 'Sin cliente'}`,
@@ -244,8 +264,8 @@ export default function SalidaScreen() {
       ]
     );
   } catch (error) {
+    console.error('ERROR FATAL:', error);
     Alert.alert('Error', 'Error al registrar: ' + error.message);
-    console.error('Error completo:', error);
   } finally {
     setLoading(false);
   }

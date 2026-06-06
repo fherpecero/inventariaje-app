@@ -18,7 +18,6 @@ export const imagenes = {
   '782706461360': require('./assets/productos/782706461360.webp'),
   '782706461230': require('./assets/productos/782706461230.webp'),
   '782706461247': require('./assets/productos/782706461247.webp'),
-  '789232464094': require('./assets/productos/789232464094.webp'),
   '782706461285': require('./assets/productos/782706461285.webp'),
   '723326333675': require('./assets/productos/723326333675.webp'),
   '723326333699': require('./assets/productos/723326333699.webp'),
