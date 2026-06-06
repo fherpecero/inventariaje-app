@@ -13,6 +13,17 @@ if (!admin.apps.length) {
   db = admin.database();
 }
 
+function getTimestamp() {
+  const ahora = new Date();
+  const año = ahora.getFullYear();
+  const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+  const día = String(ahora.getDate()).padStart(2, '0');
+  const hora = String(ahora.getHours()).padStart(2, '0');
+  const minuto = String(ahora.getMinutes()).padStart(2, '0');
+  const segundo = String(ahora.getSeconds()).padStart(2, '0');
+  return `${año}-${mes}-${día} ${hora}:${minuto}:${segundo}`;
+}
+
 async function obtenerProductos() {
   try {
     const snapshot = await db.ref('inventario').once('value');
@@ -54,7 +65,7 @@ module.exports = async (req, res) => {
 
     // POST: Registrar venta
     if (req.method === 'POST') {
-      const { codigo, producto, cantidad, precio, descuento, cliente } = req.body;
+      const { codigo, producto, cantidad, descuento, cliente } = req.body;
 
       if (!codigo || !cantidad) {
         return res.status(400).json({
@@ -63,39 +74,59 @@ module.exports = async (req, res) => {
         });
       }
 
-      // Obtener cantidad actual
-      const snapshot = await db.ref(`inventario/${codigo}/cantidad`).once('value');
-      const cantidadActual = snapshot.val() || 0;
+      // Obtener producto del inventario
+      const snapshot = await db.ref(`inventario/${producto}`).once('value');
+      const productoData = snapshot.val();
 
-      // Verificar stock
-      if (cantidadActual < parseInt(cantidad)) {
+      if (!productoData) {
         return res.status(400).json({
           exito: false,
-          mensaje: `Stock insuficiente. Disponible: ${cantidadActual}`,
+          mensaje: 'Producto no encontrado',
         });
       }
 
-      const nuevaCantidad = cantidadActual - parseInt(cantidad);
+      const cantidadActual = productoData.cantidad || 0;
+      const cantidadVenta = parseInt(cantidad);
+
+      // Verificar stock
+      if (cantidadActual < cantidadVenta) {
+        return res.status(400).json({
+          exito: false,
+          mensaje: `No tienes tantos. Disponible: ${cantidadActual}`,
+        });
+      }
+
+      const nuevaCantidad = cantidadActual - cantidadVenta;
+      const precioUnitario = productoData.precioVenta || 0;
+      const precioTotal = precioUnitario * cantidadVenta; // ← PRECIO TOTAL
+      const descuentoAplicado = (precioTotal * (parseFloat(descuento) || 0)) / 100;
+      const totalFinal = precioTotal - descuentoAplicado;
 
       // Restar del inventario
-      await db.ref(`inventario/${codigo}/cantidad`).set(nuevaCantidad);
+      await db.ref(`inventario/${producto}/cantidad`).set(nuevaCantidad);
+
+      const timestamp = getTimestamp();
 
       // Registrar venta
       await db.ref('ventas').push().set({
-        fecha: new Date().toLocaleDateString('es-MX'),
+        fecha: timestamp,
         producto: producto,
         codigo: codigo,
-        cantidad: parseInt(cantidad),
-        precio: parseFloat(precio) || 0,
-        descuento: parseFloat(descuento) || 0,
+        cantidad: cantidadVenta,
+        precioUnitario: precioUnitario,
+        precioTotal: precioTotal,  // ← TOTAL
+        descuentoPorcentaje: parseFloat(descuento) || 0,
+        descuentoDolar: descuentoAplicado,
+        totalFinal: totalFinal,
         cliente: cliente || '',
-        timestamp: admin.database.ServerValue.TIMESTAMP,
       });
 
       return res.status(200).json({
         exito: true,
         mensaje: 'Vendimia completada satisfactoriamente',
+        timestamp: timestamp,
         cantidadRestante: nuevaCantidad,
+        totalFinal: totalFinal,
       });
     }
 

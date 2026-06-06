@@ -13,6 +13,17 @@ if (!admin.apps.length) {
   db = admin.database();
 }
 
+function getTimestamp() {
+  const ahora = new Date();
+  const año = ahora.getFullYear();
+  const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+  const día = String(ahora.getDate()).padStart(2, '0');
+  const hora = String(ahora.getHours()).padStart(2, '0');
+  const minuto = String(ahora.getMinutes()).padStart(2, '0');
+  const segundo = String(ahora.getSeconds()).padStart(2, '0');
+  return `${año}-${mes}-${día} ${hora}:${minuto}:${segundo}`;
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   
@@ -27,27 +38,39 @@ module.exports = async (req, res) => {
         });
       }
 
-      // Obtener cantidad actual
-      const snapshot = await db.ref(`inventario/${codigo}/cantidad`).once('value');
-      const cantidadActual = snapshot.val() || 0;
+      // Obtener cantidad actual del inventario
+      const snapshot = await db.ref(`inventario/${producto}/codigo`).parent.once('value');
+      const productoData = snapshot.val();
+      
+      if (!productoData) {
+        return res.status(400).json({
+          exito: false,
+          mensaje: 'Producto no encontrado',
+        });
+      }
+
+      const cantidadActual = productoData.cantidad || 0;
       const nuevaCantidad = cantidadActual + parseInt(cantidad);
 
-      // Actualizar en inventario
-      await db.ref(`inventario/${codigo}/cantidad`).set(nuevaCantidad);
+      // Actualizar cantidad en inventario
+      await db.ref(`inventario/${producto}/cantidad`).set(nuevaCantidad);
 
-      // Registrar en log de entradas
+      const timestamp = getTimestamp();
+
+      // Registrar en entradas (historial)
       await db.ref('entradas').push().set({
-        fecha: new Date().toLocaleDateString('es-MX'),
+        fecha: timestamp,
         producto: producto,
+        codigo: codigo,
         cantidad: parseInt(cantidad),
         cantidadAnterior: cantidadActual,
         cantidadNueva: nuevaCantidad,
-        timestamp: admin.database.ServerValue.TIMESTAMP,
       });
 
       return res.status(200).json({
         exito: true,
         mensaje: 'Vendimia completada satisfactoriamente',
+        timestamp: timestamp,
         cantidadNueva: nuevaCantidad,
       });
     }

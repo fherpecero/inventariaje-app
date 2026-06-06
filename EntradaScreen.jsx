@@ -93,7 +93,7 @@ export default function EntradaScreen() {
       const timestamp = getTimestamp();
 
       const response = await fetch(
-        'https://inventariaje-app.vercel.app/api/firebase-api',
+        'https://inventariaje-app.vercel.app/api/entrada',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -113,7 +113,7 @@ export default function EntradaScreen() {
         Keyboard.dismiss();
         
         Alert.alert(
-          '✅ Éxito si pude',
+          '✅ Ya esta puesto',
           `${selectedProduct.nombre}\nCantidad agregada: ${cantidad}\nFecha: ${timestamp}`,
           [
             {
