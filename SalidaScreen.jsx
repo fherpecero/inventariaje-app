@@ -16,13 +16,14 @@ import {
 } from 'react-native';
 
 const COLORS = {
-  turquesa: '#00BCD4',
+  turquesa: '#1a9ea1',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
   verde: '#4CAF50',
   rojo: '#f44336',
   naranja: '#FF9800',
+  morado: '#9C27B0',
 };
 
 export default function SalidaScreen() {
@@ -179,68 +180,75 @@ export default function SalidaScreen() {
 
   // Registrar venta
   const registrarVenta = async () => {
-    if (carrito.length === 0) {
-      Alert.alert('Error', 'El carrito está vacío');
-      return;
-    }
+  if (carrito.length === 0) {
+    Alert.alert('Error', 'El carrito está vacío');
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      // Registrar cada item del carrito
-      for (const item of carrito) {
-        const totales = calcularTotales();
+  try {
+    const totales = calcularTotales();
 
-        const response = await fetch(
-          'https://inventariaje-app.vercel.app/api/salida',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              codigo: item.codigo,
-              producto: item.nombre,
-              cantidad: item.cantidad,
-              descuento: descuentoPorcentaje || 0,
-              cliente: cliente || 'Sin cliente',
-            }),
-          }
-        );
+    // Registrar cada item del carrito
+    for (const item of carrito) {
+      console.log('Registrando venta:', {
+        codigo: item.codigo,
+        producto: item.nombre,
+        cantidad: item.cantidad,
+        descuento: descuentoPorcentaje || 0,
+        cliente: cliente || 'Sin cliente',
+      });
 
-        const data = await response.json();
-
-        if (!data.exito) {
-          Alert.alert('Error', `Error registrando ${item.nombre}`);
-          setLoading(false);
-          return;
+      const response = await fetch(
+        'https://inventariaje-app.vercel.app/api/salida',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            codigo: item.codigo,
+            producto: item.nombre,  // ← ES item.nombre (no ID)
+            cantidad: item.cantidad,
+            descuento: descuentoPorcentaje || 0,
+            cliente: cliente || 'Sin cliente',
+          }),
         }
-      }
-
-      // Éxito
-      const totales = calcularTotales();
-
-      Alert.alert(
-        '✅ Venta registrada',
-        `Total: $${totales.total.toFixed(2)}\nTipo de pago: ${tipoPago.toUpperCase()}\nCliente: ${cliente || 'Sin cliente'}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setCarrito([]);
-              setDescuentoPorcentaje('');
-              setCliente('');
-              setTipoPago('efectivo');
-              cargarProductos();
-            },
-          },
-        ]
       );
-    } catch (error) {
-      Alert.alert('Error', 'Error al registrar: ' + error.message);
-      console.error('Error completo:', error);
-    } finally {
-      setLoading(false);
+
+      const data = await response.json();
+      console.log('Respuesta Firebase:', data);
+
+      if (!data.exito) {
+        Alert.alert('Error', `Error registrando ${item.nombre}: ${data.mensaje}`);
+        setLoading(false);
+        return;
+      }
     }
-  };
+
+    // Éxito - mostrar resumen
+    Alert.alert(
+      '✅ Venta registrada',
+      `Total: $${totales.total.toFixed(2)}\nTipo de pago: ${tipoPago.toUpperCase()}\nCliente: ${cliente || 'Sin cliente'}`,
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            setCarrito([]);
+            setDescuentoPorcentaje('');
+            setCliente('');
+            setTipoPago('efectivo');
+            cargarProductos();
+          },
+        },
+      ]
+    );
+  } catch (error) {
+    Alert.alert('Error', 'Error al registrar: ' + error.message);
+    console.error('Error completo:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const totales = calcularTotales();
 
@@ -254,7 +262,11 @@ export default function SalidaScreen() {
     >
       {/* Imagen placeholder */}
       <View style={styles.imagenPlaceholder}>
-        <Text style={styles.imagenPlaceholderText}>📦</Text>
+        <Image
+          source={require(`../assets/productos/${item.codigo}.webp`)}
+          style={{ width: 60, height: 60, resizeMode: 'contain' }}
+          onError={() => <Text style={styles.imagenPlaceholderText}>📦</Text>}
+        />
       </View>
 
       <Text style={styles.productoNombre}>{item.nombre}</Text>
@@ -582,8 +594,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: COLORS.turquesa,
-    paddingVertical: 15,
-    paddingHorizontal: 15,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
   },
   title: {
     fontSize: 24,
@@ -786,7 +798,7 @@ const styles = StyleSheet.create({
   totalesRowFinal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 10,
+    paddingTop: 40,
     borderTopWidth: 2,
     borderTopColor: COLORS.turquesa,
   },
@@ -816,7 +828,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   cancelBtn: {
-    backgroundColor: COLORS.rojo,
+    backgroundColor: COLORS.morado,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',

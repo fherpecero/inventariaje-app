@@ -14,12 +14,14 @@ import {
 } from 'react-native';
 
 const COLORS = {
-  turquesa: '#00BCD4',
+  turquesa: '#1a9ea1',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
   verde: '#4CAF50',
   rojo: '#f44336',
+  naranja: '#FF9800',
+  morado: '#9C27B0',
 };
 
 export default function EntradaScreen() {
@@ -293,8 +295,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: COLORS.turquesa,
-    paddingVertical: 15,
-    paddingHorizontal: 15,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
   },
   title: {
     fontSize: 24,

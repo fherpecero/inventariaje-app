@@ -5,10 +5,12 @@ import EntradaScreen from './EntradaScreen';
 import SalidaScreen from './SalidaScreen';
 
 const COLORS = {
-  turquesa: '#00BCD4',
+  turquesa: '#1a9ea1',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
+  naranja: '#FF9800',
+  morado: '#9C27B0',
 };
 
 export default function App() {
