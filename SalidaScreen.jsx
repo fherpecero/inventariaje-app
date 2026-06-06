@@ -248,7 +248,7 @@ export default function SalidaScreen() {
     // Éxito
     console.log('\n=== TODAS LAS VENTAS REGISTRADAS ===');
     Alert.alert(
-      '✅ Venta registrada',
+      '✅ Vendimia registrada',
       `Total: $${totales.total.toFixed(2)}\nTipo de pago: ${tipoPago.toUpperCase()}\nCliente: ${cliente || 'Sin cliente'}`,
       [
         {
