@@ -330,14 +330,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: COLORS.blanco,
     color: COLORS.negro,
+  
   },
   dropdown: {
     backgroundColor: COLORS.blanco,
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 8,
+    borderTopWidth: 1,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
     maxHeight: 200,
-    marginBottom: 10,
+    marginTop: -10,
+    marginHorizontal: -1,
+    zIndex: 10,
   },
   dropdownItem: {
     padding: 12,
