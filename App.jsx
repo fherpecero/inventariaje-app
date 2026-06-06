@@ -5,7 +5,7 @@ import EntradaScreen from './EntradaScreen';
 import SalidaScreen from './SalidaScreen';
 
 const COLORS = {
-  turquesa: '#1a9ea1',
+  turquesa: '#00BCD4',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -20,38 +20,34 @@ export default function App() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Mostrar pantalla según page */}
-        {page === 'home' && <HomeScreen />}
+        {page === 'home' && <HomeScreen onNavigate={setPage} />}
         {page === 'entrada' && <EntradaScreen />}
         {page === 'salida' && <SalidaScreen />}
 
-        {/* Bottom Navigation */}
+        {/* Bottom Navigation - MORADO CON 3 BOTONES */}
         <View style={styles.navbar}>
           <TouchableOpacity
             style={[styles.navBtn, page === 'home' && styles.navBtnActive]}
             onPress={() => setPage('home')}
           >
-            <Text style={styles.navText}>🏠 Dashboard</Text>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={styles.navLabel}>HOME</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navBtn, page === 'entrada' && styles.navBtnActive]}
             onPress={() => setPage('entrada')}
           >
-            <Text style={styles.navText}>✨ ADD</Text>
+            <Text style={styles.navIcon}>✨</Text>
+            <Text style={styles.navLabel}>ADD</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navBtn, page === 'salida' && styles.navBtnActive]}
             onPress={() => setPage('salida')}
           >
-            <Text style={styles.navText}>🤑 VENTA</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navBtn}
-            onPress={() => {}}
-          >
-            <Text style={styles.navText}>⚙️ Settings</Text>
+            <Text style={styles.navIcon}>💰</Text>
+            <Text style={styles.navLabel}>VENTA</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -70,22 +66,29 @@ const styles = StyleSheet.create({
   },
   navbar: {
     flexDirection: 'row',
-    backgroundColor: COLORS.blanco,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+    backgroundColor: COLORS.morado,
+    borderTopWidth: 0,
+    paddingVertical: 10,
+    paddingBottom: 16,
   },
   navBtn: {
     flex: 1,
-    paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   navBtnActive: {
-    borderTopWidth: 3,
-    borderTopColor: COLORS.turquesa,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 12,
+    marginHorizontal: 6,
+    paddingVertical: 8,
   },
-  navText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.negro,
+  navIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  navLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.blanco,
   },
 });

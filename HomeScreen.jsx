@@ -40,7 +40,7 @@ export default function HomeScreen({ onNavigate }) {
             <Text style={styles.subtitle}>by FherLaRush</Text>
           </View>
           
-          {/* Hamburger Menu Button */}
+          {/* Hamburger Menu Button - ALINEADO */}
           <TouchableOpacity
             style={styles.hamburgerBtn}
             onPress={() => setMenuVisible(true)}
@@ -60,37 +60,6 @@ export default function HomeScreen({ onNavigate }) {
             <Text style={styles.subgreeting}>
               Sistema de gestión de inventario VH
             </Text>
-          </View>
-
-          {/* Action Buttons - MORADO */}
-          <View style={styles.actionsContainer}>
-            {/* ADD Button */}
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => handleNavigation('entrada')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.actionBtnIcon}>✨</Text>
-              <View style={styles.actionBtnContent}>
-                <Text style={styles.actionBtnTitle}>Agregar Inventario</Text>
-                <Text style={styles.actionBtnDesc}>Registra entradas de productos</Text>
-              </View>
-              <Text style={styles.actionBtnArrow}>→</Text>
-            </TouchableOpacity>
-
-            {/* VENTA Button */}
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => handleNavigation('salida')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.actionBtnIcon}>💰</Text>
-              <View style={styles.actionBtnContent}>
-                <Text style={styles.actionBtnTitle}>Registrar Venta</Text>
-                <Text style={styles.actionBtnDesc}>Checkout y registro de salidas</Text>
-              </View>
-              <Text style={styles.actionBtnArrow}>→</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Roadmap Card - TU CONTENIDO MEJORADO */}
@@ -276,23 +245,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logo: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: COLORS.blanco,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   subtitle: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: 3,
   },
   hamburgerBtn: {
     padding: 8,
-    marginRight: -8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   hamburgerIcon: {
-    fontSize: 28,
+    fontSize: 26,
     color: COLORS.blanco,
     fontWeight: 'bold',
   },
@@ -314,47 +284,7 @@ const styles = StyleSheet.create({
     color: '#999',
     fontWeight: '500',
   },
-  actionsContainer: {
-    gap: 12,
-    marginBottom: 25,
-  },
-  actionBtn: {
-    backgroundColor: COLORS.morado,
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: COLORS.morado,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  actionBtnIcon: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  actionBtnContent: {
-    flex: 1,
-  },
-  actionBtnTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.blanco,
-    marginBottom: 2,
-  },
-  actionBtnDesc: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
-  },
-  actionBtnArrow: {
-    fontSize: 18,
-    color: COLORS.blanco,
-    fontWeight: 'bold',
-  },
-  // Card Roadmap - TU CONTENIDO MEJORADO
+  // Card Roadmap
   card: {
     backgroundColor: COLORS.blanco,
     padding: 16,
