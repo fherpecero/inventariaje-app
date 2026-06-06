@@ -36,30 +36,27 @@ export default function EntradaScreen() {
     cargarProductos();
   }, []);
 
-  // Obtener productos de Google Sheets via API
   const cargarProductos = async () => {
-    try {
-      const response = await fetch(
-      'https://inventariaje-app.vercel.app/api/entrada',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          codigo: selectedProduct.codigo,
-          producto: selectedProduct.nombre,
-          cantidad: parseInt(cantidad),
-        }),
-    }
-  );
-      const data = await response.json();
+  try {
+    const response = await fetch(
+      'https://inventariaje-app.vercel.app/api/salida'
+    );
+    const data = await response.json();
 
-      if (data.exito && data.productos) {
-        setAllProducts(data.productos);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Error al cargar productos: ' + error.message);
+    if (data.exito && data.productos) {
+      // Validar que cada producto tenga propiedades requeridas
+      const productosValidos = data.productos.filter(p => 
+        p && p.nombre && p.codigo
+      );
+      setAllProducts(productosValidos);
+    } else {
+      Alert.alert('Error', 'No hay productos disponibles');
     }
-  };
+  } catch (error) {
+    Alert.alert('Error', 'Error al cargar productos: ' + error.message);
+    console.error('Error:', error);
+  }
+};
 
   // Filtrar productos por búsqueda
   const handleSearch = (text) => {
