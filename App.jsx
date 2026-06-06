@@ -5,7 +5,7 @@ import EntradaScreen from './EntradaScreen';
 import SalidaScreen from './SalidaScreen';
 
 const COLORS = {
-  turquesa: '#00BCD4',
+  turquesa: '#1a9ea1',  // ✅ CORREGIDO
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -24,14 +24,14 @@ export default function App() {
         {page === 'entrada' && <EntradaScreen />}
         {page === 'salida' && <SalidaScreen />}
 
-        {/* Bottom Navigation - MORADO CON 3 BOTONES */}
+        {/* Bottom Navigation - TURQUESA CON 3 BOTONES */}
         <View style={styles.navbar}>
           <TouchableOpacity
             style={[styles.navBtn, page === 'home' && styles.navBtnActive]}
             onPress={() => setPage('home')}
           >
             <Text style={styles.navIcon}>🏠</Text>
-            <Text style={styles.navLabel}>HOME</Text>
+            <Text style={styles.navLabel}>Dashboard</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   },
   navbar: {
     flexDirection: 'row',
-    backgroundColor: COLORS.morado,
+    backgroundColor: COLORS.turquesa,
     borderTopWidth: 0,
     paddingVertical: 10,
     paddingBottom: 16,

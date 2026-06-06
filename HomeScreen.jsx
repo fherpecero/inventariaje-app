@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,11 @@ import {
   ScrollView,
   Modal,
   SafeAreaView,
+  Pressable,
 } from 'react-native';
 
 const COLORS = {
-  turquesa: '#00BCD4',
+  turquesa: '#1a9ea1',  // ✅ CORREGIDO
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -22,12 +23,54 @@ const COLORS = {
 
 export default function HomeScreen({ onNavigate }) {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [stats, setStats] = useState({
+    totalEnExistencia: 0,
+    productossinStock: 0,
+    ventasdelaSemana: 0,
+  });
+
+  useEffect(() => {
+    cargarEstadisticas();
+  }, []);
+
+  const cargarEstadisticas = async () => {
+    try {
+      // Obtener estadísticas de Firebase
+      const response = await fetch('https://inventariaje-app.vercel.app/api/salida');
+      const data = await response.json();
+
+      if (data.exito && data.productos) {
+        // Calcular totales
+        const totalEnExistencia = data.productos.reduce(
+          (sum, p) => sum + (p.cantidad || 0),
+          0
+        );
+
+        const productossinStock = data.productos.filter(
+          (p) => p.cantidad === 0
+        ).length;
+
+        // Por ahora, ventas = valor estático (se actualizará cuando tengamos API de reportes)
+        setStats({
+          totalEnExistencia,
+          productossinStock,
+          ventasdelaSemana: 0,
+        });
+      }
+    } catch (error) {
+      console.error('Error cargando estadísticas:', error);
+    }
+  };
 
   const handleNavigation = (screen) => {
     setMenuVisible(false);
     if (onNavigate) {
       onNavigate(screen);
     }
+  };
+
+  const cerrarMenu = () => {
+    setMenuVisible(false);
   };
 
   return (
@@ -39,7 +82,7 @@ export default function HomeScreen({ onNavigate }) {
             <Text style={styles.logo}>🌿INVENTARIAJE APP🌱</Text>
             <Text style={styles.subtitle}>by FherLaRush</Text>
           </View>
-          
+
           {/* Hamburger Menu Button - ALINEADO */}
           <TouchableOpacity
             style={styles.hamburgerBtn}
@@ -64,9 +107,9 @@ export default function HomeScreen({ onNavigate }) {
 
           {/* Roadmap Card - TU CONTENIDO MEJORADO */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>📊 Roadmap de la app</Text>
-            <Text style={styles.cardSubtitle}>Usa los botones arriba para:</Text>
-            
+            <Text style={styles.cardTitle}>🛣️ Roadmap de la app</Text>
+            <Text style={styles.cardSubtitle}>Usa los botones abajo para:</Text>
+
             <View style={styles.roadmapItem}>
               <Text style={styles.roadmapCheck}>✅</Text>
               <View>
@@ -109,34 +152,53 @@ export default function HomeScreen({ onNavigate }) {
               </View>
             </View>
 
+            <View style={styles.roadmapItem}>
+              <Text style={styles.roadmapPlan}>🎯</Text>
+              <View>
+                <Text style={styles.roadmapLabel}>Alertas de Restock</Text>
+                <Text style={styles.roadmapDesc}>
+                  Notificaciones cuando el inventario está bajo
+                </Text>
+              </View>
+            </View>
+
             <Text style={styles.roadmapQuestion}>🤔 ¿Qué más se le ofrece?</Text>
           </View>
 
-          {/* Info Cards */}
+          {/* Info Cards - ACTUALIZADAS */}
           <View style={styles.cardsSection}>
             <Text style={styles.sectionTitle}>📊 Estado del Sistema</Text>
 
+            {/* Total en Existencia */}
             <View style={styles.infoCard}>
               <Text style={styles.infoCardIcon}>📦</Text>
               <View style={styles.infoCardContent}>
-                <Text style={styles.infoCardLabel}>Productos</Text>
-                <Text style={styles.infoCardValue}>27 activos</Text>
+                <Text style={styles.infoCardLabel}>Total en Existencia</Text>
+                <Text style={styles.infoCardValue}>
+                  {stats.totalEnExistencia} unidades
+                </Text>
               </View>
             </View>
 
+            {/* Productos sin Stock */}
             <View style={styles.infoCard}>
-              <Text style={styles.infoCardIcon}>📈</Text>
+              <Text style={styles.infoCardIcon}>⚠️</Text>
               <View style={styles.infoCardContent}>
-                <Text style={styles.infoCardLabel}>Últimas Ventas</Text>
-                <Text style={styles.infoCardValue}>En tiempo real</Text>
+                <Text style={styles.infoCardLabel}>Productos sin Stock</Text>
+                <Text style={[styles.infoCardValue, styles.alertValue]}>
+                  {stats.productossinStock} productos
+                </Text>
               </View>
             </View>
 
+            {/* Ventas de la Semana */}
             <View style={styles.infoCard}>
-              <Text style={styles.infoCardIcon}>🔄</Text>
+              <Text style={styles.infoCardIcon}>💵</Text>
               <View style={styles.infoCardContent}>
-                <Text style={styles.infoCardLabel}>Sincronización</Text>
-                <Text style={styles.infoCardValue}>Firebase ✅</Text>
+                <Text style={styles.infoCardLabel}>Ventas de la Semana</Text>
+                <Text style={styles.infoCardValue}>
+                  ${stats.ventasdelaSemana.toLocaleString()}
+                </Text>
               </View>
             </View>
           </View>
@@ -145,80 +207,89 @@ export default function HomeScreen({ onNavigate }) {
         </ScrollView>
       </View>
 
-      {/* Hamburger Menu Modal */}
+      {/* Hamburger Menu Modal - CON CIERRE AL TOCAR AFUERA */}
       <Modal
         visible={menuVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
+        onRequestClose={cerrarMenu}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.menuModal}>
-            <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>Menú</Text>
-              <TouchableOpacity
-                onPress={() => setMenuVisible(false)}
-                style={styles.closeBtn}
-              >
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+        {/* Área clickeable para cerrar */}
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={cerrarMenu}
+        >
+          {/* Menu que NO se cierra al tocar */}
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <SafeAreaView style={styles.menuSafeArea}>
+              <View style={styles.menuModal}>
+                <View style={styles.menuHeader}>
+                  <Text style={styles.menuTitle}>Menú</Text>
+                  <TouchableOpacity
+                    onPress={cerrarMenu}
+                    style={styles.closeBtn}
+                  >
+                    <Text style={styles.closeBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.menuDivider} />
+                <View style={styles.menuDivider} />
 
-            {/* Menu Items */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuItemIcon}>⚙️</Text>
-              <Text style={styles.menuItemText}>Configuración</Text>
-              <Text style={styles.menuItemArrow}>→</Text>
-            </TouchableOpacity>
+                {/* Menu Items */}
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={cerrarMenu}
+                >
+                  <Text style={styles.menuItemIcon}>⚙️</Text>
+                  <Text style={styles.menuItemText}>Configuración</Text>
+                  <Text style={styles.menuItemArrow}>→</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuItemIcon}>📊</Text>
-              <Text style={styles.menuItemText}>Reportes & Analytics</Text>
-              <Text style={styles.menuItemArrow}>→</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={cerrarMenu}
+                >
+                  <Text style={styles.menuItemIcon}>📊</Text>
+                  <Text style={styles.menuItemText}>Reportes & Analytics</Text>
+                  <Text style={styles.menuItemArrow}>→</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuItemIcon}>👥</Text>
-              <Text style={styles.menuItemText}>Multi-usuario</Text>
-              <Text style={styles.menuItemArrow}>→</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={cerrarMenu}
+                >
+                  <Text style={styles.menuItemIcon}>👥</Text>
+                  <Text style={styles.menuItemText}>Multi-usuario</Text>
+                  <Text style={styles.menuItemArrow}>→</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuItemIcon}>ℹ️</Text>
-              <Text style={styles.menuItemText}>Acerca de</Text>
-              <Text style={styles.menuItemArrow}>→</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={cerrarMenu}
+                >
+                  <Text style={styles.menuItemIcon}>ℹ️</Text>
+                  <Text style={styles.menuItemText}>Acerca de</Text>
+                  <Text style={styles.menuItemArrow}>→</Text>
+                </TouchableOpacity>
 
-            <View style={styles.menuDivider} />
+                <View style={styles.menuDivider} />
 
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemDanger]}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuItemIcon}>🚪</Text>
-              <Text style={styles.menuItemText}>Cerrar Sesión</Text>
-              <Text style={styles.menuItemArrow}>→</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.menuItem, styles.menuItemDanger]}
+                  onPress={cerrarMenu}
+                >
+                  <Text style={styles.menuItemIcon}>🚪</Text>
+                  <Text style={styles.menuItemText}>Cerrar Sesión</Text>
+                  <Text style={styles.menuItemArrow}>→</Text>
+                </TouchableOpacity>
 
-            <View style={styles.menuFooter}>
-              <Text style={styles.versionText}>v1.0.0 - Beta</Text>
-            </View>
-          </View>
-        </View>
+                <View style={styles.menuFooter}>
+                  <Text style={styles.versionText}>v1.0.0 - Beta</Text>
+                </View>
+              </View>
+            </SafeAreaView>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -380,6 +451,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.negro,
   },
+  alertValue: {
+    color: COLORS.rojo,
+  },
   spacer: {
     height: 20,
   },
@@ -387,6 +461,9 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  menuSafeArea: {
+    flex: 1,
   },
   menuModal: {
     position: 'absolute',
