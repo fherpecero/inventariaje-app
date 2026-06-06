@@ -40,8 +40,17 @@ export default function EntradaScreen() {
   const cargarProductos = async () => {
     try {
       const response = await fetch(
-      'https://inventariaje-app.vercel.app/api/firebase-api',
-      );
+      'https://inventariaje-app.vercel.app/api/entrada',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo: selectedProduct.codigo,
+          producto: selectedProduct.nombre,
+          cantidad: parseInt(cantidad),
+        }),
+    }
+  );
       const data = await response.json();
 
       if (data.exito && data.productos) {

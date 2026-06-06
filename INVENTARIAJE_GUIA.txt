@@ -55,8 +55,8 @@ Lee el archivo RESUMEN.md. Es muy simple y rapido.
 3. PREPARAR APP (10 min)
 - Instalar Node.js
 - npm install -g expo-cli
-- mkdir InventariAJE
-- cd InventariAJE
+- mkdir inventariaje
+- cd inventariaje
 - Copiar todos los .jsx y package.json
 - npm install
 - Actualizar API_URL en todos los archivos
