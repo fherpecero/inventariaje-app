@@ -18,10 +18,7 @@ function getTimestamp() {
   const año = ahora.getFullYear();
   const mes = String(ahora.getMonth() + 1).padStart(2, '0');
   const día = String(ahora.getDate()).padStart(2, '0');
-  const hora = String(ahora.getHours()).padStart(2, '0');
-  const minuto = String(ahora.getMinutes()).padStart(2, '0');
-  const segundo = String(ahora.getSeconds()).padStart(2, '0');
-  return `${año}-${mes}-${día} ${hora}:${minuto}:${segundo}`;
+  return `${año}-${mes}-${día}`;
 }
 
 async function obtenerProductos() {
@@ -119,7 +116,6 @@ module.exports = async (req, res) => {
         descuentoDolar: descuentoAplicado,
         totalFinal: totalFinal,
         cliente: cliente || '',
-        timestamp: admin.database.ServerValue.TIMESTAMP,
       });
 
       return res.status(200).json({
