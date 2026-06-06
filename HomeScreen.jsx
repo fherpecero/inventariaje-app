@@ -167,7 +167,7 @@ export default function HomeScreen({ onNavigate }) {
 
           {/* Info Cards - ACTUALIZADAS */}
           <View style={styles.cardsSection}>
-            <Text style={styles.sectionTitle}>📊 Estado del Sistema</Text>
+            <Text style={styles.sectionTitle}>📊 Dashboard</Text>
 
             {/* Total en Existencia */}
             <View style={styles.infoCard}>
@@ -458,21 +458,23 @@ const styles = StyleSheet.create({
     height: 20,
   },
   // Modal Styles
-  modalOverlay: {
+  modalSafeArea: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  menuSafeArea: {
+  modalOverlay: {
     flex: 1,
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
-  menuModal: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
+  menuPressable: {
     width: '75%',
     backgroundColor: COLORS.blanco,
     paddingTop: 16,
+  },
+  menuModal: {
+    flex: 1,
   },
   menuHeader: {
     flexDirection: 'row',
@@ -523,13 +525,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   menuFooter: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
   },
   versionText: {
     fontSize: 11,
     color: '#999',
     fontWeight: '500',
   },
-});
+  });
