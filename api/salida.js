@@ -78,7 +78,7 @@ module.exports = async (req, res) => {
       if (!productoData) {
         return res.status(400).json({
           exito: false,
-          mensaje: 'Producto no encontrado',
+          mensaje: 'ese no lo encuentro',
         });
       }
 
@@ -120,7 +120,7 @@ module.exports = async (req, res) => {
 
       return res.status(200).json({
         exito: true,
-        mensaje: 'Vendimia completada satisfactoriamente',
+        mensaje: 'Vendimia redimida con éxito',
         timestamp: timestamp,
         cantidadRestante: nuevaCantidad,
         totalFinal: totalFinal,
@@ -135,7 +135,7 @@ module.exports = async (req, res) => {
     console.error('Error en API salida:', error);
     return res.status(500).json({
       exito: false,
-      mensaje: 'Yo falle pero no se por que, soporta',
+      mensaje: 'Ay se me apago la compu',
       error: error.message,
     });
   }

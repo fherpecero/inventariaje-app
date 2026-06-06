@@ -28,28 +28,28 @@ export default function App() {
             style={[styles.navBtn, page === 'home' && styles.navBtnActive]}
             onPress={() => setPage('home')}
           >
-            <Text style={styles.navText}>📊 Inicio</Text>
+            <Text style={styles.navText}>🏠 Dashboard</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navBtn, page === 'entrada' && styles.navBtnActive]}
             onPress={() => setPage('entrada')}
           >
-            <Text style={styles.navText}>📥 Entrada</Text>
+            <Text style={styles.navText}>✨ ADD</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navBtn, page === 'salida' && styles.navBtnActive]}
             onPress={() => setPage('salida')}
           >
-            <Text style={styles.navText}>📤 Salida</Text>
+            <Text style={styles.navText}>🤑 VENTA</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.navBtn}
             onPress={() => {}}
           >
-            <Text style={styles.navText}>⚙️ Config</Text>
+            <Text style={styles.navText}>⚙️ Settings</Text>
           </TouchableOpacity>
         </View>
       </View>

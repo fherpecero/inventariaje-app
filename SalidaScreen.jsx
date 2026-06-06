@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
-  Image, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
+  Keyboard,
   ScrollView,
-  FlatList
 } from 'react-native';
-import { getImagenProducto } from './productosData';
 
 const COLORS = {
   turquesa: '#00BCD4',
@@ -20,333 +19,355 @@ const COLORS = {
   gris: '#f5f5f5',
   verde: '#4CAF50',
   rojo: '#f44336',
-  amarillo: '#FFC107',
+  naranja: '#FF9800',
 };
 
 export default function SalidaScreen() {
-  const [productos, setProductos] = useState([]);
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [cantidad, setCantidad] = useState('');
   const [cliente, setCliente] = useState('');
-  const [fecha, setFecha] = useState(new Date().toLocaleString('es-MX'));
-  const [loading, setLoading] = useState(true);
-  const [mostraCatalogo, setMostraCatalogo] = useState(true);
+  const [descuento, setDescuento] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [allProducts, setAllProducts] = useState([]);
 
-  // Obtener todos los productos al cargar
+  // Cargar productos al iniciar
   useEffect(() => {
-    obtenerProductos();
+    cargarProductos();
   }, []);
 
-  const obtenerProductos = async () => {
-    setLoading(true);
+  // Cargar productos desde Firebase
+  const cargarProductos = async () => {
     try {
       const response = await fetch(
-        'https://inventariaje-app.vercel.app/api/inventario'
+        'https://inventariaje-app.vercel.app/api/salida'
       );
-      
-      // Por ahora simulamos con datos locales
-      // Después conectamos con API real que devuelva todos los productos
-      const productosSimulados = [
-        { codigo: '783495591689', nombre: 'Vitamina C 500mg', cantidad: 25, precioCosto: 50, precioVenta: 120 },
-        { codigo: '704001043645', nombre: 'Proteína Whey', cantidad: 12, precioCosto: 200, precioVenta: 450 },
-        { codigo: '742761499890', nombre: 'Omega 3', cantidad: 8, precioCosto: 150, precioVenta: 350 },
-        { codigo: '789232455740', nombre: 'Multivitamínico', cantidad: 15, precioCosto: 80, precioVenta: 200 },
-        { codigo: '782706461186', nombre: 'Magnesio', cantidad: 20, precioCosto: 60, precioVenta: 150 },
-        { codigo: '782706461193', nombre: 'Zinc', cantidad: 18, precioCosto: 45, precioVenta: 120 },
-      ];
-      
-      setProductos(productosSimulados);
+      const data = await response.json();
+
+      if (data.exito && data.productos) {
+        const productosValidos = data.productos.filter(
+          (p) => p && p.nombre && p.codigo
+        );
+        setAllProducts(productosValidos);
+      } else {
+        Alert.alert('Error', 'Orita no tenemos joven, a la vuelta');
+      }
     } catch (error) {
       Alert.alert('Error', 'Error al cargar productos: ' + error.message);
-    } finally {
-      setLoading(false);
+      console.error('Error:', error);
     }
   };
 
-  // Seleccionar producto del catálogo
-  const seleccionarProducto = (producto) => {
-    setProductoSeleccionado(producto);
-    setMostraCatalogo(false);
+  // Filtrar productos por búsqueda
+  const handleSearch = (text) => {
+    setSearchText(text);
+    if (text.trim().length > 0) {
+      const filtered = allProducts.filter((p) =>
+        p.nombre.toLowerCase().includes(text.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+      setShowDropdown(true);
+    } else {
+      setFilteredProducts([]);
+      setShowDropdown(false);
+    }
+  };
+
+  // Seleccionar producto
+  const selectProduct = (producto) => {
+    setSelectedProduct(producto);
+    setSearchText(producto.nombre);
+    setShowDropdown(false);
     setCantidad('');
     setCliente('');
-    setFecha(new Date().toLocaleString('es-MX'));
+    setDescuento('');
+  };
+
+  // Calcular total
+  const calcularTotal = () => {
+    if (!selectedProduct || !cantidad) return 0;
+
+    const cantidadNum = parseInt(cantidad) || 0;
+    const precioUnitario = selectedProduct.precioVenta || 0;
+    const subtotal = cantidadNum * precioUnitario;
+
+    if (descuento) {
+      const descuentoNum = parseFloat(descuento) || 0;
+      const montoDescuento = (subtotal * descuentoNum) / 100;
+      return subtotal - montoDescuento;
+    }
+
+    return subtotal;
   };
 
   // Registrar venta
   const registrarVenta = async () => {
+    // Validaciones
+    if (!selectedProduct) {
+      Alert.alert('Error', 'Selecciona un producto primero');
+      return;
+    }
+
     if (!cantidad || isNaN(cantidad) || parseInt(cantidad) <= 0) {
       Alert.alert('Error', 'Ingresa una cantidad válida');
       return;
     }
 
-    if (!cliente.trim()) {
-      Alert.alert('Error', 'Ingresa el nombre del cliente');
-      return;
-    }
-
-    const cantidadVenta = parseInt(cantidad);
-
-    if (cantidadVenta > productoSeleccionado.cantidad) {
+    const cantidadNum = parseInt(cantidad);
+    if (cantidadNum > selectedProduct.cantidad) {
       Alert.alert(
-        'Stock insuficiente',
-        `Solo hay ${productoSeleccionado.cantidad} unidades disponibles`
+        'Error',
+        `Stock insuficiente.\nDisponible: ${selectedProduct.cantidad}\nSolicitado: ${cantidadNum}`
       );
       return;
     }
 
     setLoading(true);
+
     try {
-      // Restar del inventario
-      const nuevaCantidad = productoSeleccionado.cantidad - cantidadVenta;
-      
+      console.log('Enviando a /api/salida:', {
+        codigo: selectedProduct.codigo,
+        producto: selectedProduct.nombre,
+        cantidad: cantidadNum,
+        descuento: descuento || 0,
+        cliente: cliente || 'Sin cliente',
+      });
+
       const response = await fetch(
-        'https://inventariaje-app.vercel.app/api/inventario',
+        'https://inventariaje-app.vercel.app/api/salida',
         {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            codigo: productoSeleccionado.codigo,
-            cantidad: nuevaCantidad,
+            codigo: selectedProduct.codigo,
+            producto: selectedProduct.nombre,
+            cantidad: cantidadNum,
+            descuento: descuento || 0,
+            cliente: cliente || '',
           }),
         }
       );
 
       const data = await response.json();
+      console.log('Respuesta:', data);
 
       if (data.exito) {
-        // Calcular totales
-        const totalCosto = cantidadVenta * productoSeleccionado.precioCosto;
-        const totalVenta = cantidadVenta * productoSeleccionado.precioVenta;
-        const ganancia = totalVenta - totalCosto;
+        Keyboard.dismiss();
+
+        const totalFinal = calcularTotal();
 
         Alert.alert(
-          '✅ Venta registrada',
-          `
-Producto: ${productoSeleccionado.nombre}
-Cantidad: ${cantidadVenta} unidades
-Cliente: ${cliente}
-Fecha: ${fecha}
-
-Costo total: $${totalCosto}
-Venta total: $${totalVenta}
-Ganancia: $${ganancia}
-          `,
+          '✅ Vendimia redimida con éxito',
+          `${selectedProduct.nombre}\nCantidad: ${cantidad}\nTotal: $${totalFinal.toFixed(2)}\nStock restante: ${data.cantidadRestante}`,
           [
             {
               text: 'OK',
               onPress: () => {
-                setProductoSeleccionado(null);
+                // Limpiar formulario
+                setSelectedProduct(null);
+                setSearchText('');
                 setCantidad('');
                 setCliente('');
-                setMostraCatalogo(true);
-                obtenerProductos(); // Recargar productos
+                setDescuento('');
+                setFilteredProducts([]);
+                cargarProductos(); // Recargar lista
               },
             },
           ]
         );
+      } else {
+        Alert.alert('Error', data.mensaje || 'Error al registrar venta');
       }
     } catch (error) {
-      Alert.alert('Error', 'Error al registrar venta: ' + error.message);
+      Alert.alert('Error', 'Error al registrar: ' + error.message);
+      console.error('Error completo:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // UI: Catálogo de productos
-  if (mostraCatalogo) {
-    return (
+  const total = calcularTotal();
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>📤 Salida de Inventario</Text>
+          <Text style={styles.title}>💰 Registrar Venta</Text>
         </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.turquesa} />
-            <Text style={styles.loadingText}>Cargando catálogo...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={productos}
-            keyExtractor={(item) => item.codigo}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.productItem}
-                onPress={() => seleccionarProducto(item)}
-              >
-                <View style={styles.productItemImage}>
-                  <Image
-                    source={getImagenProducto(item.codigo)}
-                    style={styles.productItemImg}
-                  />
-                </View>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Búsqueda de producto */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Buscar producto:</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej: lo que dice despues del V-"
+              value={searchText}
+              onChangeText={handleSearch}
+              editable={!loading}
+            />
 
-                <View style={styles.productItemInfo}>
-                  <Text style={styles.productItemName}>{item.nombre}</Text>
-                  <Text style={styles.productItemCode}>Código: {item.codigo}</Text>
-                  <View style={styles.productItemFooter}>
-                    <Text style={styles.productItemStock}>
-                      Stock: {item.cantidad}
+            {/* Dropdown de resultados */}
+            {showDropdown && filteredProducts.length > 0 && (
+              <View style={styles.dropdown}>
+                {filteredProducts.map((producto) => (
+                  <TouchableOpacity
+                    key={producto.codigo}
+                    style={styles.dropdownItem}
+                    onPress={() => selectProduct(producto)}
+                  >
+                    <Text style={styles.dropdownItemText}>
+                      {producto.nombre}
                     </Text>
-                    <Text style={styles.productItemPrice}>
-                      ${item.precioVenta}
+                    <Text style={styles.dropdownItemStock}>
+                      Stock: {producto.cantidad}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Producto seleccionado */}
+          {selectedProduct && (
+            <View style={styles.productCard}>
+              <Text style={styles.productName}>{selectedProduct.nombre}</Text>
+              <Text style={styles.productCode}>
+                Código: {selectedProduct.codigo}
+              </Text>
+
+              {/* Información de stock */}
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Stock disponible:</Text>
+                <Text style={styles.infoValue}>
+                  {selectedProduct.cantidad} unidades
+                </Text>
+              </View>
+
+              {/* Información de precio */}
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Precio unitario:</Text>
+                <Text style={styles.infoValue}>
+                  ${selectedProduct.precioVenta}
+                </Text>
+              </View>
+
+              {/* Cantidad a vender */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Cantidad a vender:</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: 2"
+                  value={cantidad}
+                  onChangeText={setCantidad}
+                  keyboardType="number-pad"
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Cliente (opcional) */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Cliente (opcional):</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nombre del cliente"
+                  value={cliente}
+                  onChangeText={setCliente}
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Descuento % (opcional) */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Descuento % (opcional):</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: 10 (para 10%)"
+                  value={descuento}
+                  onChangeText={setDescuento}
+                  keyboardType="decimal-pad"
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Resumen de total */}
+              {cantidad && (
+                <View style={styles.totalBox}>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Subtotal:</Text>
+                    <Text style={styles.totalValue}>
+                      ${(parseInt(cantidad) * selectedProduct.precioVenta).toFixed(2)}
+                    </Text>
+                  </View>
+                  {descuento && (
+                    <View style={styles.totalRow}>
+                      <Text style={styles.totalLabel}>Descuento ({descuento}%):</Text>
+                      <Text style={styles.totalValue}>
+                        -${(
+                          ((parseInt(cantidad) * selectedProduct.precioVenta) *
+                            parseFloat(descuento)) /
+                          100
+                        ).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.totalRowFinal}>
+                    <Text style={styles.totalLabelFinal}>TOTAL:</Text>
+                    <Text style={styles.totalValueFinal}>
+                      ${total.toFixed(2)}
                     </Text>
                   </View>
                 </View>
+              )}
 
-                <View style={styles.productItemSelect}>
-                  <Text style={styles.selectArrow}>→</Text>
-                </View>
+              {/* Botones */}
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={registrarVenta}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={COLORS.blanco} />
+                ) : (
+                  <Text style={styles.confirmBtnText}>✅ Confirmar venta</Text>
+                )}
               </TouchableOpacity>
-            )}
-            scrollEnabled={true}
-          />
-        )}
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setSelectedProduct(null);
+                  setSearchText('');
+                  setCantidad('');
+                  setCliente('');
+                  setDescuento('');
+                }}
+                disabled={loading}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
       </View>
-    );
-  }
-
-  // UI: Formulario de venta
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>📤 Registrar Venta</Text>
-      </View>
-
-      <ScrollView style={styles.content}>
-        {/* Producto seleccionado */}
-        <View style={styles.productCard}>
-          <View style={styles.productCardImage}>
-            <Image
-              source={getImagenProducto(productoSeleccionado.codigo)}
-              style={styles.productCardImg}
-            />
-          </View>
-
-          <Text style={styles.productCardName}>{productoSeleccionado.nombre}</Text>
-          <Text style={styles.productCardCode}>
-            Código: {productoSeleccionado.codigo}
-          </Text>
-
-          <View style={styles.productCardInfo}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Stock disponible:</Text>
-              <Text style={styles.infoValue}>{productoSeleccionado.cantidad}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Precio venta:</Text>
-              <Text style={styles.infoValue}>${productoSeleccionado.precioVenta}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.changeProductBtn}
-            onPress={() => {
-              setProductoSeleccionado(null);
-              setMostraCatalogo(true);
-            }}
-          >
-            <Text style={styles.changeProductBtnText}>← Cambiar producto</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Cantidad */}
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Cantidad a vender:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: 2"
-            value={cantidad}
-            onChangeText={setCantidad}
-            keyboardType="numeric"
-            editable={!loading}
-          />
-        </View>
-
-        {/* Cliente */}
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Nombre del cliente:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nombre o empresa"
-            value={cliente}
-            onChangeText={setCliente}
-            editable={!loading}
-          />
-        </View>
-
-        {/* Fecha/Hora */}
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Fecha y hora:</Text>
-          <TextInput
-            style={styles.input}
-            value={fecha}
-            onChangeText={setFecha}
-          />
-          <TouchableOpacity
-            style={styles.updateDateBtn}
-            onPress={() => setFecha(new Date().toLocaleString('es-MX'))}
-          >
-            <Text style={styles.updateDateBtnText}>Actualizar a ahora</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Resumen */}
-        {cantidad && (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Resumen de venta:</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Cantidad:</Text>
-              <Text style={styles.summaryValue}>{cantidad} unidades</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Precio unitario:</Text>
-              <Text style={styles.summaryValue}>${productoSeleccionado.precioVenta}</Text>
-            </View>
-            <View style={[styles.summaryRow, styles.summaryTotal]}>
-              <Text style={styles.summaryLabel}>Total venta:</Text>
-              <Text style={styles.summaryTotalValue}>
-                ${parseInt(cantidad) * productoSeleccionado.precioVenta}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Botón Vender */}
-        <TouchableOpacity
-          style={styles.sellBtn}
-          onPress={registrarVenta}
-          disabled={loading}
-        >
-          <Text style={styles.sellBtnText}>✅ Registrar Venta</Text>
-        </TouchableOpacity>
-
-        {/* Botón Cancelar */}
-        <TouchableOpacity
-          style={styles.cancelBtn}
-          onPress={() => {
-            setProductoSeleccionado(null);
-            setMostraCatalogo(true);
-          }}
-          disabled={loading}
-        >
-          <Text style={styles.cancelBtnText}>Cancelar</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.gris,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.gris,
   },
   header: {
     backgroundColor: COLORS.turquesa,
-    paddingTop: 40,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 15,
   },
@@ -359,140 +380,8 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: '#666',
-  },
-  productItem: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.blanco,
-    borderRadius: 8,
-    marginBottom: 10,
-    padding: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.turquesa,
-  },
-  productItemImage: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  productItemImg: {
-    width: 70,
-    height: 70,
-    resizeMode: 'contain',
-  },
-  productItemInfo: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  productItemName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.negro,
-    marginBottom: 4,
-  },
-  productItemCode: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 8,
-  },
-  productItemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  productItemStock: {
-    fontSize: 13,
-    color: COLORS.turquesa,
-    fontWeight: '600',
-  },
-  productItemPrice: {
-    fontSize: 14,
-    color: COLORS.verde,
-    fontWeight: 'bold',
-  },
-  productItemSelect: {
-    justifyContent: 'center',
-    paddingLeft: 10,
-  },
-  selectArrow: {
-    fontSize: 20,
-    color: COLORS.turquesa,
-  },
-  productCard: {
-    backgroundColor: COLORS.blanco,
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: COLORS.turquesa,
-  },
-  productCardImage: {
-    alignItems: 'center',
-    marginBottom: 15,
-    backgroundColor: '#f0f0f0',
-    padding: 15,
-    borderRadius: 6,
-  },
-  productCardImg: {
-    width: 120,
-    height: 120,
-    resizeMode: 'contain',
-  },
-  productCardName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.negro,
-    marginBottom: 5,
-  },
-  productCardCode: {
-    fontSize: 13,
-    color: '#999',
-    marginBottom: 15,
-  },
-  productCardInfo: {
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 15,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: '#666',
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.turquesa,
-  },
-  changeProductBtn: {
-    backgroundColor: '#e0e0e0',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  changeProductBtnText: {
-    color: COLORS.negro,
-    fontSize: 13,
-    fontWeight: '600',
-  },
   formGroup: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,
@@ -503,70 +392,117 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 6,
-    padding: 12,
-    fontSize: 15,
-    backgroundColor: COLORS.blanco,
-  },
-  updateDateBtn: {
-    backgroundColor: COLORS.amarillo,
-    padding: 8,
-    borderRadius: 6,
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  updateDateBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.negro,
-  },
-  summaryCard: {
-    backgroundColor: '#f0f8ff',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 15,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.verde,
+    fontSize: 16,
+    backgroundColor: COLORS.blanco,
   },
-  summaryTitle: {
+  dropdown: {
+    backgroundColor: COLORS.blanco,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  dropdownItemText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.negro,
-    marginBottom: 10,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    color: '#666',
-  },
-  summaryValue: {
-    fontSize: 13,
     fontWeight: '600',
     color: COLORS.negro,
   },
-  summaryTotal: {
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#ccc',
-    marginTop: 10,
+  dropdownItemStock: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
   },
-  summaryTotalValue: {
+  productCard: {
+    backgroundColor: COLORS.blanco,
+    borderRadius: 8,
+    padding: 15,
+    borderWidth: 2,
+    borderColor: COLORS.turquesa,
+    marginBottom: 20,
+  },
+  productName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.negro,
+    marginBottom: 5,
+  },
+  productCode: {
+    fontSize: 13,
+    color: '#999',
+    marginBottom: 15,
+  },
+  infoBox: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 15,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 5,
+  },
+  infoValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.turquesa,
+  },
+  totalBox: {
+    backgroundColor: '#f9f9f9',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.naranja,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  totalLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  totalValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.negro,
+  },
+  totalRowFinal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 2,
+    borderTopColor: COLORS.turquesa,
+  },
+  totalLabelFinal: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.verde,
+    color: COLORS.negro,
   },
-  sellBtn: {
+  totalValueFinal: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.naranja,
+  },
+  confirmBtn: {
     backgroundColor: COLORS.verde,
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 10,
   },
-  sellBtnText: {
+  confirmBtnText: {
     color: COLORS.blanco,
     fontSize: 16,
     fontWeight: 'bold',
@@ -576,7 +512,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 30,
   },
   cancelBtnText: {
     color: COLORS.negro,
