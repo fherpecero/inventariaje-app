@@ -40,7 +40,7 @@ export default function EntradaScreen() {
   const cargarProductos = async () => {
     try {
       const response = await fetch(
-        'https://inventariaje-app.vercel.app/api/ventas'
+      'https://inventariaje-app.vercel.app/api/firebase-api',
       );
       const data = await response.json();
 
@@ -87,7 +87,7 @@ export default function EntradaScreen() {
       const timestamp = getTimestamp();
 
       const response = await fetch(
-        'https://inventariaje-app.vercel.app/api/ventas',
+        'https://inventariaje-app.vercel.app/api/firebase-api',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
