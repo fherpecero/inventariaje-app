@@ -1,3 +1,4 @@
+import { imagenes } from './productosData';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -262,11 +263,14 @@ export default function SalidaScreen() {
     >
       {/* Imagen placeholder */}
       <View style={styles.imagenPlaceholder}>
-        <Image
-          source={require(`../assets/productos/${item.codigo}.webp`)}
-          style={{ width: 60, height: 60, resizeMode: 'contain' }}
-          onError={() => <Text style={styles.imagenPlaceholderText}>📦</Text>}
-        />
+        {imagenes[item.codigo] ? (
+          <Image
+            source={imagenes[item.codigo]}
+            style={{ width: 60, height: 60, resizeMode: 'contain' }}
+          />
+        ) : (
+          <Text style={styles.imagenPlaceholderText}>📦</Text>
+        )}
       </View>
 
       <Text style={styles.productoNombre}>{item.nombre}</Text>
