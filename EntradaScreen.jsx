@@ -5,13 +5,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  Image,
   Alert,
   ActivityIndicator,
   FlatList,
   SafeAreaView,
   Keyboard,
 } from 'react-native';
-import { getTimestamp } from './utils';
 
 const COLORS = {
   turquesa: '#00BCD4',
@@ -23,74 +23,89 @@ const COLORS = {
 };
 
 export default function EntradaScreen() {
-  const [searchText, setSearchText] = useState('');
+  const [allProducts, setAllProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [searchText, setSearchText] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cantidad, setCantidad] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [allProducts, setAllProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   // Cargar productos al iniciar
   useEffect(() => {
     cargarProductos();
   }, []);
 
+  // Cargar productos desde Firebase
   const cargarProductos = async () => {
-  try {
-    const response = await fetch(
-      'https://inventariaje-app.vercel.app/api/salida'
-    );
-    const data = await response.json();
-
-    if (data.exito && data.productos) {
-      // Validar que cada producto tenga propiedades requeridas
-      const productosValidos = data.productos.filter(p => 
-        p && p.nombre && p.codigo
+    setLoadingProducts(true);
+    try {
+      const response = await fetch(
+        'https://inventariaje-app.vercel.app/api/salida'
       );
-      setAllProducts(productosValidos);
-    } else {
-      Alert.alert('Error', 'No hay productos disponibles');
-    }
-  } catch (error) {
-    Alert.alert('Error', 'Error al cargar productos: ' + error.message);
-    console.error('Error:', error);
-  }
-};
+      const data = await response.json();
 
-  // Filtrar productos por búsqueda
+      if (data.exito && data.productos) {
+        const productosValidos = data.productos.filter(
+          (p) => p && p.nombre && p.codigo
+        );
+        setAllProducts(productosValidos);
+        setFilteredProducts(productosValidos);
+      } else {
+        Alert.alert('Error', 'No hay productos disponibles');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Error al cargar productos: ' + error.message);
+      console.error('Error:', error);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  // Filtrar productos mientras el usuario escribe
   const handleSearch = (text) => {
     setSearchText(text);
-    if (text.trim().length > 0) {
-      const filtered = allProducts.filter(p =>
-        p.nombre.toLowerCase().includes(text.toLowerCase())
+
+    if (text.trim() === '') {
+      setFilteredProducts(allProducts);
+    } else {
+      const filtered = allProducts.filter((p) =>
+        p.nombre.toUpperCase().includes(text.toUpperCase())
       );
       setFilteredProducts(filtered);
-      setShowDropdown(true);
-    } else {
-      setFilteredProducts([]);
-      setShowDropdown(false);
     }
   };
 
-  // Seleccionar producto
-  const selectProduct = (producto) => {
-    setSelectedProduct(producto);
-    setSearchText(producto.nombre);
-    setShowDropdown(false);
+  // Seleccionar producto del dropdown
+  const selectProduct = (product) => {
+    setSelectedProduct(product);
+    setSearchText(product.nombre);
+    setFilteredProducts([]);
     setCantidad('');
+    Keyboard.dismiss();
   };
 
-  // Agregar al inventario
+  // Agregar inventario
   const agregarInventario = async () => {
+    // Validaciones
+    if (!selectedProduct) {
+      Alert.alert('Error', 'Selecciona un producto primero');
+      return;
+    }
+
     if (!cantidad || isNaN(cantidad) || parseInt(cantidad) <= 0) {
-      Alert.alert('Error', 'Pero cuantos quieres?');
+      Alert.alert('Error', 'Ingresa una cantidad válida (mayor a 0)');
       return;
     }
 
     setLoading(true);
+
     try {
-      const timestamp = getTimestamp();
+      console.log('Enviando a /api/entrada:', {
+        codigo: selectedProduct.codigo,
+        producto: selectedProduct.nombre,
+        cantidad: parseInt(cantidad),
+      });
 
       const response = await fetch(
         'https://inventariaje-app.vercel.app/api/entrada',
@@ -98,152 +113,187 @@ export default function EntradaScreen() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            codigo: selectedProduct.codigo,
             producto: selectedProduct.nombre,
             cantidad: parseInt(cantidad),
-            precio: selectedProduct.precioVenta,
-            evento: 'ENTRADA',
-            lugar: 'Bodega',
           }),
         }
       );
 
       const data = await response.json();
+      console.log('Respuesta:', data);
 
       if (data.exito) {
-        Keyboard.dismiss();
-        
         Alert.alert(
-          '✅ Ya esta puesto',
-          `${selectedProduct.nombre}\nCantidad agregada: ${cantidad}\nFecha: ${timestamp}`,
+          '✅ Inventario Aumentificado Correctamente',
+          `Inventario actualizado\n\n${selectedProduct.nombre}\nCantidad agregada: ${cantidad}\nNueva cantidad: ${data.cantidadNueva}`,
           [
             {
               text: 'OK',
               onPress: () => {
+                // Limpiar formulario
                 setSelectedProduct(null);
                 setSearchText('');
                 setCantidad('');
-                setFilteredProducts([]);
-                cargarProductos(); // Recargar lista
+                setFilteredProducts(allProducts);
+                
+                // Recargar productos
+                cargarProductos();
               },
             },
           ]
         );
+      } else {
+        Alert.alert('Error', data.mensaje || 'Error al actualizar inventario');
       }
     } catch (error) {
-      Alert.alert('No pude', 'Error: ' + error.message);
+      Alert.alert('Error', 'Error al agregar: ' + error.message);
+      console.error('Error completo:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+  // Limpiar selección
+  const limpiar = () => {
+    setSelectedProduct(null);
+    setSearchText('');
+    setCantidad('');
+    setFilteredProducts(allProducts);
+  };
+
+  // Renderizar item del dropdown
+  const renderProductItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.dropdownItem}
+      onPress={() => selectProduct(item)}
+    >
+      <Text style={styles.dropdownItemText}>{item.nombre}</Text>
+      <Text style={styles.dropdownItemCode}>{item.codigo}</Text>
+    </TouchableOpacity>
+  );
+
+  if (loadingProducts) {
+    return (
+      <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>📥 Agregar Inventario</Text>
+          <Text style={styles.title}>📦 Agregar Inventario</Text>
         </View>
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={COLORS.turquesa} />
+          <Text style={styles.loaderText}>Cargando productos...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-        <View style={styles.content}>
-          {/* Búsqueda de producto */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Buscar producto:</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ej: lo que dice despues del V-"
-              value={searchText}
-              onChangeText={handleSearch}
-              editable={!loading}
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>📦 Agregar Inventario</Text>
+      </View>
+
+      <View style={styles.content}>
+        {/* Campo de búsqueda */}
+        <Text style={styles.label}>Buscar producto:</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ej: lo que dice despues del V-"
+          value={searchText}
+          onChangeText={handleSearch}
+          placeholderTextColor="#999"
+        />
+
+        {/* Dropdown de productos */}
+        {filteredProducts.length > 0 && searchText.trim() !== '' && (
+          <View style={styles.dropdown}>
+            <FlatList
+              data={filteredProducts}
+              renderItem={renderProductItem}
+              keyExtractor={(item) => item.codigo}
+              scrollEnabled={false}
             />
-
-            {/* Dropdown de resultados */}
-            {showDropdown && filteredProducts.length > 0 && (
-              <View style={styles.dropdown}>
-                {filteredProducts.map((producto) => (
-                  <TouchableOpacity
-                    key={producto.codigo}
-                    style={styles.dropdownItem}
-                    onPress={() => selectProduct(producto)}
-                  >
-                    <Text style={styles.dropdownItemText}>
-                      {producto.nombre}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
           </View>
+        )}
 
-          {/* Producto seleccionado */}
-          {selectedProduct && (
-            <View style={styles.productCard}>
-              <Text style={styles.productName}>{selectedProduct.nombre}</Text>
-              <Text style={styles.productCode}>
-                Código: {selectedProduct.codigo}
+        {/* Producto seleccionado */}
+        {selectedProduct && (
+          <View style={styles.productCard}>
+            <Text style={styles.productName}>{selectedProduct.nombre}</Text>
+            <Text style={styles.productCode}>
+              Código: {selectedProduct.codigo}
+            </Text>
+
+            {/* Información actual */}
+            <View style={styles.infoBox}>
+              <Text style={styles.infoLabel}>Cantidad actual:</Text>
+              <Text style={styles.infoValue}>
+                {selectedProduct.cantidad} unidades
               </Text>
-
-              <View style={styles.infoBox}>
-                <Text style={styles.infoLabel}>Cantidad actual:</Text>
-                <Text style={styles.infoValue}>{selectedProduct.cantidad}</Text>
-              </View>
-
-              {/* Cantidad a agregar */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Cantidad a agregar:</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: 5"
-                  value={cantidad}
-                  onChangeText={setCantidad}
-                  keyboardType="numeric"
-                  editable={!loading}
-                />
-              </View>
-
-              {/* Botones */}
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={agregarInventario}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={COLORS.blanco} />
-                ) : (
-                  <Text style={styles.addBtnText}>✅ Agregar</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => {
-                  setSelectedProduct(null);
-                  setSearchText('');
-                  setCantidad('');
-                }}
-                disabled={loading}
-              >
-                <Text style={styles.cancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
             </View>
-          )}
-        </View>
+
+            {/* Campo cantidad */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Cantidad a agregar:</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: 5"
+                value={cantidad}
+                onChangeText={setCantidad}
+                keyboardType="number-pad"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Botón agregar */}
+            <TouchableOpacity
+              style={[styles.addBtn, loading && styles.disabledBtn]}
+              onPress={agregarInventario}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={COLORS.blanco} />
+              ) : (
+                <Text style={styles.addBtnText}>✅ Agregar</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Botón limpiar */}
+            <TouchableOpacity
+              style={styles.resetBtn}
+              onPress={limpiar}
+              disabled={loading}
+            >
+              <Text style={styles.resetBtnText}>Limpiar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Sin productos */}
+        {!selectedProduct && allProducts.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No hay productos disponibles</Text>
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={cargarProductos}
+            >
+              <Text style={styles.refreshBtnText}>🔄 Recargar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.gris,
-  },
   container: {
     flex: 1,
     backgroundColor: COLORS.gris,
   },
   header: {
     backgroundColor: COLORS.turquesa,
-    paddingTop: 20,
-    paddingBottom: 20,
+    paddingVertical: 15,
     paddingHorizontal: 15,
   },
   title: {
@@ -255,8 +305,15 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
   },
-  formGroup: {
-    marginBottom: 20,
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
   },
   label: {
     fontSize: 14,
@@ -269,17 +326,18 @@ const styles = StyleSheet.create({
     borderColor: '#ccc',
     borderRadius: 8,
     padding: 12,
+    marginBottom: 10,
     fontSize: 16,
     backgroundColor: COLORS.blanco,
+    color: COLORS.negro,
   },
   dropdown: {
     backgroundColor: COLORS.blanco,
     borderWidth: 1,
     borderColor: '#ccc',
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
+    borderRadius: 8,
     maxHeight: 200,
+    marginBottom: 10,
   },
   dropdownItem: {
     padding: 12,
@@ -287,25 +345,32 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
   },
   dropdownItemText: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '600',
     color: COLORS.negro,
+  },
+  dropdownItemCode: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
   },
   productCard: {
     backgroundColor: COLORS.blanco,
     borderRadius: 8,
     padding: 15,
+    marginTop: 20,
     borderWidth: 2,
     borderColor: COLORS.turquesa,
   },
   productName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.negro,
     marginBottom: 5,
   },
   productCode: {
-    fontSize: 13,
-    color: '#999',
+    fontSize: 14,
+    color: '#666',
     marginBottom: 15,
   },
   infoBox: {
@@ -320,9 +385,12 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   infoValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.turquesa,
+  },
+  inputGroup: {
+    marginBottom: 15,
   },
   addBtn: {
     backgroundColor: COLORS.verde,
@@ -336,15 +404,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  cancelBtn: {
+  disabledBtn: {
+    opacity: 0.6,
+  },
+  resetBtn: {
     backgroundColor: '#e0e0e0',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  cancelBtnText: {
+  resetBtnText: {
     color: COLORS.negro,
     fontSize: 14,
     fontWeight: '600',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#999',
+    marginBottom: 15,
+  },
+  refreshBtn: {
+    backgroundColor: COLORS.turquesa,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  refreshBtnText: {
+    color: COLORS.blanco,
+    fontWeight: 'bold',
   },
 });
