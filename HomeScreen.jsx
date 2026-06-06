@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 const COLORS = {
-  turquesa: '#1a9ea1',  // ✅ CORREGIDO
+  turquesa: '#1a9ea1',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -35,12 +35,10 @@ export default function HomeScreen({ onNavigate }) {
 
   const cargarEstadisticas = async () => {
     try {
-      // Obtener estadísticas de Firebase
       const response = await fetch('https://inventariaje-app.vercel.app/api/salida');
       const data = await response.json();
 
       if (data.exito && data.productos) {
-        // Calcular totales
         const totalEnExistencia = data.productos.reduce(
           (sum, p) => sum + (p.cantidad || 0),
           0
@@ -50,7 +48,6 @@ export default function HomeScreen({ onNavigate }) {
           (p) => p.cantidad === 0
         ).length;
 
-        // Por ahora, ventas = valor estático (se actualizará cuando tengamos API de reportes)
         setStats({
           totalEnExistencia,
           productossinStock,
@@ -59,13 +56,6 @@ export default function HomeScreen({ onNavigate }) {
       }
     } catch (error) {
       console.error('Error cargando estadísticas:', error);
-    }
-  };
-
-  const handleNavigation = (screen) => {
-    setMenuVisible(false);
-    if (onNavigate) {
-      onNavigate(screen);
     }
   };
 
@@ -83,7 +73,7 @@ export default function HomeScreen({ onNavigate }) {
             <Text style={styles.subtitle}>by FherLaRush</Text>
           </View>
 
-          {/* Hamburger Menu Button - ALINEADO */}
+          {/* Hamburger Menu Button */}
           <TouchableOpacity
             style={styles.hamburgerBtn}
             onPress={() => setMenuVisible(true)}
@@ -105,7 +95,7 @@ export default function HomeScreen({ onNavigate }) {
             </Text>
           </View>
 
-          {/* Roadmap Card - TU CONTENIDO MEJORADO */}
+          {/* Roadmap Card */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>🛣️ Roadmap de la app</Text>
             <Text style={styles.cardSubtitle}>Usa los botones abajo para:</Text>
@@ -165,7 +155,7 @@ export default function HomeScreen({ onNavigate }) {
             <Text style={styles.roadmapQuestion}>🤔 ¿Qué más se le ofrece?</Text>
           </View>
 
-          {/* Info Cards - ACTUALIZADAS */}
+          {/* Info Cards - Dashboard */}
           <View style={styles.cardsSection}>
             <Text style={styles.sectionTitle}>📊 Dashboard</Text>
 
@@ -207,20 +197,23 @@ export default function HomeScreen({ onNavigate }) {
         </ScrollView>
       </View>
 
-      {/* Hamburger Menu Modal - CON CIERRE AL TOCAR AFUERA */}
+      {/* Hamburger Menu Modal */}
       <Modal
         visible={menuVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={cerrarMenu}
       >
-        {/* Área clickeable para cerrar */}
+        {/* Capa oscura - Al tocar aquí, cierra */}
         <Pressable
           style={styles.modalOverlay}
           onPress={cerrarMenu}
         >
-          {/* Menu que NO se cierra al tocar */}
-          <Pressable onPress={(e) => e.stopPropagation()}>
+          {/* Menu - Evita que se cierre al tocar aquí */}
+          <Pressable 
+            style={styles.menuPressable}
+            onPress={(e) => e.stopPropagation()}
+          >
             <SafeAreaView style={styles.menuSafeArea}>
               <View style={styles.menuModal}>
                 <View style={styles.menuHeader}>
@@ -458,30 +451,33 @@ const styles = StyleSheet.create({
     height: 20,
   },
   // Modal Styles
-  modalSafeArea: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'transparent',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
   },
   menuPressable: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
     width: '75%',
     backgroundColor: COLORS.blanco,
-    paddingTop: 16,
+  },
+  menuSafeArea: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   menuModal: {
     flex: 1,
+    backgroundColor: COLORS.blanco,
   },
   menuHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingVertical: 12,
   },
   menuTitle: {
     fontSize: 18,
@@ -535,4 +531,4 @@ const styles = StyleSheet.create({
     color: '#999',
     fontWeight: '500',
   },
-  });
+});
