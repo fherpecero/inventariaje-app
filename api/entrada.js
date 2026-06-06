@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
       }
 
       // Obtener cantidad actual del inventario
-      const snapshot = await db.ref(`inventario/${producto}/codigo`).parent.once('value');
+      const snapshot = await db.ref(`inventario/${producto}`).once('value');
       const productoData = snapshot.val();
       
       if (!productoData) {
@@ -65,6 +65,7 @@ module.exports = async (req, res) => {
         cantidad: parseInt(cantidad),
         cantidadAnterior: cantidadActual,
         cantidadNueva: nuevaCantidad,
+        timestamp: admin.database.ServerValue.TIMESTAMP,
       });
 
       return res.status(200).json({

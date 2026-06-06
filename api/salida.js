@@ -119,6 +119,7 @@ module.exports = async (req, res) => {
         descuentoDolar: descuentoAplicado,
         totalFinal: totalFinal,
         cliente: cliente || '',
+        timestamp: admin.database.ServerValue.TIMESTAMP,
       });
 
       return res.status(200).json({
