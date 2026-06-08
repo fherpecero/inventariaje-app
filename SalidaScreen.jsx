@@ -8,13 +8,14 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   Keyboard,
   ScrollView,
   FlatList,
   Modal,
   Image,
 } from 'react-native';
+
+
 
 const COLORS = {
   turquesa: '#1a9ea1',
@@ -24,10 +25,11 @@ const COLORS = {
   verde: '#4CAF50',
   rojo: '#f44336',
   naranja: '#FF9800',
-  morado: '#9C27B0',
+  morado: '#7e2b8d',
+  rojito: '#f97272',
 };
 
-export default function SalidaScreen() {
+export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   const [allProducts, setAllProducts] = useState([]);
   const [carrito, setCarrito] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -229,7 +231,7 @@ export default function SalidaScreen() {
         data = JSON.parse(responseText);
       } catch (e) {
         console.error('Error parseando JSON:', e);
-        Alert.alert('Error', `Error en respuesta del servidor: ${responseText}`);
+        Alert.alert('Error', `El servidor no sirve: ${responseText}`);
         setLoading(false);
         return;
       }
@@ -297,7 +299,7 @@ export default function SalidaScreen() {
       <Text style={styles.productoPrecio}>${item.precioVenta}</Text>
 
       {item.cantidad === 0 ? (
-        <Text style={styles.sinStock}>Sin stock</Text>
+        <Text style={styles.sinStock}>Ya no tienes</Text>
       ) : (
         <Text style={styles.stock}>Stock: {item.cantidad}</Text>
       )}
@@ -342,28 +344,28 @@ export default function SalidaScreen() {
 
   if (loadingProducts) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>🛒 Venta / Checkout</Text>
+          <Text style={styles.title}>🛒 Venta</Text>
         </View>
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.turquesa} />
           <Text style={styles.loaderText}>Cargando productos...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>🛒 Venta / Checkout</Text>
+        <Text style={styles.title}>🛒 Venta</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Grid de productos */}
         <View style={styles.gridContainer}>
-          <Text style={styles.sectionTitle}>📦 Productos disponibles:</Text>
+          <Text style={styles.sectionTitle}>🛍️ Productos disponibles:</Text>
           <FlatList
             data={allProducts}
             renderItem={renderProductoGrid}
@@ -607,12 +609,12 @@ export default function SalidaScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: COLORS.gris,
   },
@@ -620,6 +622,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.turquesa,
     paddingVertical: 20,
     paddingHorizontal: 20,
+    paddingTop:65,
   },
   title: {
     fontSize: 24,
@@ -655,8 +658,9 @@ const styles = StyleSheet.create({
   },
   productoGridCard: {
     width: '31%',
-    backgroundColor: COLORS.blanco,
+    backgroundColor: 'transparent',
     borderRadius: 8,
+    overflow: 'hidden',
     padding: 10,
     alignItems: 'center',
     borderWidth: 1,
@@ -697,7 +701,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   carritoContainer: {
-    backgroundColor: COLORS.blanco,
+    backgroundColor: 'transparent',
     borderRadius: 8,
     padding: 15,
     marginBottom: 20,
@@ -852,7 +856,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   cancelBtn: {
-    backgroundColor: COLORS.morado,
+    backgroundColor: COLORS.rojito,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -990,7 +994,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   modalCancelBtn: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: COLORS.rojito,
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
