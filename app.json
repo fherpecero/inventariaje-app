@@ -2,7 +2,8 @@
   "expo": {
     "name": "inventariaje-app",
     "slug": "inventariaje-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
+     "icon": "./assets/logo.png",
     "platforms": [
       "android"
     ],
