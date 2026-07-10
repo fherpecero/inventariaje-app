@@ -1,16 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  BackHandler,
+  ActivityIndicator,
+  LogBox
 } from 'react-native';
 
-// Importar todas las pantallas
-import HomeScreen from './HomeScreen';
-import EntradaScreen from './EntradaScreen';
-import SalidaScreen from './SalidaScreen';
-import SettingsScreen from './SettingsScreen';
+LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
+
+
+import { AuthContext, AuthProvider } from './context/AuthContext';
+import { fetchAndCacheTier, getTierFromCache } from './utils/tierUtils';
+
+// Importar pantallas
+import LoginScreen from './screens/LoginScreen';
+import HomeScreen from './screens/HomeScreen';
+import EntradaScreen from './screens/EntradaScreen';
+import SalidaScreen from './screens/SalidaScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import ExistenciasScreen from './screens/ExistenciasScreen'; 
+import MembersScreen from './screens/MembersScreen';
+
+
+const handleNavigation = async (screen) => {
+  console.log('Navegando a:', screen);
+  cerrarMenu();
+  
+  // Pequeño delay para evitar cambios visuales rápidos
+  setTimeout(() => {
+    onNavigate(screen);
+  }, 100);
+};
 
 const COLORS = {
   turquesa: '#1a9ea1',
@@ -25,14 +49,14 @@ const COLORS = {
 };
 
 const FONT_SIZES = {
-  titulo: 20,
-  subtitulo: 16,
+  titulo: 24,
+  subtitulo: 20,
   normal: 14,
   pequeño: 12,
 };
 
 const SPACING = {
-  header_padding: 20,
+  header_padding: 50,
   content_padding: 15,
   bottom_padding: 30,
   btn_padding: 15,
@@ -50,6 +74,7 @@ const getThemeColors = (darkMode) => {
       header: '#0d5f60',
       border: '#444444',
       input: '#333333',
+      cardBg: '#2a2a2a',
     };
   } else {
     return {
@@ -60,13 +85,35 @@ const getThemeColors = (darkMode) => {
       header: COLORS.turquesa,
       border: '#e0e0e0',
       input: COLORS.blanco,
+      cardBg: COLORS.blanco,
     };
   }
 };
 
-export default function App() {
+// COMPONENTE PRINCIPAL
+function AppContent() {
+  const { user, loading, logout } = useContext(AuthContext);
   const [page, setPage] = useState('home');
   const [darkMode, setDarkMode] = useState(false);
+  const [userTier, setUserTier] = useState('basic'); 
+
+  // BACK BUTTON HANDLER
+  useEffect(() => {
+    const backAction = () => {
+      if (page !== 'home') {
+        setPage('home');
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [page]);
 
   const themeColors = getThemeColors(darkMode);
 
@@ -74,6 +121,40 @@ export default function App() {
     setDarkMode(newValue);
   };
 
+  // CARGAR TIER CUANDO USUARIO HACE LOGIN
+  useEffect(() => {
+    if (user) {
+      cargarTierDelUsuario();
+    }
+  }, [user]);
+
+  const cargarTierDelUsuario = async () => {
+    try {
+      const tier = await getTierFromCache();
+      setUserTier(tier);
+      console.log(`📱 Tier cargado en App: ${tier}`);
+    } catch (error) {
+      console.error('❌ Error cargando tier en App:', error);
+      setUserTier('basic');
+    }
+  };
+
+  // MOSTRAR LOADING MIENTRAS SE VERIFICA AUTENTICACIÓN
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.turquesa} />
+        <Text style={[styles.loadingText, { color: themeColors.text }]}>Cargando...</Text>
+      </View>
+    );
+  }
+
+  // SI NO HAY USUARIO LOGUEADO, MOSTRAR LOGIN
+  if (!user) {
+    return <LoginScreen />;
+  }
+
+  // SI HAY USUARIO LOGUEADO, MOSTRAR APP
   return (
     <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
       {/* PANTALLAS PRINCIPALES */}
@@ -99,7 +180,7 @@ export default function App() {
         />
       )}
 
-      {/* PANTALLAS SECUNDARIAS (FASE 3) */}
+      {/* PANTALLAS SECUNDARIAS */}
       {page === 'Configuranza' && (
         <SettingsScreen
           onNavigate={setPage}
@@ -108,22 +189,40 @@ export default function App() {
           onDarkModeChange={toggleDarkMode}
         />
       )}
+      {page === 'existencias' && (  // ← AGREGAR ESTAS LÍNEAS
+        <ExistenciasScreen
+          onNavigate={setPage}
+          darkMode={darkMode}
+          themeColors={themeColors}
+        />
+      )}
+      {page === 'miembros' && 
+        <MembersScreen 
+          onNavigate={setPage} 
+          darkMode={darkMode} 
+          themeColors={themeColors} 
+        />
+      }
+
       {page === 'analytics' && (
         <AnalyticsPlaceholder onNavigate={setPage} themeColors={themeColors} />
       )}
       {page === 'alertas' && (
         <AlertasPlaceholder onNavigate={setPage} themeColors={themeColors} />
       )}
-
-      {/* PANTALLAS DE DASHBOARD ITEMS */}
       {page === 'inventario' && (
-        <InventarioPlaceholder
-          onNavigate={setPage}
-          themeColors={themeColors}
-        />
+        <InventarioPlaceholder onNavigate={setPage} themeColors={themeColors} />
       )}
       {page === 'sin-stock' && (
-        <SinStockPlaceholder onNavigate={setPage} themeColors={themeColors} />
+        <ExistenciasScreen
+          onNavigate={setPage}
+          darkMode={darkMode}
+          themeColors={themeColors}
+          modoSoloSinStock={true}  // ← PARÁMETRO QUE ACTIVA EL FILTRO
+  />
+      )}
+      {page === 'logout' && (
+        <LogoutScreen onNavigate={setPage} onLogout={logout} themeColors={themeColors} />
       )}
 
       {/* FOOTER NAVBAR - SOLO EN PANTALLAS PRINCIPALES */}
@@ -143,7 +242,7 @@ export default function App() {
             onPress={() => setPage('home')}
           >
             <Text style={styles.navIcon}>🏠</Text>
-            <Text style={styles.navLabel}>Dashboard</Text>
+            <Text style={styles.navLabel}>Inicio</Text>
           </TouchableOpacity>
 
           {/* Botón ADD (Entrada) */}
@@ -155,7 +254,7 @@ export default function App() {
             onPress={() => setPage('entrada')}
           >
             <Text style={styles.navIcon}>➕</Text>
-            <Text style={styles.navLabel}>ADD</Text>
+            <Text style={styles.navLabel}>Agregar</Text>
           </TouchableOpacity>
 
           {/* Botón VENTA (Salida) */}
@@ -167,13 +266,23 @@ export default function App() {
             onPress={() => setPage('salida')}
           >
             <Text style={styles.navIcon}>💰</Text>
-            <Text style={styles.navLabel}>VENTA</Text>
+            <Text style={styles.navLabel}>Ventas</Text>
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
 }
+
+// COMPONENTE RAÍZ (CON PROVIDER)
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
 
 // PLACEHOLDER: InventarioScreen
 function InventarioPlaceholder({ onNavigate, themeColors }) {
@@ -291,18 +400,63 @@ function AlertasPlaceholder({ onNavigate, themeColors }) {
   );
 }
 
+// LOGOUT SCREEN
+function LogoutScreen({ onNavigate, onLogout, themeColors }) {
+  const handleLogout = async () => {
+    await onLogout();  // Esperar a que logout() termine
+    onNavigate('home');  // Redirige a home (que mostrará LoginScreen si user === null)
+  };
+  
+  return (
+    <View style={[styles.placeholder, { backgroundColor: themeColors.bg }]}>
+      <View style={[styles.placeholderHeader, { backgroundColor: themeColors.header }]}>
+        <TouchableOpacity onPress={() => onNavigate('home')}>
+          <Text style={styles.placeholderBackBtn}>← Atrás</Text>
+        </TouchableOpacity>
+        <Text style={styles.placeholderTitle}>Salir</Text>
+        <View style={{ width: 60 }} />
+      </View>
+      <View style={styles.placeholderContent}>
+        <Text style={[styles.placeholderText, { color: themeColors.text }]}>
+          ¿Deseas cerrar sesión?
+        </Text>
+        <TouchableOpacity
+          style={styles.placeholderBtn}
+          onPress={() => {
+            handleLogout();
+          }}
+        >
+          <Text style={styles.placeholderBtnText}>Cerrar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.placeholderBtn, { backgroundColor: '#999' }]}
+          onPress={() => onNavigate('home')}
+        >
+          <Text style={styles.placeholderBtnText}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   // NAVBAR STYLES
   navbar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: SPACING.btn_padding,
-    paddingBottom: SPACING.bottom_padding,
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    paddingBottom: 40,
     borderTopWidth: 1,
     borderTopColor: '#0d6f71',
   },
@@ -317,7 +471,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   navIcon: {
-    fontSize: 32,
+    fontSize: 30,
     marginBottom: 8,
   },
   navLabel: {
@@ -367,6 +521,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
+    marginBottom: 10,
   },
   placeholderBtnText: {
     color: COLORS.blanco,

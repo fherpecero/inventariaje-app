@@ -26,4 +26,11 @@ export const imagenes = {
   '782706461292': require('./assets/productos/782706461292.webp'),
   '782706461421': require('./assets/productos/782706461421.webp'),
   '782706461346': require('./assets/productos/782706461346.webp'),
+  '782706461353': require('./assets/productos/782706461353.webp'), // V-THERMOKAFE
+  '782706461414': require('./assets/productos/782706461414.webp'), // VITALPRO
+  '704001003502': require('./assets/productos/704001003502.webp'), // GLUTATION PLUS
+  '789232464094': require('./assets/productos/789232464094.webp'), // V-TEDETOX MORAS
+  '789233333333': require('./assets/productos/789233333333.webp'), // V-PRIME
+  '789222222222': require('./assets/productos/789222222222.webp'), // V-HARMONY
+  '783495495154': require('./assets/productos/783495495154.webp'), // Collagen
 };

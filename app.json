@@ -1,22 +1,30 @@
 {
   "expo": {
-    "name": "inventariaje-app",
-    "slug": "inventariaje-app",
-    "version": "1.1.0",
-     "icon": "./assets/logo.png",
+    "name": "Inventariaje App",
+    "slug": "inventariaje-app11",
+    "version": "1.3.2",
+    "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a9ea1"
+    },
     "platforms": [
       "android"
     ],
     "android": {
       "package": "com.fherpecero.inventariajeapp",
-      "versionCode": 1
+      "versionCode": 3,
+      "icon": "./assets/logo.png"
     },
     "extra": {
       "eas": {
-        "projectId": "62aaf181-4537-4cb6-bf95-530933accc6d"
+        "projectId": "a24c5e4b-952b-45a0-a95c-9fb33550a369"
       }
     },
     "plugins": [
-    ]
+      "@react-native-community/datetimepicker"
+    ],
+    "owner": "fherpecero"
   }
 }
