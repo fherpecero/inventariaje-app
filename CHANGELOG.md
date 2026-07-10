@@ -1,9 +1,50 @@
 # Changelog - Inventariaje App
-## 📅 Fecha
-**26 de Junio, 2026**
  
 ---
- 
+
+## [1.4.0] - 2026-07-10
+
+### 🎯 Major: Tier System Hybrid Architecture
+Rediseño completo del sistema de tiers con separación clara entre datos Firestore y lógica frontend.
+
+### ✨ Features
+- **Tier System Híbrido**: `premiumTrialActive` + `trialStartDate` guardados en Firestore
+- **Trial de 30 días**: Cálculo frontend automático, `updateDoc()` al expirar
+- **Premium Features Visible**: Escáner, Analytics, Clientes, Créditos desbloqueados para tier premium
+- **Trial Info Banner**: Muestra días restantes en HomeScreen
+- **MembersScreen Optimizado**: Solo descarga miembros autorizados de `cuentaId`
+
+### 🔧 Technical Changes
+- Separación clara: `cuentaId` (string ID) vs `cuenta` (documento completo)
+- AuthContext pasa documento completo vía `getDoc()`
+- HomeScreen usa `cuentaId` para queries, `cuenta` para datos
+- Firestore Rules simplificadas (sin recursión `getCuenta()`)
+- Auth SDK initialization guard: `loadingAuth` verifica antes de queries
+
+### 🐛 Bug Fixes
+- Eliminada recursión en Firestore Rules que causaba race conditions
+- Resuelto timing issue: Auth SDK se inicializa async
+- MembersScreen: lectura entre miembros de cuenta autorizada
+- SalidasScreen, EntradasScreen, ExistenciasScreen: rutas Firestore corregidas
+
+### 📋 Modified Files
+- `AuthContext.jsx`: Exporta `cuentaId` + documento completo
+- `HomeScreen.jsx`: Trial logic, tier cálculo, `loadingAuth` guard
+- `MembersScreen.jsx`: Query optimizada + validación de miembros
+- `SalidasScreen.jsx`, `EntradasScreen.jsx`, `ExistenciasScreen.jsx`: Rutas ajustadas
+- `firestore.rules`: Gatekeepers básicos, lectura entre miembros
+- `tierUtils.jsx`: Limpieza de funciones innecesarias
+
+### 🚀 Next Phase
+**Fase 4 - Módulo Eventos Escáner**: ModalRegistroEscaner + SalidasScreen integration
+
+### ⚠️ Breaking Changes
+- `cuentaId` ahora required como parámetro separado
+- `cuenta` es documento completo, no solo ID
+- Firestore rules requeridas para funcionar correctamente
+
+---
+
 ## ✨ CAMBIOS EN v1.3.2
  
 ### 🆕 Nuevas Características
