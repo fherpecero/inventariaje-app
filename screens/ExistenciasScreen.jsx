@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,25 +17,10 @@ import { imagenes } from '../productosData';
 import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
+import SearchBar from '../components/SearchBar';
 
-const COLORS = {
-  turquesa: '#1a9ea1',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#f44336',
-  naranja: '#FF9800',
-  morado: '#7e2b8d',
-  rojito: '#f97272',
-};
-
-const FONT_SIZES = {
-  titulo: 20,
-  subtitulo: 16,
-  normal: 14,
-  pequeño: 12,
-};
+// ✅ 1. Importamos la Fuente de la Verdad y los componentes globales
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 export default function ExistenciasScreen({ 
     onNavigate, 
@@ -50,7 +35,6 @@ export default function ExistenciasScreen({
   const [modalNotasVisible, setModalNotasVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [notasEdicion, setNotasEdicion] = useState('');
-  const [busqueda, setBusqueda] = useState('');
   const [ordenamiento, setOrdenamiento] = useState('nombre'); // 'nombre', 'cantidad-asc', 'cantidad-desc'
   const [isOwner, setIsOwner] = useState(false);
 
@@ -69,7 +53,6 @@ export default function ExistenciasScreen({
     }
   }, [user, cuenta]);
 
-  // ¿Es el propietario de la cuenta?
   const verificarPropietario = async () => {
     try {
       const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
@@ -85,9 +68,6 @@ export default function ExistenciasScreen({
     }
   };
 
-  /**
-   * FUNCIÓN: Cargar productos con notas
-    */
   const cargarProductos = async () => {
     if (!isMountedRef.current) return;
 
@@ -96,11 +76,9 @@ export default function ExistenciasScreen({
 
       console.log('📦 Cargando existencias para cuenta:', cuenta);
 
-      // PASO 1: Leer catálogo global
       const catalogoRef = collection(db, 'catalogoGlobal');
       const catalogoSnap = await getDocs(catalogoRef);
 
-      // PASO 2: Leer inventario de la cuenta
       const docRef = doc(
         db,
         'cuentas',
@@ -111,7 +89,6 @@ export default function ExistenciasScreen({
         const docSnap = await getDoc(docRef);
         const productos = docSnap.data()?.productos || {};
 
-        // Crear mapa de inventario
         const inventarioMap = {};
         Object.keys(productos).forEach((codigo) => {
           inventarioMap[codigo] = {
@@ -120,7 +97,6 @@ export default function ExistenciasScreen({
           };
         });
 
-      // PASO 3: Combinar catálogo + inventario
       const productosCombinados = catalogoSnap.docs.map((doc) => {
         const catalogo = doc.data();
         const datos = inventarioMap[doc.id] || { cantidad: 0, notas: '' };
@@ -138,20 +114,14 @@ export default function ExistenciasScreen({
 
       if (isMountedRef.current) {
         setProductos(productosCombinados);
-        aplicarFiltrosYOrdenamiento(productosCombinados, busqueda, ordenamiento);
-        console.log('✅ Existencias cargadas:', productosCombinados.length);
-
-        // Si es modo "sin stock", filtrar automáticamente
+        
         if (modoSoloSinStock) {
             const sinStock = productosCombinados.filter(p => p.cantidad === 0);
             setProductosFiltrados(sinStock);
             setOrdenamiento('nombre');
-            console.log('📊 Modo Sin Stock - Mostrando:', sinStock.length, 'productos');
         } else {
-            aplicarFiltrosYOrdenamiento(productosCombinados, busqueda, ordenamiento);
+            setProductosFiltrados(productosCombinados);
         }
-        
-        console.log('✅ inExistencias cargadas:', productosCombinados.length);
       }
     } catch (error) {
       console.error('❌ Error cargando existencias:', error);
@@ -163,21 +133,9 @@ export default function ExistenciasScreen({
     }
   };
 
-  /**
-   * FUNCIÓN: Aplicar búsqueda y ordenamiento
-   */
-  const aplicarFiltrosYOrdenamiento = (lista, textobus, orden) => {
+  const aplicarFiltrosYOrdenamiento = (lista, orden) => {
     let resultado = [...lista];
 
-    // FILTRO: Búsqueda por nombre o código
-    if (textobus.trim()) {
-      resultado = resultado.filter((p) =>
-        p.nombre.toLowerCase().includes(textobus.toLowerCase()) ||
-        p.codigo.includes(textobus)
-      );
-    }
-
-    // ORDENAMIENTO
     if (orden === 'nombre') {
       resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     } else if (orden === 'cantidad-asc') {
@@ -189,16 +147,9 @@ export default function ExistenciasScreen({
     setProductosFiltrados(resultado);
   };
 
-  // ✅ ÚNICA función para búsqueda
-  const handleBusqueda = (texto) => {
-    setBusqueda(texto);
-    aplicarFiltrosYOrdenamiento(productos, texto, ordenamiento);
-  };
-
-  // ✅ ÚNICA función para ordenamiento
   const handleOrdenamiento = (nuevoOrden) => {
     setOrdenamiento(nuevoOrden);
-    aplicarFiltrosYOrdenamiento(productos, busqueda, nuevoOrden);
+    aplicarFiltrosYOrdenamiento(productosFiltrados, nuevoOrden);
   };
 
   const openModalNotas = (product) => {
@@ -213,11 +164,6 @@ export default function ExistenciasScreen({
     setNotasEdicion('');
   };
 
-  /**
-   * FUNCIÓN: Guardar notas del producto
-   * 
-   * PERMISOS: Todos los miembros pueden editar notas
-   */
   const guardarNotas = async () => {
     if (!selectedProduct) return;
 
@@ -236,9 +182,6 @@ export default function ExistenciasScreen({
       [`productos.${selectedProduct.id}.notas`]: notasEdicion,
       [`productos.${selectedProduct.id}.updatedAt`]: new Date().toISOString(),
       });
-      
-
-      console.log('✅ Anotado:', selectedProduct.nombre);
 
       Alert.alert('✅ Guardado', 'Las notas se anotaron correctamente', [
         {
@@ -272,7 +215,6 @@ export default function ExistenciasScreen({
         onPress={() => openModalNotas(item)}
         activeOpacity={0.7}
       >
-        {/* IMAGEN */}
         <View style={styles.imagenContainer}>
           {imagen ? (
             <Image source={imagen} style={styles.imagen} />
@@ -283,7 +225,6 @@ export default function ExistenciasScreen({
           )}
         </View>
 
-        {/* INFO */}
         <View style={styles.info}>
           <Text style={[styles.nombre, { color: themeColors.text }]} numberOfLines={2}>
             {item.nombre}
@@ -296,115 +237,87 @@ export default function ExistenciasScreen({
             <Text style={styles.cantidad}>
               {item.cantidad} pz
             </Text>
-            
           </View>          
         </View>
 
-        {/* 💰 PRECIO */}
         <View style={[styles.precioContainer, { backgroundColor: themeColors.bg }]}>
           <Text style={[styles.precioLabel, { color: themeColors.textSecondary }]}>
             ${item.precioVenta}
           </Text>
         </View>
 
-        {/* ICONO NOTAS */}
         <TouchableOpacity
           style={styles.notasBtn}
           onPress={() => openModalNotas(item)}
         >
-          <Text style={styles.notasBtnText}>{tieneNotas ? '📝' : '📝'}</Text>
+          <Text style={styles.notasBtnText}>📝</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
+  const productosParaSearch = useMemo(() => {
+    return modoSoloSinStock 
+      ? productos.filter(p => p.cantidad === 0)
+      : productos;
+  }, [productos, modoSoloSinStock]);
+
   if (loading && productos.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.bg }]}>
-        <View style={styles.loaderContainer}>
+      <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+        <View style={GLOBAL_STYLES.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.turquesa} />
+          <Text style={GLOBAL_STYLES.loaderText}>Cargando existencias...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.bg }]}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => onNavigate('home')}>
-          <Text style={styles.backBtn}>← Atrás</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{modoSoloSinStock ? '⚠️ Sin Stock' : '📊 Existencias'}</Text>
-        <View style={{ width: 60 }} />
-      </View>
+    <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+      
+      {/* ✅ 2. Implementamos ScreenHeader */}
+      <ScreenHeader
+        title={modoSoloSinStock ? '⚠️ Sin Stock' : '📊 Existencias'}
+        onBackPress={() => onNavigate('home')}
+        themeColors={themeColors}
+      />
 
-      {/* BÚSQUEDA */}
-      <View style={[styles.searchContainer, { backgroundColor: themeColors.bgSecondary }]}>
-        <TextInput
-          style={[styles.searchInput, { color: themeColors.text }]}
-          placeholder="Buscar por nombre o código..."
-          placeholderTextColor={themeColors.textSecondary}
-          value={busqueda}
-          onChangeText={handleBusqueda}
-        />
-      </View>
+      <SearchBar 
+        data={productosParaSearch}
+        onSearch={setProductosFiltrados}
+        searchKeys={['nombre', 'codigo']}
+      />
 
-      {/* FILTROS */}
       <View style={styles.filtrosContainer}>
         <TouchableOpacity
-          style={[
-            styles.filtroBtn,
-            ordenamiento === 'nombre' && styles.filtroBtnActive,
-          ]}
+          style={[styles.filtroBtn, ordenamiento === 'nombre' && styles.filtroBtnActive]}
           onPress={() => handleOrdenamiento('nombre')}
         >
-          <Text
-            style={[
-              styles.filtroBtnText,
-              ordenamiento === 'nombre' && styles.filtroBtnTextActive,
-            ]}
-          >
+          <Text style={[styles.filtroBtnText, ordenamiento === 'nombre' && styles.filtroBtnTextActive]}>
             A-Z
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.filtroBtn,
-            ordenamiento === 'cantidad-asc' && styles.filtroBtnActive,
-          ]}
+          style={[styles.filtroBtn, ordenamiento === 'cantidad-asc' && styles.filtroBtnActive]}
           onPress={() => handleOrdenamiento('cantidad-asc')}
         >
-          <Text
-            style={[
-              styles.filtroBtnText,
-              ordenamiento === 'cantidad-asc' && styles.filtroBtnTextActive,
-            ]}
-          >
+          <Text style={[styles.filtroBtnText, ordenamiento === 'cantidad-asc' && styles.filtroBtnTextActive]}>
             ↑ Stock
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.filtroBtn,
-            ordenamiento === 'cantidad-desc' && styles.filtroBtnActive,
-          ]}
+          style={[styles.filtroBtn, ordenamiento === 'cantidad-desc' && styles.filtroBtnActive]}
           onPress={() => handleOrdenamiento('cantidad-desc')}
         >
-          <Text
-            style={[
-              styles.filtroBtnText,
-              ordenamiento === 'cantidad-desc' && styles.filtroBtnTextActive,
-            ]}
-          >
+          <Text style={[styles.filtroBtnText, ordenamiento === 'cantidad-desc' && styles.filtroBtnTextActive]}>
             ↓ Stock
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* LISTA */}
       <FlatList
         data={productosFiltrados}
         renderItem={renderProducto}
@@ -412,57 +325,56 @@ export default function ExistenciasScreen({
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: themeColors.text }]}>
+          <View style={GLOBAL_STYLES.emptyContainer}>
+            <Text style={[GLOBAL_STYLES.emptyText, { color: themeColors.textSecondary }]}>
               No hay productos
             </Text>
           </View>
         }
       />
 
-      {/* MODAL - EDITAR NOTAS */}
+      {/* ✅ 3. Modal unificado con GLOBAL_STYLES */}
       <Modal
         visible={modalNotasVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={closeModalNotas}
       >
-        <Pressable style={styles.modalOverlay} onPress={closeModalNotas}>
+        <Pressable style={GLOBAL_STYLES.modalOverlay} onPress={closeModalNotas}>
           <Pressable
-            style={[styles.modalContent, { backgroundColor: themeColors.bgSecondary }]}
+            style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bgSecondary }]}
             onPress={(e) => e.stopPropagation()}
           >
             {selectedProduct && (
               <>
-                {/* HEADER MODAL */}
                 <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: themeColors.text }]}>
+                  {/* Forzamos marginBottom 0 para que no choque con la 'X' */}
+                  <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text, marginBottom: 0, flex: 1 }]}>
                     {selectedProduct.nombre}
                   </Text>
                   <TouchableOpacity onPress={closeModalNotas}>
-                    <Text style={styles.modalCloseBtn}>✕</Text>
+                    <Text style={{ fontSize: 24, fontWeight: '700', color: themeColors.textSecondary, marginLeft: 10 }}>✕</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* INFO */}
                 <View style={styles.modalInfo}>
-                  <Text style={[styles.modalLabel, { color: themeColors.text }]}>
+                  <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>
                     Cantidad: {selectedProduct.cantidad} unid.
                   </Text>
-                  <Text style={[styles.modalLabel, { color: themeColors.textSecondary }]}>
+                  <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.textSecondary }]}>
                     Código: {selectedProduct.codigo}
                   </Text>
                 </View>
 
-                {/* NOTAS INPUT */}
-                <View style={styles.notasInputContainer}>
-                  <Text style={[styles.notasInputLabel, { color: themeColors.text }]}>
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>
                     📝 Notas (Prestado, Cortesías, etc)
                   </Text>
                   <TextInput
                     style={[
-                      styles.notasInput,
-                      { color: themeColors.text, borderColor: COLORS.turquesa },
+                      GLOBAL_STYLES.inputBase, // Hereda borde, padding y fuente global
+                      styles.notasInputArea, // Mantiene el multiline
+                      { color: themeColors.text, borderColor: COLORS.turquesa, backgroundColor: themeColors.bg },
                     ]}
                     placeholder="Agregar notas..."
                     placeholderTextColor={themeColors.textSecondary}
@@ -473,22 +385,21 @@ export default function ExistenciasScreen({
                   />
                 </View>
 
-                {/* BOTONES */}
-                <View style={styles.modalButtons}>
+                <View style={GLOBAL_STYLES.modalButtons}>
                   <TouchableOpacity
-                    style={styles.cancelBtn}
+                    style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]}
                     onPress={closeModalNotas}
                   >
-                    <Text style={styles.cancelBtnText}>Cancelar</Text>
+                    <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.acceptBtn, loading && styles.disabledBtn]}
+                    style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]}
                     onPress={guardarNotas}
                     disabled={loading}
                   >
-                    <Text style={styles.acceptBtnText}>
-                      {loading ? '⏳' : '💾'} Guardar
+                    <Text style={GLOBAL_STYLES.btnText}>
+                      {loading ? '⏳' : '💾 Guardar'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -501,52 +412,8 @@ export default function ExistenciasScreen({
   );
 }
 
+// ✅ 4. StyleSheet purificado (Solo estilos de Filtros, Tarjetas y Layout del modal)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.blanco,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // HEADER
-  header: {
-    backgroundColor: COLORS.turquesa,
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    paddingTop: 65,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backBtn: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.blanco,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.blanco,
-  },
-
-  // BÚSQUEDA
-  searchContainer: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: COLORS.gris,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-
   // FILTROS
   filtrosContainer: {
     flexDirection: 'row',
@@ -573,7 +440,7 @@ const styles = StyleSheet.create({
     color: COLORS.blanco,
   },
 
-  // LISTA
+  // LISTA Y TARJETAS DE PRODUCTO
   listContent: {
     padding: 15,
     paddingBottom: 30,
@@ -629,21 +496,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.turquesa,
-    textAlign: 'center',  // ← AGREGAR SOLO ESTA LÍNEA
-    minWidth: 60,         // ← Para que tome espacio suficiente
-  },
-  notasBadge: {
-    backgroundColor: COLORS.naranja,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    alignItems: 'center',
-  },
-  notasText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.blanco,
+    textAlign: 'center',
+    minWidth: 60,
   },
   notasBtn: {
     width: 40,
@@ -656,105 +510,8 @@ const styles = StyleSheet.create({
   notasBtnText: {
     fontSize: 18,
   },
-
-  // EMPTY
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 50,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-
-  // MODAL
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    padding: 20,
-    paddingBottom: 30,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  modalCloseBtn: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  modalInfo: {
-    marginBottom: 15,
-  },
-  modalLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-
-  // NOTAS INPUT
-  notasInputContainer: {
-    marginBottom: 20,
-  },
-  notasInputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  notasInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 13,
-    textAlignVertical: 'top',
-  },
-
-  // BOTONES MODAL
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: COLORS.rojito,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.blanco,
-  },
-  acceptBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: COLORS.verde,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  acceptBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.blanco,
-  },
-  disabledBtn: {
-    opacity: 0.5,
-  },
-  // 🆕 PRECIO TAG
+  
+  // ETIQUETA DE PRECIO
   precioContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -765,14 +522,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderLeftWidth: 3,
     borderLeftColor: COLORS.turquesa,
-},
-precioLabel: {
-  fontSize: 12,
-  fontWeight: '600',
-},
-precioValue: {
-  fontSize: 12,
-  fontWeight: '700',
-  color: COLORS.turquesa,
-},
+  },
+  precioLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  
+  // LAYOUT INTERNO DEL MODAL
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 15,
+  },
+  modalInfo: {
+    marginBottom: 15,
+  },
+  notasInputArea: {
+    minHeight: 100, // Hace que el input parezca un área de texto grande
+    textAlignVertical: 'top',
+  },
 });

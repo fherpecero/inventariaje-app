@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
 
 const COLORS = {
-  turquesa: '#1a9ea1',
+  turquesa: '#24c5c5',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',

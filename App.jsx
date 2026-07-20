@@ -24,6 +24,13 @@ import SalidaScreen from './screens/SalidaScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ExistenciasScreen from './screens/ExistenciasScreen'; 
 import MembersScreen from './screens/MembersScreen';
+import ClientesScreen from './screens/ClientesScreen';
+
+// Importar items de Diseño
+import HomeIcon from './assets/icons/IconHome.svg';
+import AddIcon from './assets/icons/IconAdd.svg';
+import VentaIcon from './assets/icons/IconVenta.svg';
+
 
 
 const handleNavigation = async (screen) => {
@@ -37,7 +44,7 @@ const handleNavigation = async (screen) => {
 };
 
 const COLORS = {
-  turquesa: '#1a9ea1',
+  turquesa: '#24c5c5',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -46,6 +53,7 @@ const COLORS = {
   naranja: '#FF9800',
   morado: '#7e2b8d',
   rojito: '#f97272',
+  grey: '#565656',
 };
 
 const FONT_SIZES = {
@@ -82,7 +90,7 @@ const getThemeColors = (darkMode) => {
       bgSecondary: COLORS.blanco,
       text: COLORS.negro,
       textSecondary: '#666666',
-      header: COLORS.turquesa,
+      header: COLORS.blanco,
       border: '#e0e0e0',
       input: COLORS.blanco,
       cardBg: COLORS.blanco,
@@ -203,6 +211,14 @@ function AppContent() {
           themeColors={themeColors} 
         />
       }
+      {/* PANTALLAS PREMIUM */}
+      {page === 'clientes' && (
+        <ClientesScreen
+          onNavigate={setPage}
+          darkMode={darkMode}
+          themeColors={themeColors}
+        />
+      )}
 
       {page === 'analytics' && (
         <AnalyticsPlaceholder onNavigate={setPage} themeColors={themeColors} />
@@ -235,38 +251,68 @@ function AppContent() {
         >
           {/* Botón Dashboard */}
           <TouchableOpacity
-            style={[
-              styles.navBtn,
-              page === 'home' && styles.navBtnActive,
-            ]}
+            style={styles.navBtn}
             onPress={() => setPage('home')}
           >
-            <Text style={styles.navIcon}>🏠</Text>
-            <Text style={styles.navLabel}>Inicio</Text>
+            <View style={[
+              styles.navIconContainer, 
+              page === 'home' && styles.navIconContainerActive
+            ]}>
+              <HomeIcon 
+                style={[
+                  styles.navIcon, 
+                  page === 'home' && styles.navIconActive
+                ]} 
+              />
+            </View>
+            <Text style={[
+              styles.navLabel, 
+              page === 'home' && styles.navLabelActive
+            ]}>Inicio</Text>
           </TouchableOpacity>
 
           {/* Botón ADD (Entrada) */}
           <TouchableOpacity
-            style={[
-              styles.navBtn,
-              page === 'entrada' && styles.navBtnActive,
-            ]}
+            style={styles.navBtn}
             onPress={() => setPage('entrada')}
           >
-            <Text style={styles.navIcon}>➕</Text>
-            <Text style={styles.navLabel}>Agregar</Text>
+            <View style={[
+              styles.navIconContainer, 
+              page === 'entrada' && styles.navIconContainerActive
+            ]}>
+              <AddIcon 
+                style={[
+                  styles.navIcon, 
+                  page === 'entrada' && styles.navIconActive
+                ]} 
+              />
+            </View>
+            <Text style={[
+              styles.navLabel, 
+              page === 'entrada' && styles.navLabelActive
+            ]}>Agregar</Text>
           </TouchableOpacity>
 
           {/* Botón VENTA (Salida) */}
           <TouchableOpacity
-            style={[
-              styles.navBtn,
-              page === 'salida' && styles.navBtnActive,
-            ]}
+            style={styles.navBtn}
             onPress={() => setPage('salida')}
           >
-            <Text style={styles.navIcon}>💰</Text>
-            <Text style={styles.navLabel}>Ventas</Text>
+            <View style={[
+              styles.navIconContainer, 
+              page === 'salida' && styles.navIconContainerActive
+            ]}>
+              <VentaIcon 
+                style={[
+                  styles.navIcon, 
+                  page === 'salida' && styles.navIconActive
+                ]} 
+              />
+            </View>
+            <Text style={[
+              styles.navLabel, 
+              page === 'salida' && styles.navLabelActive
+            ]}>Vender</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -454,30 +500,71 @@ const styles = StyleSheet.create({
   navbar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingVertical: 10,
-    paddingBottom: 40,
+    paddingHorizontal: 30,
+    paddingBottom: 25,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#0d6f71',
+    borderTopColor: COLORS.gris,
+    boxShadow: '0px 0px 5px -3px #00000042',
   },
   navBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
+    //paddingVertical: 10,
+    //borderRadius: 50,
+    //marginHorizontal: 4,
+    //width: 100,
+    //height: 100,
+    //borderRadius: 50,
+    justifyContent: 'center',
+    //alignItems: 'center',
     marginHorizontal: 4,
+    //color: COLORS.gris, 
   },
-  navBtnActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  //navBtnActive: {
+    //backgroundColor: COLORS.turquesa,
+  //},
+  navIconContainer: {
+  width: 45,
+  height: 45,
+  borderRadius: 25, 
+  backgroundColor: 'transparent',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginBottom: 4,
+  padding: 10,
+  },
+  navIconContainerActive: {
+    backgroundColor: COLORS.turquesa,
+    borderRadius: 25, 
   },
   navIcon: {
-    fontSize: 30,
-    marginBottom: 8,
+    //fontSize: 30,
+    //marginBottom: 8,
+    //color: COLORS.gris,
+    //width: 1,
+    //height: 1,
+    //borderRadius: 25,
+    //backgroundColor: 'transparent', 
+    color: COLORS.grey,
+    marginBottom: 4,
+    //textAlign: 'center',
+    
+  },
+  navIconActive: {
+    //backgroundColor: COLORS.turquesa,
+    color: COLORS.blanco,
   },
   navLabel: {
     fontSize: FONT_SIZES.pequeño,
     fontWeight: '600',
-    color: COLORS.blanco,
+    color: COLORS.grey,
+    textAlign: 'center',
+  },
+  navLabelActive: {
+    color: COLORS.turquesa,
   },
 
   // PLACEHOLDER STYLES

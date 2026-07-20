@@ -18,7 +18,7 @@ import { signOut } from 'firebase/auth';
 import { AuthContext } from '../context/AuthContext';
 
 const COLORS = {
-  turquesa: '#1a9ea1',
+  turquesa: '#24c5c5',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -44,7 +44,7 @@ export default function SettingsScreen({
   themeColors,
   onDarkModeChange,
 }) {
-  const { logout } = useContext(AuthContext);
+  const { logout, cuenta, cuentaId } = useContext(AuthContext);
 
   const [usuario, setUsuario] = useState({
     nombre: 'Usuario',
@@ -113,16 +113,47 @@ export default function SettingsScreen({
     setEditingNombre(true);
   };
 
-  const guardarNombre = () => {
-    if (nombreTemporal.trim().length === 0) {
-      Alert.alert('Error', 'El nombre no puede estar vacío');
-      return;
-    }
+  const guardarNombre = async () => {
+  console.log('1️⃣ Inicio guardarNombre');
+  console.log('   nombreTemporal:', nombreTemporal);
+  console.log('   cuentaId:', cuentaId);  // ✅ Ahora está definido
 
-    const newUsuario = { ...usuario, nombre: nombreTemporal.trim() };
-    guardarUsuario(newUsuario);
+  if (nombreTemporal.trim().length === 0) {
+    console.log('❌ VALIDACIÓN FALLIDA: nombre vacío');
+    Alert.alert('Error', 'El nombre no puede estar vacío');
+    return;
+  }
+  console.log('✅ Validación pasada');
+
+  try {
+    const nombreNuevo = nombreTemporal.trim();
+    console.log('2️⃣ Preparando actualización:', {
+      colección: 'cuentas',
+      documentId: cuentaId,
+      campo: 'nombre',
+      valorNuevo: nombreNuevo
+    });
+
+    console.log('3️⃣ Enviando a Firestore...');
+    await updateDoc(doc(db, 'cuentas', cuentaId), {
+      nombre: nombreNuevo
+    });
+    console.log('✅ Firestore actualizado exitosamente');
+
+    const newUsuario = { ...usuario, nombre: nombreNuevo };
+    setUsuario(newUsuario);
     setEditingNombre(false);
-  };
+
+    console.log('5️⃣ Mostrando mensaje de éxito');
+    Alert.alert('Éxito', 'Nombre actualizado');
+  } catch (error) {
+    console.log('❌ ERROR CAPTURADO:', {
+      mensaje: error.message,
+      código: error.code,
+    });
+    Alert.alert('Error', 'No se pudo guardar: ' + error.message);
+  }
+};
 
   const toggleNotificaciones = async () => {
     const newValue = !notificaciones;
@@ -258,17 +289,32 @@ export default function SettingsScreen({
                   </View>
                 ) : (
                   <>
-                    <Text style={[styles.userName, { color: themeColors.text }]}>
-                      {usuario.nombre}
-                    </Text>
-                    <Text
-                      style={[styles.userEmail, { color: themeColors.textSecondary }]}
-                    >
-                      {usuario.email}
-                    </Text>
-                    <TouchableOpacity onPress={editarNombre} style={styles.editBtn}>
-                      <Text style={styles.editBtnText}>✏️ Editar nombre</Text>
-                    </TouchableOpacity>
+                 {/* Línea 1: Nombre + Account ID */}
+<View style={styles.userInfoRow}>
+  {/* LEFT */}
+  <View style={styles.userInfoLeft}>
+    <Text style={[styles.userName, { color: themeColors.text }]}>
+      {usuario.nombre}
+    </Text>
+    <Text style={[styles.userEmail, { color: themeColors.textSecondary }]}>
+      {usuario.email}
+    </Text>
+    <TouchableOpacity onPress={editarNombre} style={styles.editBtn}>
+      <Text style={styles.editBtnText}>✏️ Editar nombre</Text>
+    </TouchableOpacity>
+  </View>
+
+  {/* RIGHT */}
+  <View style={styles.userInfoRight}>
+    <Text style={[styles.accountId, { color: themeColors.text }]}>
+      ID: {cuentaId}
+    </Text>
+    <Text style={styles.tierEmoji}>💎</Text>
+    <Text style={[styles.tierLabel, { color: COLORS.turquesa }]}>
+      PREMIUM
+    </Text>
+  </View>
+</View>
                   </>
                 )}
               </View>
@@ -382,7 +428,7 @@ export default function SettingsScreen({
               />
             </View>
 
-            {/* Idioma */}
+            {/* Idioma
             <View style={styles.idiomaSection}>
               <Text
                 style={[styles.settingLabel, { color: themeColors.text, marginBottom: 10 }]}
@@ -426,7 +472,7 @@ export default function SettingsScreen({
                   </Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </View> */}
           </View>
 
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -453,39 +499,70 @@ export default function SettingsScreen({
                   },
                 ]}
               >
-                <View style={styles.itemsContainer}>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Registro de entradas y salidas
+                {/* FASE 1 - COMPLETADAS */}
+                  <View style={styles.itemsContainer}>
+                  <Text style={[styles.featureVersion, { color: themeColors.text }]}>
+                    Fase 1
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Catálogo de Productos
+                      ✓ Full Stack dev - App deployment
+                    </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                      ✓ Base de datos en la nube (real time)
+                    </Text>
+                  
+                {/* FASE 2 */}
+                  <Text style={[styles.featureVersion, { color: themeColors.text }]}>
+                  Fase 2
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Autenticación Multi-usuario
+                    ✓ Dashboard con Inicio
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Dashboard con Métricas simples
+                    ✓ Control de Inventario (entradas y salidas)
                   </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
+
+                {/* FASE 3 */}
+                    <Text style={[styles.featureVersion, { color: themeColors.text }]}>
+                    Fase 3
+                    </Text>
+                    <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Autenticación Multi-usuario 
+                    </Text>
+                    <Text style={[styles.item, { color: themeColors.text }]}>
                     ✓ Estructura Multi-cuenta en Firestore
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Migración Realtime DB → Firestore
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Menu de existencias y articulos sin stock
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    </Text>
+                    <Text style={[styles.item, { color: themeColors.text }]}>
+                      ✓ Migración Realtime DB → Firestore
+                    </Text>
+                    <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Modo Oscuro
+                    </Text>
+                     <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Catálogo de Productos (existencias y faltantes)
+                    </Text>
+                    <Text style={[styles.item, { color: themeColors.text }]}>
                     ✓ Gestión de usuarios (crear usuarios adicionales)
+                    </Text>
+                    <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Tier management (version basic & premium)
+                  </Text>
+
+
+                {/* FASE 4 */}
+                  <Text style={[styles.featureVersion, { color: themeColors.text }]}>
+                  Fase 4 | Funciones Premium
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ 🌚 Modo Oscuro
+                    ✓ Registro de Escaner (Scanner Party)
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Ventas a credito
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Modulo de intercambio de productos (socios)
                   </Text>
                 </View>
-
-                <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                  v1.1.2
-                </Text>
               </View>
             </View>
 
@@ -510,21 +587,18 @@ export default function SettingsScreen({
                     🏷️ Descuento por producto (checkout)
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    📥 Registro de ingresos por scanner
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🎟️ Registro de eventos (scanner party)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    💸 Gastos y Viaticos (costos por restock y eventos)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
                     📊 Analytics & Reportes (ingresos & egresos/profits)
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    🎨 Rediseño de imagen 
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    👥 Team Management (tracking de miembros de mi unidad)
                   </Text>
                 </View>
 
                 <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
-                  20% completado - v1.4.0
+                  20% completado - v2.0.0
                 </Text>
               </View>
             </View>
@@ -540,13 +614,16 @@ export default function SettingsScreen({
                   styles.featureBox,
                   {
                     backgroundColor: themeColors.bgSecondary,
-                    borderColor: themeColors.border,
+                    borderColor: COLORS.morado,
                   },
                 ]}
               >
                 <View style={styles.itemsContainer}>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     📜 Historial Completo de operaciones
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    💸 Gastos y Viaticos (costos por restock y eventos)
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     ⚠️ Alertas de Restock automáticas
@@ -584,13 +661,13 @@ export default function SettingsScreen({
               ]}
             >
               <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v1.3.1
+                📱 Versión Actual: v2.0.0
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: {new Date().toLocaleDateString('es-MX')}
+                Compilada: '16/07/2026',
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Multi-usuario + Gestión de Miembros
+                Última actualización: Escaner + Creditos + Intercambios | Rediseño iniciado
               </Text>
             </View>
           </View>
@@ -636,12 +713,12 @@ const styles = StyleSheet.create({
   backBtn: {
     fontSize: FONT_SIZES.normal,
     fontWeight: '600',
-    color: COLORS.blanco,
+    color: COLORS.grey,
   },
   title: {
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: '700',
-    color: COLORS.blanco,
+    color: COLORS.grey,
   },
 
   /* CONTENT */
@@ -687,7 +764,29 @@ const styles = StyleSheet.create({
   userInfoContainer: {
     flex: 1,
   },
-  editingContainer: {
+  userInfoRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'space-between',
+},
+userInfoLeft: {
+  flex: 1,
+  marginRight: 10,
+},
+userInfoRight: {
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 5,
+},
+tierEmoji: {
+  fontSize: 32,
+  marginVertical: 4,
+},
+tierLabel: {
+  fontSize: 12,
+  fontWeight: '600',
+},
+    editingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

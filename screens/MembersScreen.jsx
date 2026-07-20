@@ -19,7 +19,7 @@ import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 
 const COLORS = {
-  turquesa: '#1a9ea1',
+  turquesa: '#24c5c5',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',

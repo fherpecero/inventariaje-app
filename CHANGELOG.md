@@ -1,5 +1,48 @@
 # Changelog - Inventariaje App
  
+
+ ## [2.0.0] - 2026-07-20
+
+### 🎯 Major: Arquitectura Serverless, Escalabilidad y Módulos Colaborativos
+Migración de la lógica crítica al backend (Cloud Functions), reestructuración masiva del esquema de inventarios para soportar alta escalabilidad, y lanzamiento de los módulos de Intercambios y Créditos.
+
+### ✨ Features
+- **Módulo Eventos Escáner (Fase 4A)**: Implementación de `ModalRegistroEscaner` con fecha y guardado de estado `activo`/`finalizado`.
+- **Módulo Créditos / CRD (Fase 4B)**: Reemplazo de "PTP" en `SalidaScreen`. Abre modal para capturar nombre, fecha y notas, registrándose paralelamente en `/salidas/` y `/creditos/`.
+- **Gestión de Cobranza (`ClientesScreen`)**: Interfaz de tabla para visualizar créditos. Modal dinámico que permite registrar "Adelantos" (pagos parciales) o "Liquidación" total de la deuda.
+- **Módulo de Intercambios Colaborativo**: Implementado en `SalidaScreen` (botón 🔁). Soporta selección de socio ("Con App" / "Sin App" vía `AutocompleteSearchSocios`) y cálculo automático de saldos a favor/en contra.
+- **Buzón de Intercambios (`ModalExchange.jsx`)**: Componente *listener* en tiempo real (`onSnapshot`) en el HomeScreen que notifica al usuario receptor y permite aceptar/rechazar solicitudes de intercambio cruzado.
+- **Feedback de Testers**: Nuevo buzón de sugerencias en el menú lateral.
+
+### 🔧 Technical Changes
+- **Cloud Functions (`crearNuevaCuenta`)**: Transición a transacciones en backend (`batch.commit()`) para crear cuentas nuevas. Previene recursión, elimina riesgo de duplicidad de ID (*race conditions*) y blinda la base de datos de escrituras del cliente.
+- [cite_start]**Subcolecciones de Inventario**: Migración del esquema `productos` (antiguo mapa único límite 1MB) a subcolecciones atómicas (`/cuentas/{cuentaId}/inventarios/{productoId}`) para soportar la escalabilidad a 1000+ usuarios[cite: 5, 2].
+- [cite_start]**Auth Initialization Guard**: Implementación de bandera de estado `loadingAuth` (`onAuthStateChanged`) en `AuthContext` para frenar peticiones prematuras a Firestore que provocaban errores de permisos[cite: 4].
+- [cite_start]**UI & Styling Centralizado**: Creación de `context/theme.jsx` como *Single Source of Truth* para colores (`getThemeColors` Dark/Light), tipografías, el nuevo `ScreenHeader` global y gradientes (`expo-linear-gradient`)[cite: 5].
+- [cite_start]**Safe Area Context**: Integración nativa de `useSafeAreaInsets` de `react-native-safe-area-context` en `HomeScreen` para evitar solapamiento visual con la barra de navegación del hardware[cite: 6].
+- [cite_start]**Soporte SVG**: Integración en `metro.config.js` de `react-native-svg-transformer` para importar archivos `.svg` vectoriales[cite: 3].
+- [cite_start]**Refactorización de Renders**: Optimización del JSX sacando cálculos pesados (ej. `calcularDiferenciaIntercambio()`) de las funciones anónimas autoejecutables para mejorar la velocidad[cite: 3].
+
+### 🐛 Bug Fixes
+- [cite_start]**Firestore Rules Arrays**: Corrección crítica cambiando el operador `in` por `miembros.contains()` para iterar arreglos correctamente, solucionando el bloqueo "Missing or insufficient permissions" en Analytics[cite: 4].
+- [cite_start]**Inflación de Ventas del Mes**: Se añadió un filtro (`if (tipoPago !== 'crd')`) para que el "Dinero Líquido" en la caja de la HomeScreen no sume las ventas a crédito aún no pagadas[cite: 3].
+- [cite_start]**Choque de Modales (Animaciones)**: Implementación de *Retraso Táctico* (`setTimeout`) en el Menú lateral para permitir el cierre total del Drawer antes de montar modales secundarios, evitando que la app se congele[cite: 3].
+- **Loop Infinito en `SearchBar`**: Corrección de arreglo de dependencias en el `useEffect`, cambiando `[filteredData]` por `[searchText]` para prevenir ciclos de renderizado.
+
+### 📋 Modified Files
+- `HomeScreen.jsx`: Safe Area insets, Métricas limpias, Buzón de intercambios, *timeout* de Feedback.
+- `AuthContext.js`: Integración de estado `loadingAuth` y eliminación de lógica de creación de cuentas de frontend.
+- `SalidaScreen.jsx`: Integración Módulo de Intercambios optimizado y CRD.
+- `ClientesScreen.jsx`: Remoción de *StyleSheets* a tema global, nueva tabla de clientes.
+- `context/theme.jsx` (Nuevo): Contexto global de diseño UI.
+- `components/ModalExchange.jsx` (Nuevo): Lógica y modal de buzón colaborativo.
+- `functions/index.js` (Nuevo): Backend serverless para creación de cuentas.
+- `firestore.rules`: Ajustes de seguridad, uso de `.contains()` y bloqueo de la colección `_config`.
+
+### ⚠️ Breaking Changes
+- La inicialización de nuevos usuarios ahora depende estrictamente de Firebase Cloud Functions (la función debe estar desplegada).
+- Esquema de base de datos alterado: Las consultas a inventarios ahora apuntan a subcolecciones.
+- Las reglas de seguridad bloquean toda lectura/escritura de clientes en la colección `_config`.
 ---
 
 ## [1.4.0] - 2026-07-10

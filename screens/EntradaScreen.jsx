@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,33 +16,15 @@ import { collection, setDoc, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import Toast from '../components/Toast';
+import SearchBar from '../components/SearchBar';
 
-const COLORS = {
-  turquesa: '#1a9ea1',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#a7342b',
-  naranja: '#FF9800',
-  rojito: '#f97272',
-  morado: '#7e2b8d',
-};
-
-const FONT_SIZES = {
-  titulo: 20,
-  subtitulo: 16,
-  normal: 14,
-  pequeño: 12,
-};
-
-
-
-const SPACING = 10;
+// ✅ 1. Importamos la Fuente de la Verdad desde theme.jsx
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   const { user, cuenta, cuentaId } = useContext(AuthContext);
   const [productos, setProductos] = useState([]);
+  const [productosFiltrados, setProductosFiltrados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -51,13 +33,12 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     visible: false,
     message: '',
     type: 'success'
-});
+  });
 
-const mostrarToast = (msg, tipo = 'success') => {
-  setToastConfig({ visible: true, message: msg, type: tipo });
-};
+  const mostrarToast = (msg, tipo = 'success') => {
+    setToastConfig({ visible: true, message: msg, type: tipo });
+  };
   
-  // ✅ Ref para trackear si el componente está montado
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -66,16 +47,12 @@ const mostrarToast = (msg, tipo = 'success') => {
     };
   }, []);
 
-  // ✅ Cargar productos cuando monta o cuando cambia la cuenta
   useEffect(() => {
     if (user && cuenta) {
       cargarProductos();
     }
   }, [user, cuenta]);
 
-  /**
-   * FUNCIÓN: Cargar productos combinando catálogo global + inventario de cuenta
-   */
   const cargarProductos = async () => {
     if (!isMountedRef.current) return;
     
@@ -84,11 +61,9 @@ const mostrarToast = (msg, tipo = 'success') => {
       
       console.log('📦 Cargando productos para cuenta:', cuenta);
 
-      // PASO 1: Leer catálogo global
       const catalogoRef = collection(db, 'catalogoGlobal');
       const catalogoSnap = await getDocs(catalogoRef);
 
-      // PASO 2: Leer inventario de la cuenta (COMO DOCUMENTO MAPA)
       const docRef = doc(
         db,
         'cuentas',
@@ -99,15 +74,11 @@ const mostrarToast = (msg, tipo = 'success') => {
       const docSnap = await getDoc(docRef);
       const productos = docSnap.data()?.productos || {};
 
-      // Crear mapa de inventario
       const inventarioMap = {};
       Object.keys(productos).forEach((codigo) => {
         inventarioMap[codigo] = productos[codigo].cantidad || 0;
       });
 
-      console.log('📊 Inventario cargado:', inventarioMap);
-
-      // PASO 3: Combinar catálogo + inventario
       const productosCombinados = catalogoSnap.docs.map((doc) => {
         const catalogo = doc.data();
         const cantidad = inventarioMap[doc.id] || 0;
@@ -126,7 +97,7 @@ const mostrarToast = (msg, tipo = 'success') => {
 
       if (isMountedRef.current) {
         setProductos(productosCombinados);
-        console.log('✅ Productos cargados:', productosCombinados.length);
+        setProductosFiltrados(productosCombinados);
       }
     } catch (error) {
       console.error('❌ Error cargando productos:', error);
@@ -162,91 +133,82 @@ const mostrarToast = (msg, tipo = 'success') => {
     }
   };
 
-  /**
-   * FUNCIÓN: Confirmar entrada (agregar productos al inventario)
-   */
   const confirmarEntrada = async () => {
-  if (!selectedProduct || cantidad < 1) {
-    mostrarToast('Cantidad inválida', 'error');
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    // PASO 1: Referencia al documento del inventario
-    const productoRef = doc(
-      db,
-      'cuentas',
-      cuentaId.toString(),
-      'inventarios',
-      'vital_health_principal'
-    );
-
-    // PASO 2: Leer inventario actual
-    const docSnap = await getDoc(productoRef);
-    
-    // ✅ IMPORTANTE: Asegurar que siempre sea un objeto
-    let productosActuales = {};
-    if (docSnap.exists() && docSnap.data().productos) {
-      productosActuales = docSnap.data().productos;
+    if (!selectedProduct || cantidad < 1) {
+      mostrarToast('Cantidad inválida', 'error');
+      return;
     }
 
-    console.log('📦 Productos actuales:', productosActuales);
+    try {
+      setLoading(true);
 
-    const cantidadActual = productosActuales[selectedProduct.id]?.cantidad || 0;
-    const nuevaCantidad = cantidadActual + cantidad;
+      const productoRef = doc(
+        db,
+        'cuentas',
+        cuentaId.toString(),
+        'inventarios',
+        'vital_health_principal'
+      );
 
-    // PASO 3: Actualizar el mapa de productos
-    const productosActualizados = {
-      ...productosActuales,
-      [selectedProduct.id]: {
-        ...productosActuales[selectedProduct.id],
-        cantidad: nuevaCantidad,
-        codigo: selectedProduct.codigo,
-        nombre: selectedProduct.nombre,
-        updatedAt: new Date().toISOString(),
-        createdAt: productosActuales[selectedProduct.id]?.createdAt || new Date().toISOString(),
+      const docSnap = await getDoc(productoRef);
+      
+      let productosActuales = {};
+      if (docSnap.exists() && docSnap.data().productos) {
+        productosActuales = docSnap.data().productos;
       }
-    };
 
-    console.log('📦 Productos después de actualizar:', productosActualizados);
+      const cantidadActual = productosActuales[selectedProduct.id]?.cantidad || 0;
+      const nuevaCantidad = cantidadActual + cantidad;
 
-    // PASO 4: Guardar en Firestore
-    await setDoc(productoRef, {
-      productos: productosActualizados,
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
+      const productosActualizados = {
+        ...productosActuales,
+        [selectedProduct.id]: {
+          ...productosActuales[selectedProduct.id],
+          cantidad: nuevaCantidad,
+          codigo: selectedProduct.codigo,
+          nombre: selectedProduct.nombre,
+          updatedAt: new Date().toISOString(),
+          createdAt: productosActuales[selectedProduct.id]?.createdAt || new Date().toISOString(),
+        }
+      };
 
-    console.log(`✅ ${selectedProduct.nombre}: ${cantidadActual} → ${nuevaCantidad}`);
+      await setDoc(productoRef, {
+        productos: productosActualizados,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
 
-    // PASO 5: Actualizar estado local
-    const productosActualizadosLocal = productos.map((p) =>
-      p.id === selectedProduct.id
-        ? { ...p, cantidad: nuevaCantidad }
-        : p
-    );
-    setProductos(productosActualizadosLocal);
+      const productosActualizadosLocal = productos.map((p) =>
+        p.id === selectedProduct.id
+          ? { ...p, cantidad: nuevaCantidad }
+          : p
+      );
+      setProductos(productosActualizadosLocal);
 
-    // PASO 6: Mostrar Toast y cerrar modal
-    closeModal();
-    mostrarToast(`${selectedProduct.nombre}: +${cantidad} unidades`, 'success');
+      closeModal();
+      mostrarToast(`${selectedProduct.nombre}: +${cantidad} unidades`, 'success');
 
-  } catch (error) {
-    console.error('❌ Error en confirmarEntrada:', error);
-    console.error('📋 Detalles:', error.message);
-    mostrarToast('Error al agregar producto', 'error');
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error) {
+      console.error('❌ Error en confirmarEntrada:', error);
+      mostrarToast('Error al agregar producto', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = useCallback((filtrados) => {
+    setProductosFiltrados(filtrados);
+  }, []);
+
+  const productosParaSearch = useMemo(() => {
+    return productos;
+  }, [productos]);
 
   const renderProducto = ({ item }) => {
     const imagen = imagenes[item.codigo] || null;
 
     return (
       <TouchableOpacity
-        style={styles.productCard}
+        style={[styles.productCard, { borderColor: COLORS.morado }]} // Forzamos color para que no se pierda al quitar COLORS local
         onPress={() => openModal(item)}
         activeOpacity={0.7}
       >
@@ -262,7 +224,7 @@ const mostrarToast = (msg, tipo = 'success') => {
         )}
 
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={1}>
+          <Text style={[styles.productName, { color: themeColors.text }]} numberOfLines={1}>
             {item.nombre}
           </Text>
           <Text style={styles.productStock}>
@@ -279,14 +241,14 @@ const mostrarToast = (msg, tipo = 'success') => {
 
   if (loading && productos.length === 0) {
     return (
-      <View style={styles.loaderContainer}>
+      <View style={GLOBAL_STYLES.loaderContainer}>
         <ActivityIndicator size="large" color={COLORS.turquesa} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
+    <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <Toast 
         visible={toastConfig.visible}
         message={toastConfig.message}
@@ -294,15 +256,22 @@ const mostrarToast = (msg, tipo = 'success') => {
         duration={1500}
         onHide={() => setToastConfig({ visible: false })}
       />
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>➕ Agregar Productos</Text>
-        <Text style={styles.headerSubtitle}>Introduce la cantidad de productos a sumar a tu inventario</Text>
-      </View>
+      
+      {/* ✅ 2. Cambiamos el header manual por el ScreenHeader Global */}
+      <ScreenHeader
+        title="➕ Entradas"
+        onBackPress={() => onNavigate('home')}
+        themeColors={themeColors}
+      />
 
-      {/* GRID DE PRODUCTOS */}
+      <SearchBar 
+        data={productosParaSearch} 
+        onSearch={handleSearch}
+        searchKeys={['nombre', 'codigo']}
+      />
+
       <FlatList
-        data={productos}
+        data={productosFiltrados}
         renderItem={renderProducto}
         keyExtractor={(item) => item.codigo}
         numColumns={3}
@@ -311,7 +280,6 @@ const mostrarToast = (msg, tipo = 'success') => {
         contentContainerStyle={styles.gridContent}
       />
 
-      {/* MODAL - SELECCIONAR CANTIDAD */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -319,16 +287,15 @@ const mostrarToast = (msg, tipo = 'success') => {
         onRequestClose={closeModal}
       >
         <Pressable
-          style={styles.modalOverlay}
+          style={GLOBAL_STYLES.modalOverlay}
           onPress={closeModal}
         >
           <Pressable
-            style={styles.modalContent}
+            style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg, padding: 0 }]} // Quitamos el padding para la imagen de arriba
             onPress={(e) => e.stopPropagation()}
           >
             {selectedProduct && (
               <>
-                {/* IMAGEN PRODUCTO */}
                 <View style={styles.modalImageContainer}>
                   {imagenes[selectedProduct.codigo] ? (
                     <Image
@@ -342,62 +309,63 @@ const mostrarToast = (msg, tipo = 'success') => {
                   )}
                 </View>
 
-                {/* INFORMACIÓN */}
-                <View style={styles.modalInfo}>
-                  <Text style={styles.modalProductName}>
-                    {selectedProduct.nombre}
-                  </Text>
-                  <Text style={styles.modalProductCode}>
-                    Código: {selectedProduct.codigo}
-                  </Text>
-                  <Text style={styles.modalProductStock}>
-                    Stock actual: {selectedProduct.cantidad} unidades
-                  </Text>
-                </View>
+                {/* Envolvemos el resto en un View con padding */}
+                <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+                  <View style={styles.modalInfo}>
+                    <Text style={[GLOBAL_STYLES.modalTitle, { textAlign: 'left', marginBottom: 5, color: themeColors.text }]}>
+                      {selectedProduct.nombre}
+                    </Text>
+                    <Text style={styles.modalProductCode}>
+                      Código: {selectedProduct.codigo}
+                    </Text>
+                    <Text style={styles.modalProductStock}>
+                      Stock actual: {selectedProduct.cantidad} unidades
+                    </Text>
+                  </View>
 
-                {/* SELECTOR DE CANTIDAD */}
-                <View style={styles.cantidadSection}>
-                  <Text style={styles.cantidadLabel}>Cantidad a agregar:</Text>
+                  <View style={[styles.cantidadSection, { backgroundColor: darkMode ? '#333' : COLORS.gris }]}>
+                    <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Cantidad a agregar:</Text>
 
-                  <View style={styles.cantidadControls}>
+                    <View style={styles.cantidadControls}>
+                      <TouchableOpacity
+                        style={styles.cantidadBtn}
+                        onPress={disminuirCantidad}
+                      >
+                        <Text style={styles.cantidadBtnText}>−</Text>
+                      </TouchableOpacity>
+
+                      <View style={styles.cantidadDisplay}>
+                        <Text style={styles.cantidadValue}>{cantidad}</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.cantidadBtn}
+                        onPress={aumentarCantidad}
+                      >
+                        <Text style={styles.cantidadBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* ✅ 3. Usamos los botones Globales */}
+                  <View style={GLOBAL_STYLES.modalButtons}>
                     <TouchableOpacity
-                      style={styles.cantidadBtn}
-                      onPress={disminuirCantidad}
+                      style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]}
+                      onPress={closeModal}
                     >
-                      <Text style={styles.cantidadBtnText}>−</Text>
+                      <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.cantidadDisplay}>
-                      <Text style={styles.cantidadValue}>{cantidad}</Text>
-                    </View>
-
                     <TouchableOpacity
-                      style={styles.cantidadBtn}
-                      onPress={aumentarCantidad}
+                      style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]}
+                      onPress={confirmarEntrada}
+                      disabled={loading}
                     >
-                      <Text style={styles.cantidadBtnText}>+</Text>
+                      <Text style={GLOBAL_STYLES.btnText}>
+                        {loading ? '⏳' : '✅'} Aceptar
+                      </Text>
                     </TouchableOpacity>
                   </View>
-                </View>
-
-                {/* BOTONES */}
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={closeModal}
-                  >
-                    <Text style={styles.cancelBtnText}>Cancelar</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.acceptBtn, loading && styles.disabledBtn]}
-                    onPress={confirmarEntrada}
-                    disabled={loading}
-                  >
-                    <Text style={styles.acceptBtnText}>
-                      {loading ? '⏳' : '✅'} Aceptar
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               </>
             )}
@@ -408,38 +376,10 @@ const mostrarToast = (msg, tipo = 'success') => {
   );
 }
 
+// ✅ 4. StyleSheet purificado (Solo estilos de Grid/Imágenes que son únicos aquí)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.gris,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* HEADER */
-  header: {
-    backgroundColor: COLORS.turquesa,
-    paddingHorizontal: SPACING,
-    paddingVertical: 20,
-    paddingTop: 60,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-  },
-
-  /* GRID */
   gridContent: {
-    padding: SPACING,
+    padding: SPACING.content_padding,
     paddingBottom: 30,
   },
   row: {
@@ -454,7 +394,6 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.morado,
   },
   productImage: {
     width: '100%',
@@ -477,12 +416,11 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     width: '100%',
-    backgroundColor: COLORS.blanco,
+    backgroundColor: 'transparent',
   },
   productName: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.negro,
     textAlign: 'center',
     marginBottom: 3,
   },
@@ -504,26 +442,12 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 16,
   },
-
-  /* MODAL */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-  },
-  modalContent: {
-    backgroundColor: COLORS.blanco,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
   modalImageContainer: {
     width: '100%',
     height: 240,
     marginBottom: 20,
-    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
   },
   modalImage: {
@@ -544,12 +468,6 @@ const styles = StyleSheet.create({
   modalInfo: {
     marginBottom: 20,
   },
-  modalProductName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.negro,
-    marginBottom: 8,
-  },
   modalProductCode: {
     fontSize: 12,
     color: '#999',
@@ -560,19 +478,10 @@ const styles = StyleSheet.create({
     color: COLORS.turquesa,
     fontWeight: '600',
   },
-
-  /* CANTIDAD */
   cantidadSection: {
-    backgroundColor: COLORS.gris,
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
-  },
-  cantidadLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.negro,
-    marginBottom: 12,
   },
   cantidadControls: {
     flexDirection: 'row',
@@ -607,38 +516,5 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: COLORS.turquesa,
-  },
-
-  /* BUTTONS */
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    backgroundColor: COLORS.rojito,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.negro,
-  },
-  acceptBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    backgroundColor: COLORS.verde,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  acceptBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.blanco,
-  },
-  disabledBtn: {
-    opacity: 0.5,
   },
 });

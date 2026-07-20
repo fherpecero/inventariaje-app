@@ -104,7 +104,6 @@ export const hasAccessToFeature = async (featureName) => {
     'existencias': ['basic', 'premium'],
     'bajo-stock': ['basic', 'premium'],
     'bajo_stock': ['basic', 'premium'],
-    'scannerEvents': { basic: false, premium: true }, 
     
     // Features PREMIUM (solo premium)
     'scanner': ['premium'],
@@ -114,7 +113,7 @@ export const hasAccessToFeature = async (featureName) => {
     'clientes': ['premium'],
     'creditos': ['premium'],
     'alertas': ['premium'],  
-    'scannerEvents': { basic: false, premium: true }, 
+    'scannerEvents': [premium], 
   };
 
   const allowedTiers = featureMatrix[featureName] || [];

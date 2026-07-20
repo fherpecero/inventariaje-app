@@ -1,6 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { getTimestamp } from '../utils/utils';
 import {
   View,
   Text,
@@ -13,16 +11,27 @@ import {
   ActivityIndicator,
   LogBox,
 } from 'react-native';
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, query } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, query, where, onSnapshot } from 'firebase/firestore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
-import { hasAccessToFeature, calculateEffectiveTier, getTrialInfo } from '../utils/tierUtils';
-import FeatureLocked from '../components/FeatureLocked';
+import ModalRegistroEscaner from '../components/ModalRegistroEscaner';
+import ModalExchange from '../components/ModalExchange';
+import ModalFeedback from '../components/ModalFeedback';
+
+// ICONS
+import MenuIcon from '../assets/icons/IconMenu.svg';
+
 
 LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
+// ==========================================
+// CONSTANTES Y THEME
+// ==========================================
 const COLORS = {
-  turquesa: '#1a9ea1',
+  turquesa: '#24c5c5',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
@@ -30,13 +39,14 @@ const COLORS = {
   rojo: '#f44336',
   naranja: '#FF9800',
   morado: '#7e2b8d',
+  grey: '#565656',
 };
 
 const FONT_SIZES = {
-  titulo: 20,
-  subtitulo: 16,
-  normal: 14,
-  pequeño: 12,
+  titulo: 40,
+  subtitulo: 20,
+  normal: 16,
+  pequeño: 14,
 };
 
 const SPACING = {
@@ -46,60 +56,65 @@ const SPACING = {
   btn_padding: 15,
 };
 
-// FUNCIÓN PARA OBTENER COLORES SEGÚN DARK MODE
-const getThemeColors = (darkMode) => {
-  if (darkMode) {
-    return {
-      bg: '#1a1a1a',
-      bgSecondary: '#2d2d2d',
-      text: '#ffffff',
-      textSecondary: '#cccccc',
-      header: '#0d5f60',
-      border: '#444444',
-      input: '#333333',
-      cardBg: '#2a2a2a',
-    };
-  } else {
-    return {
-      bg: COLORS.gris,
-      bgSecondary: COLORS.blanco,
-      text: COLORS.negro,
-      textSecondary: '#666666',
-      header: COLORS.turquesa,
-      border: '#e0e0e0',
-      input: COLORS.blanco,
-      cardBg: COLORS.blanco,
-    };
-  }
-};
-
 export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
-  // Extraemos variables del contexto y renombramos loading para evitar colisiones
+  // ==========================================
+  // ESTADOS Y CONTEXTOS
+  // ==========================================
   const { user, cuenta, cuentaId, loading: loadingAuth } = useContext(AuthContext);
+  const isMountedRef = useRef(true);
   
-  // Estados de interfaz y datos
+  // Interfaz y Loaders
   const [menuVisible, setMenuVisible] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [modalFeedbackVisible, setModalFeedbackVisible] = useState(false);
+  
+  // Datos del Dashboard
   const [stats, setStats] = useState({
     totalEnExistencia: 0,
     productosSinStock: 0,
     ventasDelMes: 0,
     ultimasOperaciones: [],
   });
-  
-  // Estado local para los loaders de esta pantalla en específico
-  const [loadingStats, setLoadingStats] = useState(true);
-  
-  const [canUseAnalytics, setCanUseAnalytics] = useState(false);
-  const [canUseClientes, setCanUseClientes] = useState(false);
+  const [creditosPendientes, setCreditosPendientes] = useState([]);
+  const [loadingCreditos, setLoadingCreditos] = useState(false);
+
+  // Escáner
+  const [modalEventoVisible, setModalEventoVisible] = useState(false);
+  const [eventoActivo, setEventoActivo] = useState(null);
+
+  // Suscripción y Accesos
   const [effectiveTier, setEffectiveTier] = useState('basic');
   const [trialInfo, setTrialInfo] = useState(null);
-  const [canUseAlertas, setCanUseAlertas] = useState(false);
+
+  // ESTADOS Y EFECTO: Buzón de Intercambios
+  const [peticionesBuzon, setPeticionesBuzon] = useState([]);
+  const [modalBuzonVisible, setModalBuzonVisible] = useState(false);
+
+  useEffect(() => {
+    if (loadingAuth || !user || !cuentaId) return;
+
+    // Escuchamos donde YO soy el receptor (paraCuentaId) y el estado es 'pendiente'
+    const peticionesRef = collection(db, 'intercambios_pendientes');
+    const q = query(
+      peticionesRef, 
+      where('paraCuentaId', '==', String(cuentaId)), 
+      where('estado', '==', 'pendiente')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const peticiones = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      if (isMountedRef.current) setPeticionesBuzon(peticiones);
+    });
+
+    return () => unsubscribe();
+  }, [cuentaId, user, loadingAuth]);
 
   // ==========================================
-  // REFERENCIA: Evitar fugas de memoria (Declarado una sola vez)
+  // EFECTOS DE CICLO DE VIDA
   // ==========================================
-  const isMountedRef = useRef(true);
-  
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -107,25 +122,11 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   }, []);
 
   // ==========================================
-  // HELPER: Cargar info de Trial manualmente si se requiere
-  // ==========================================
-  const cargarTrialInfo = async () => {
-    try {
-      if (!cuenta) return;
-      const trial = await getTrialInfo(cuenta);
-      if (isMountedRef.current) setTrialInfo(trial);
-    } catch (error) {
-      console.error('Error cargando trial info:', error);
-    }
-  };
-
-  // ==========================================
   // EFECTO 1: Calcular el Tier y Trial
   // ==========================================
   useEffect(() => {
     if (!user || !cuenta || !cuentaId) return;
     
-    // Calcular tier efectivo
     let tierFinal = cuenta?.tier || 'basic';
     
     if (cuenta?.premiumTrialActive && cuenta?.trialStartDate) {
@@ -134,7 +135,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
       const diferenciaDias = (ahora - inicio) / (1000 * 60 * 60 * 24);
       
       if (diferenciaDias >= 30) {
-        // Trial expiró: actualizar documento usando cuentaId como string
         updateDoc(doc(db, 'cuentas', String(cuentaId)), {
           premiumTrialActive: false,
           tier: 'basic'
@@ -145,7 +145,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         tierFinal = 'premium';
       }
       
-      // Calcular trial info restante
       const endDate = new Date(inicio);
       endDate.setDate(endDate.getDate() + 30);
       const daysRemaining = Math.ceil((endDate - ahora) / (1000 * 60 * 60 * 24));
@@ -162,42 +161,23 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   }, [user, cuenta, cuentaId]);
 
   // ==========================================
-  // EFECTO 2: Cargar Estadísticas (Protegido con Freno de Mano)
+  // EFECTO 2: Cargar Estadísticas
   // ==========================================
   useEffect(() => {
-    // 🛑 1. EL FRENO: Si Firebase Auth sigue cargando, nos detenemos.
-    if (loadingAuth) {
-      console.log("⏳ Esperando Auth antes de cargar estadísticas...");
-      return;
-    }
-    
-    // 🛑 2. Si no hay usuario o cuentaId, abortamos.
+    if (loadingAuth) return;
     if (!user || !cuentaId) return;
 
-    // ✅ 3. LÓGICA PRINCIPAL
     const cargarEstadisticas = async () => {
       if (!isMountedRef.current) return;
       
       try {
         setLoadingStats(true);
-        console.log('📊 Cargando estadísticas para:', { userId: user.uid, cuentaId });
         
-        // ========================================
-        // 1. OBTENER INVENTARIO
-        // ========================================
-        const docRef = doc(
-          db,
-          'cuentas',
-          String(cuentaId), // ✅ CORREGIDO: Usamos String(cuentaId) para evitar crasheos
-          'inventarios',
-          'vital_health_principal'
-        );
+        // 1. INVENTARIO
+        const docRef = doc(db, 'cuentas', String(cuentaId), 'inventarios', 'vital_health_principal');
         const docSnap = await getDoc(docRef);
-
         const productos = docSnap.data()?.productos || {};
         
-        console.log('📦 Productos encontrados:', Object.keys(productos).length);
-
         const catalogoRef = collection(db, 'catalogoGlobal');
         const catalogoSnap = await getDocs(catalogoRef);
 
@@ -212,34 +192,15 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         catalogoSnap.forEach((doc) => {
           const cantidad = inventarioMap[doc.id] || 0;
           totalEnExistencia += cantidad;
-
-          if (cantidad === 0) {
-            productosSinStock += 1;
-          }
+          if (cantidad === 0) productosSinStock += 1;
         });
 
-        console.log('✅ Inventario cargado:', totalEnExistencia, 'unidades');
-        console.log('⚠️ Productos sin stock:', productosSinStock, '/ 32');
-
-        // ========================================
-        // 2. CALCULAR VENTAS DEL MES EN CURSO
-        // ========================================
+        // 2. VENTAS DEL MES
         const ahora = new Date();
         const primerDiaDelMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
         const ultimoDiaDelMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
 
-        console.log('📅 Rango de mes:', {
-          desde: primerDiaDelMes.toISOString(),
-          hasta: ultimoDiaDelMes.toISOString(),
-        });
-
-        const salidasRef = collection(
-          db,
-          'cuentas',
-          String(cuentaId),
-          'salidas'
-        );
-
+        const salidasRef = collection(db, 'cuentas', String(cuentaId), 'salidas');
         const salidasSnap = await getDocs(salidasRef);
 
         let ventasDelMes = 0;
@@ -252,31 +213,29 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
           if (timestampStr) {
             const timestampDate = new Date(timestampStr);
 
-            if (
-              timestampDate >= primerDiaDelMes &&
-              timestampDate <= ultimoDiaDelMes
-            ) {
+            if (timestampDate >= primerDiaDelMes && timestampDate <= ultimoDiaDelMes) {
               const total = parseFloat(data.total) || 0;
-              ventasDelMes += total;
+              
+              // Sumar a la caja SOLO si NO es crédito
+              if (data.tipoPago !== 'crd') {
+                ventasDelMes += total;
+              }
 
+              // Registrar TODO en el historial
               ultimasOperaciones.push({
                 producto: data.producto,
                 cantidad: data.cantidad,
                 total: total,
                 timestamp: timestampStr,
-                tipo: 'salida',
+                tipo: data.tipoPago === 'crd' ? 'crédito' : 'salida',
               });
             }
           }
         });
 
-        ultimasOperaciones.sort((a, b) => {
-          const fechaA = new Date(a.timestamp);
-          const fechaB = new Date(b.timestamp);
-          return fechaB - fechaA;
-        });
+        
 
-        console.log('💰 Ventas del mes (TOTAL):', ventasDelMes.toFixed(2));
+        ultimasOperaciones.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         if (isMountedRef.current) {
           setStats({
@@ -286,37 +245,101 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             ultimasOperaciones: ultimasOperaciones,
           });
         }
-
-        console.log('✅ Estadísticas cargadas exitosamente.');
-
       } catch (error) {
         console.error('❌ Error cargando estadísticas:', error);
-        if (isMountedRef.current) {
-          Alert.alert('Error', 'No se pudieron cargar las estadísticas');
-        }
       } finally {
-        if (isMountedRef.current) {
-          setLoadingStats(false); // ✅ CORREGIDO: Ajustado al estado de loading correcto
-        }
+        if (isMountedRef.current) setLoadingStats(false);
       }
     };
 
     cargarEstadisticas();
-
-  // 👇 Dependemos de loadingAuth para que se dispare cuando Firebase termine
   }, [user, cuentaId, loadingAuth]); 
 
+  // ==========================================
+  // EFECTO 3: Cargar evento activo del Escáner
+  // ==========================================
+  useEffect(() => {
+    if (!user || !cuentaId) return;
 
-  const cerrarMenu = () => {
-    setMenuVisible(false);
-  };
+    const cargarEventoActivo = async () => {
+      try {
+        const escanerRef = collection(db, 'cuentas', String(cuentaId), 'escaneres');
+        const q = query(escanerRef, where('estado', '==', 'activo'));
+        const escanerSnap = await getDocs(q);
+
+        let eventoAct = null;
+
+        if (!escanerSnap.empty) {
+          const doc = escanerSnap.docs[0];
+          eventoAct = { ...doc.data(), id: doc.id };
+        }
+
+        if (isMountedRef.current) {
+          setEventoActivo(eventoAct);
+          if (eventoAct) {
+            await AsyncStorage.setItem('escanerActual', JSON.stringify(eventoAct));
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error cargando evento activo:', error);
+      }
+    };
+
+    cargarEventoActivo();
+  }, [user, cuentaId]);
+
+  // ==========================================
+  // EFECTO 4: Cargar Créditos Pendientes (Tiempo Real)
+  // ==========================================
+  useEffect(() => {
+    if (loadingAuth || !user || !cuentaId) return;
+    if (isMountedRef.current) setLoadingCreditos(true);
+
+    try {
+      const creditosRef = collection(db, 'cuentas', String(cuentaId), 'creditos');
+      const q = query(creditosRef, where('estado', '==', 'pendiente'));
+      
+      const unsubscribeCreditos = onSnapshot(
+        q, 
+        (snapshot) => {
+          let creditos = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          
+          creditos.sort((a, b) => (a.fechaPTP?.seconds || 0) - (b.fechaPTP?.seconds || 0));
+          
+          if (isMountedRef.current) {
+            setCreditosPendientes(creditos);
+            setLoadingCreditos(false);
+          }
+        },
+        (error) => {
+          console.log('🔇 Snapshot de créditos silenciado:', error.code);
+          if (isMountedRef.current) setLoadingCreditos(false);
+        }
+      );
+
+      return () => unsubscribeCreditos();
+    } catch (error) {
+      console.error('❌ Error configurando listener de créditos:', error);
+      if (isMountedRef.current) setLoadingCreditos(false);
+    }
+  }, [cuentaId, user, loadingAuth]);
+
+  // ==========================================
+  // ACCIONES Y NAVEGACIÓN
+  // ==========================================
+  const cerrarMenu = () => setMenuVisible(false);
 
   const handleNavigation = (screen) => {
-    console.log('Navegando a:', screen);
     cerrarMenu();
     onNavigate(screen);
   };
 
+  // ==========================================
+  // RENDER PANTALLAS DE CARGA
+  // ==========================================
   if (loadingAuth || loadingStats) {
     return (
       <View style={[styles.container, { backgroundColor: themeColors.bg, justifyContent: 'center', alignItems: 'center' }]}>
@@ -326,142 +349,318 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
     );
   }
 
+  // ==========================================
+  // RENDER PRINCIPAL
+  // ==========================================
   return (
     <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
       {/* HEADER */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>🌿 INVENTARIAJE APP 🌱</Text>
-          <Text style={styles.headerSubtitle}>by FherLaRush</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>INVENTARIAJE</Text>
+            <Text style={styles.headerSubtitle}>by FherLaRush</Text>
+          </View>
+
+          {/* Lado Derecho: Controles (Campana + Menú) */}
+          <View style={styles.headerRightControls}>
+            
+            {/* 🔔 CAMPANA DE NOTIFICACIONES */}
+            <TouchableOpacity
+              style={[
+                styles.bellButton,
+                peticionesBuzon.length > 0 ? styles.bellButtonActive : styles.bellButtonInactive
+              ]}
+              onPress={() => setModalBuzonVisible(true)}
+            >
+              <Ionicons 
+                name={peticionesBuzon.length > 0 ? "notifications" : "notifications-outline"} 
+                size={22} 
+                color={peticionesBuzon.length > 0 ? COLORS.blanco : COLORS.grey} 
+              />
+              {/* Badge (Puntito rojo) */}
+              {peticionesBuzon.length > 0 && (
+                <View style={styles.bellBadge} />
+              )}
+            </TouchableOpacity>
+          
+          {/* MENÚ HAMBURGUESA */}
+            <TouchableOpacity style={styles.menuBtn} onPress={() => setMenuVisible(true)}>
+              <MenuIcon width={36} height={36} />
+            </TouchableOpacity>
+
+          </View>
         </View>
-        <TouchableOpacity
-          style={styles.menuBtn}
-          onPress={() => setMenuVisible(true)}
-        >
-          <Text style={styles.menuIcon}>≡</Text>
-        </TouchableOpacity>
+
+        <LinearGradient
+          colors={['rgba(68, 194, 194, 1)', 'rgba(122, 122, 236, 0.7)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          locations={[0.27, 0.90]}
+          style={styles.headerBorderGradient}
+        />
       </View>
 
       {/* CONTENT */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        
         {/* BIENVENIDA */}
         <View style={styles.welcomeSection}>
-          <Text style={[styles.welcomeTitle, { color: themeColors.text }]}>
-            Bienvenido 👋
+          <Text style={[styles.welcomeSubtitle, { color: themeColors.text }]}>
+            Te damos la bienvenida
           </Text>
-          <Text style={[styles.welcomeSubtitle, { color: themeColors.textSecondary }]}>
-            Gestiona tu inventario y ventas VH 🌱
+          <Text style={styles.welcomeTitle}>
+            {cuenta?.nombre?.split(' ')[0]}
           </Text>
         </View>
 
-        {/* SECCIÓN: Info de Trial (si está activo) */}
+        {/* INFO DE TRIAL */}
         {trialInfo?.isActive && (
-          <View style={{
-            backgroundColor: '#FFE4B5',
-            borderLeftWidth: 4,
-            borderLeftColor: '#FF9800',
-            padding: 12,
-            borderRadius: 6,
-            marginBottom: 15,
-          }}>
-            <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 4 }}>
-              🎁 Trial Premium - {trialInfo.daysRemaining} días restantes
+          <View style={styles.trialCard}>
+            <Text style={styles.trialTitle}>
+              💎 Free Premium Version - {trialInfo.daysRemaining} días restantes
             </Text>
-            <Text style={{ fontSize: 12, color: '#666' }}>
-              Expira el {trialInfo.expiresAt.toLocaleDateString()}
+            <Text style={styles.trialSubtitle}>
+              Disfruta de las funciones premium hasta el {trialInfo.expiresAt.toLocaleDateString()}
             </Text>
           </View>
         )}
 
-        {/* SECCIÓN 1: INICIO - Dashboard Stats */}
+        {/* DASHBOARD PRINCIPAL */}
         <View style={styles.dashboardSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-            📊 INICIO
-          </Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📊 INICIO</Text>
 
-          {/* Botón Total Existencias */}
           <TouchableOpacity
-            style={[
-              styles.dashboardBtn,
-              { backgroundColor: themeColors.bgSecondary },
-            ]}
+            style={[styles.dashboardBtn, { backgroundColor: themeColors.bgSecondary }]}
             onPress={() => handleNavigation('existencias')}
             activeOpacity={0.8}
           >
             <View style={styles.dashboardBtnContent}>
               <Text style={styles.dashboardIcon}>📦</Text>
               <View style={styles.dashboardBtnText}>
-                <Text
-                  style={[styles.dashboardLabel, { color: themeColors.text }]}
-                >
-                  Total en Existencia
-                </Text>
-                <Text style={styles.dashboardValue}>
-                  {stats.totalEnExistencia} unidades
-                </Text>
+                <Text style={[styles.dashboardLabel, { color: themeColors.text }]}>Total en Existencia</Text>
+                <Text style={styles.dashboardValue}>{stats.totalEnExistencia} unidades</Text>
               </View>
             </View>
             <Text style={styles.dashboardArrow}>→</Text>
           </TouchableOpacity>
 
-          {/* Botón Productos sin Stock */}
           <TouchableOpacity
-            style={[
-              styles.dashboardBtn,
-              styles.dashboardBtnWarning,
-              { backgroundColor: themeColors.bgSecondary },
-            ]}
+            style={[styles.dashboardBtn, styles.dashboardBtnWarning, { backgroundColor: themeColors.bgSecondary }]}
             onPress={() => handleNavigation('sin-stock')}
             activeOpacity={0.8}
           >
             <View style={styles.dashboardBtnContent}>
               <Text style={styles.dashboardIcon}>⚠️</Text>
               <View style={styles.dashboardBtnText}>
-                <Text
-                  style={[styles.dashboardLabel, { color: themeColors.text }]}
-                >
-                  Productos sin Stock
-                </Text>
-                <Text style={styles.dashboardValueWarning}>
-                  {stats.productosSinStock} productos
-                </Text>
+                <Text style={[styles.dashboardLabel, { color: themeColors.text }]}>Productos sin Stock</Text>
+                <Text style={styles.dashboardValueWarning}>{stats.productosSinStock} productos</Text>
               </View>
             </View>
             <Text style={styles.dashboardArrow}>→</Text>
           </TouchableOpacity>
 
-          {/* Botón Ventas del Mes */}
           <TouchableOpacity
-            style={[
-              styles.dashboardBtn,
-              { backgroundColor: themeColors.bgSecondary },
-            ]}
+            style={[styles.dashboardBtn, { backgroundColor: themeColors.bgSecondary }]}
             onPress={() => handleNavigation('analytics')}
             activeOpacity={0.8}
           >
             <View style={styles.dashboardBtnContent}>
               <Text style={styles.dashboardIcon}>💰</Text>
               <View style={styles.dashboardBtnText}>
-                <Text
-                  style={[styles.dashboardLabel, { color: themeColors.text }]}
-                >
-                  Ventas del Mes
-                </Text>
-                <Text style={styles.dashboardValue}>
-                  ${stats.ventasDelMes || '0.00'}
-                </Text>
+                <Text style={[styles.dashboardLabel, { color: themeColors.text }]}>Ventas del Mes</Text>
+                <Text style={styles.dashboardValue}>${stats.ventasDelMes || '0.00'}</Text>
               </View>
             </View>
             <Text style={styles.dashboardArrow}>→</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: SPACING.bottom_padding }} />
-      
+        {/* SECCIÓN 2: EVENTO DE ESCÁNER (PREMIUM) */}
+        {effectiveTier === 'premium' && (
+        <View style={styles.scannerSection}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>💻 Evento de Escáner</Text>
 
+          {eventoActivo ? (
+            <View style={[styles.eventoCard, { backgroundColor: themeColors.bgSecondary }]}>
+              <View style={styles.eventoHeader}>
+                <Text style={[styles.eventoTitle, { color: themeColors.text }]}>{eventoActivo.evento}</Text>
+                <Text style={styles.eventoStatus}>🟢 Activo</Text>
+              </View>
+
+              {/* Cálculos del Escáner en vivo */}
+              {(() => {
+                const ingresoEscaneos = (eventoActivo.escaneos || 0) * (eventoActivo.montoCobrado || 0);
+                const ventasProductos = eventoActivo.ventaTotal || 0;
+                const totalGlobal = ingresoEscaneos + ventasProductos;
+
+                return (
+                  <View style={styles.eventoDetails}>
+                    <View style={styles.eventoDetailRow}>
+                      <Text style={[styles.eventoLabel, { color: themeColors.textSecondary }]}>Venta escaner:</Text>
+                      <Text style={[styles.eventoValue, { color: themeColors.text }]}>${ingresoEscaneos.toFixed(2)}</Text>
+                    </View>
+
+                    <View style={styles.eventoDetailRow}>
+                      <Text style={[styles.eventoLabel, { color: themeColors.textSecondary }]}>Escaneos:</Text>
+                      <Text style={[styles.eventoValue, { color: themeColors.text }]}>{eventoActivo.escaneos} px</Text>
+                    </View>  
+
+                    {/* // == logica compleja, desarrollo despues: traer al card el total de ventas del evento */}
+                    {/* <View style={styles.eventoDetailRow}>
+                      <Text style={[styles.eventoLabel, { color: themeColors.textSecondary }]}>Ventas:</Text>
+                      <Text style={[styles.eventoValue, { color: themeColors.text }]}>${ventasProductos.toFixed(2)}</Text>
+                    </View>
+
+                    <View style={styles.eventoDetailRow}>
+                      <Text style={[styles.eventoLabel, { color: themeColors.textSecondary, fontWeight: 'bold' }]}>TOTAL EVENTO:</Text>
+                      <Text style={styles.eventoValueMoney}>${totalGlobal.toFixed(2)}</Text>
+                    </View> */}
+                  </View>
+                );
+              })()}
+
+              <View style={styles.eventoButtons}>
+                <TouchableOpacity style={[styles.eventoBtnEdit, { backgroundColor: COLORS.turquesa }]} onPress={() => setModalEventoVisible(true)}>
+                  <Text style={styles.eventoBtnText}>✏️ Editar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.eventoBtnFinish, { backgroundColor: COLORS.verde }]}
+                  onPress={() => {
+                    Alert.alert('Finalizar Evento', `Cerrar "${eventoActivo.evento}"?`, [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Finalizar',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            const ahora = new Date();
+                            const ingresoEscaneos = (eventoActivo.escaneos || 0) * (eventoActivo.montoCobrado || 0);
+
+                            // 1. Actualizar estado del evento a 'finalizado'
+                            const eventoRef = doc(db, 'cuentas', String(cuentaId), 'escaneres', eventoActivo.id);
+                            await updateDoc(eventoRef, { estado: 'finalizado', updatedAt: ahora.toISOString() });
+                            
+                            // 2. CREAR TICKET DE CAJA
+                            if (ingresoEscaneos > 0) {
+                              const salidasRef = collection(db, 'cuentas', String(cuentaId), 'salidas');
+                              await addDoc(salidasRef, {
+                                tipo: 'ingreso_escaner', // Lo marcamos para que sepas de dónde vino
+                                tipoPago: 'efectivo', 
+                                producto: `Escaner: ${eventoActivo.evento}`,
+                                cantidad: eventoActivo.escaneos || 0,
+                                total: ingresoEscaneos,
+                                timestamp: ahora.toISOString(),
+                                usuario: user?.email || 'App'
+                              });
+                            }
+
+                            // 3. Limpiar el evento de la memoria del teléfono
+                            await AsyncStorage.removeItem('escanerActual');
+                            setEventoActivo(null);
+                            Alert.alert('✅ Éxito', 'Evento finalizado, ingresos registrados.');
+                            
+                            // 4. Refrescar estadísticas y MATAR el loader
+                            console.log('4️⃣ Recargando estadísticas de pantalla...');
+                            setLoadingStats(true); // Encendemos loader temporal
+                            
+                            // Forzamos la recarga si existe la función, si no, solo apagamos el loader
+                            if (typeof cargarEstadisticas === 'function') {
+                                await cargarEstadisticas(); 
+                                // Nota: cargarEstadisticas normalmente tiene su propio setLoadingStats(false) al final
+                            } else {
+                                setLoadingStats(false); 
+                            }
+                            console.log('🏁 --- CIERRE DE EVENTO COMPLETADO ---');
+                            
+                          } catch (error) {
+                            console.error('❌ ERROR DURANTE EL CIERRE DE EVENTO:', error);
+                            setLoadingStats(false); // 🛡️ SEGURO: Apagar spinner si algo explota
+                            Alert.alert('Error', 'No se pudo finalizar el evento de manera correcta.');
+                          }
+                        }
+                      }
+                    ]);
+                  }}
+                >
+                  <Text style={styles.eventoBtnText}>💾 Finalizar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={[styles.eventoBtnCreate, { backgroundColor: themeColors.bgSecondary }]} onPress={() => setModalEventoVisible(true)}>
+              <View>
+                <Text style={[styles.eventoBtnCreateText, { color: themeColors.text }]}>Crear Evento de Escáner</Text>
+                <Text style={[styles.eventoBtnCreateSubtext, { color: themeColors.textSecondary }]}>Registrar evento de escaner</Text>
+              </View>
+              <Text style={styles.dashboardArrow}>→</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        )}
+
+        {/* SECCIÓN 3: CRÉDITOS PENDIENTES (PREMIUM) */}
+        {effectiveTier === 'premium' && (
+          <TouchableOpacity 
+            onPress={() => handleNavigation('clientes')}
+            activeOpacity={0.7}
+            style={{ marginBottom: 80 }} 
+          >
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>💳 Créditos Pendientes</Text>
+
+            <View style={styles.creditoCard}>          
+              {loadingCreditos ? (
+                <ActivityIndicator color={COLORS.turquesa} />
+              ) : creditosPendientes.length === 0 ? (
+                <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>
+                  No tienes creditos pendientes
+                </Text>
+              ) : (
+                <View>
+                  {creditosPendientes.slice(0, 3).map((credito) => (
+                    <View key={credito.id} style={[styles.creditoItem, { borderBottomColor: darkMode ? '#444' : '#f0f0f0' }]}>
+                      <View style={styles.creditoInfo}>
+                        <Text style={[styles.creditoNombre, { color: themeColors.text }]}>{credito.clienteNombre}</Text>
+                        <Text style={[styles.creditoFecha, { color: themeColors.textSecondary }]}>
+                          Promesa de pago: {new Date(credito.fechaPTP.seconds * 1000).toLocaleDateString('es-MX')}
+                        </Text>
+                      </View>
+                      <Text style={styles.creditoMonto}>${credito.monto.toFixed(2)}</Text>
+                    </View>
+                  ))}
+                  {creditosPendientes.length > 3 && (
+                    <Text style={[styles.masCreditos, { color: themeColors.turquesa }]}>+{creditosPendientes.length - 3} más</Text>
+                  )}
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
-      {/* MODAL MENU HAMBURGUESA */}
+      {/* MODAL REGISTRO DE ESCÁNER */}
+      <ModalRegistroEscaner
+        visible={modalEventoVisible}
+        onClose={() => setModalEventoVisible(false)}
+        onSuccess={async (nuevoEvento) => {
+          setEventoActivo(nuevoEvento);
+          await AsyncStorage.setItem('escanerActual', JSON.stringify(nuevoEvento));
+        }}
+        cuentaId={cuentaId}
+        eventoEdicion={eventoActivo}
+      />
+
+      {/* MODAL BUZÓN DE INTERCAMBIOS */}
+      <ModalExchange
+        visible={modalBuzonVisible}
+        onClose={() => setModalBuzonVisible(false)}
+        peticiones={peticionesBuzon}
+        miCuentaId={cuentaId}
+        miEmail={user?.email}
+      />
+
+      {/* MODAL MENU LATERAL */}
       <Modal
         visible={menuVisible}
         transparent
@@ -469,17 +668,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         onRequestClose={cerrarMenu}
       >
         <Pressable style={styles.modalOverlay} onPress={cerrarMenu}>
-          <Pressable
-            style={styles.menuPressable}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View
-              style={[
-                styles.menuModal,
-                { backgroundColor: themeColors.bgSecondary },
-              ]}
-            >
-              {/* Header Menu */}
+          <Pressable style={styles.menuPressable} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.menuModal, { backgroundColor: themeColors.bgSecondary }]}>
+              
               <View style={styles.menuHeader}>
                 <Text style={styles.menuTitle}>Menú</Text>
                 <TouchableOpacity onPress={cerrarMenu}>
@@ -487,162 +678,111 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 </TouchableOpacity>
               </View>
 
-              {/* Menu Item: Configuranza */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => handleNavigation('Configuranza')}
-              >
+              <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('Configuranza')}>
                 <Text style={styles.menuItemIcon}>⚙️</Text>
-                <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                  Configuranza
-                </Text>
+                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Configuranza</Text>
                 <Text style={styles.menuItemArrow}>→</Text>
               </TouchableOpacity>
 
-              {/* SEPARADOR */}
               <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
 
-              {/* PREMIUM FEATURES SECTION */}
               <View style={styles.menuFeatureSection}>
-                <Text style={[styles.menuFeatureTitle, { color: themeColors.textSecondary }]}>
-                  Premium Features
-                </Text>
+                <Text style={[styles.menuFeatureTitle, { color: themeColors.textSecondary }]}>Premium Features</Text>
 
-                {/* Si es PREMIUM: mostrar botones activos */}
                 {effectiveTier === 'premium' ? (
                   <>
-                    {/* Escáner */}
-                    <TouchableOpacity
-                      style={styles.menuFeatureItem}
-                      onPress={() => handleNavigation('escaner')}
-                    >
+                    <TouchableOpacity style={styles.menuFeatureItem} onPress={() => { cerrarMenu(); setModalEventoVisible(true); }}>
                       <Text style={styles.menuItemIcon}>💻</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                          Escáner
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.text }]}>Escáner</Text></View>
                       <Text style={styles.menuItemArrow}>→</Text>
                     </TouchableOpacity>
 
-                    {/* Analytics */}
-                    <TouchableOpacity
-                      style={styles.menuFeatureItem}
-                      onPress={() => handleNavigation('analytics')}
-                    >
+                    <TouchableOpacity style={styles.menuFeatureItem} onPress={() => handleNavigation('analytics')}>
                       <Text style={styles.menuItemIcon}>📊</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                          Analytics
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.text }]}>Analytics</Text></View>
                       <Text style={styles.menuItemArrow}>→</Text>
                     </TouchableOpacity>
 
-                    {/* Clientes */}
-                    <TouchableOpacity
-                      style={styles.menuFeatureItem}
-                      onPress={() => handleNavigation('clientes')}
-                    >
+                    <TouchableOpacity style={styles.menuFeatureItem} onPress={() => handleNavigation('clientes')}>
                       <Text style={styles.menuItemIcon}>👥</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                          Clientes
-                        </Text>
-                      </View>
-                      <Text style={styles.menuItemArrow}>→</Text>
-                    </TouchableOpacity>
-
-                    {/* Créditos */}
-                    <TouchableOpacity
-                      style={styles.menuFeatureItem}
-                      onPress={() => handleNavigation('creditos')}
-                    >
-                      <Text style={styles.menuItemIcon}>💳</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                          Créditos
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.text }]}>Clientes</Text></View>
                       <Text style={styles.menuItemArrow}>→</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
-                  /* Si es BASIC: mostrar placeholders bloqueados */
                   <>
-                    {/* Escáner Bloqueado */}
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>💻</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>
-                          Escáner
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Escáner</Text></View>
                       <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
                     </View>
 
-                    {/* Analytics Bloqueado */}
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>📊</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>
-                          Analytics
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Analytics</Text></View>
                       <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
                     </View>
 
-                    {/* Clientes Bloqueado */}
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>👥</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>
-                          Clientes
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Clientes</Text></View>
                       <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
                     </View>
 
-                    {/* Créditos Bloqueado */}
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>💳</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>
-                          Créditos
-                        </Text>
-                      </View>
+                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Créditos</Text></View>
                       <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
                     </View>
 
-                    {/* Botón Upgrade */}
-                    <TouchableOpacity
-                      style={[styles.upgradeBtn, { backgroundColor: COLORS.morado }]}
-                      onPress={() => handleNavigation('planes')}
-                    >
+                    <TouchableOpacity style={[styles.upgradeBtn, { backgroundColor: COLORS.morado }]} onPress={() => handleNavigation('planes')}>
                       <Text style={styles.upgradeBtnText}>⬆️ Upgrade a Premium</Text>
                     </TouchableOpacity>
                   </>
                 )}
               </View>
 
-              {/* SEPARADOR */}
               <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
 
-              {/* Menu Item: Cerrar Sesión */}
+              <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('logout')}>
+                <Text style={styles.menuItemIcon}>🚪</Text>
+                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Cerrar Sesión</Text>
+                <Text style={styles.menuItemArrow}>→</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
+
+              {/* Botón de Feedback */}
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => handleNavigation('logout')}
+                onPress={() => {
+                  setMenuVisible(false); // Cerramos el menú primero
+                  
+                  // ⏱️ Retraso mágico de 350 milisegundos para dejar que el menú desaparezca
+                  setTimeout(() => {
+                    setModalFeedbackVisible(true);
+                  }, 350);
+                }}
               >
-                <Text style={styles.menuItemIcon}>🚪</Text>
+                <Text style={styles.menuItemIcon}>💡</Text>
                 <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                  Cerrar Sesión
+                  Enviar Feedback
                 </Text>
                 <Text style={styles.menuItemArrow}>→</Text>
               </TouchableOpacity>
+              
             </View>
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* MODAL DE FEEDBACK */}
+      <ModalFeedback
+        visible={modalFeedbackVisible}
+        onClose={() => setModalFeedbackVisible(false)}
+        usuarioEmail={user?.email}
+        cuentaId={cuentaId}
+      />
     </View>
   );
 }
@@ -651,61 +791,118 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     fontWeight: '600',
   },
-
-  // HEADER
   header: {
-    backgroundColor: COLORS.turquesa,
-    paddingHorizontal: SPACING.content_padding,
-    paddingVertical: SPACING.header_padding,
+    backgroundColor: COLORS.blanco,
     paddingTop: 60,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.content_padding,
+    paddingBottom: 20, 
+  },
+  headerRightControls: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 0,
+  },
+  bellButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 15, // Un poco más de margen para separar del menú
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 3,
+    position: 'relative'
+  },
+  bellButtonInactive: { 
+    backgroundColor: COLORS.blanco, 
+    borderWidth: 1, 
+    borderColor: '#eee' 
+  },
+  bellButtonActive: { 
+    backgroundColor: COLORS.morado 
+  },
+  bellBadge: { 
+    position: 'absolute', 
+    top: 8, 
+    right: 10, 
+    width: 8, 
+    height: 8, 
+    borderRadius: 4, 
+    backgroundColor: COLORS.rojo, 
+    borderWidth: 1.5, 
+    borderColor: COLORS.morado 
+  },
+  headerBorderGradient: {
+    height: 2,
+    width: '100%',
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.blanco,
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '600',
+    color: COLORS.grey,
     marginBottom: 2,
   },
   headerSubtitle: {
     fontSize: FONT_SIZES.pequeño,
     fontStyle: 'italic',
-    color: 'rgba(255,255,255,0.8)',
+    color: COLORS.grey,
   },
   menuBtn: {
-    padding: 10,
+    padding: 0,
   },
   menuIcon: {
-    fontSize: 28,
-    color: COLORS.blanco,
-    fontWeight: '700',
+    fontSize: 40,
+    color: COLORS.grey,
+    fontWeight: '500',
   },
-
-  // CONTENT
   content: {
     flex: 1,
     padding: SPACING.content_padding,
   },
   welcomeSection: {
+    marginTop: 20,
     marginBottom: 25,
   },
   welcomeTitle: {
     fontSize: FONT_SIZES.titulo,
     fontWeight: '700',
-    marginBottom: 5,
+    color: COLORS.turquesa,
+    fontStyle: 'italic',
   },
   welcomeSubtitle: {
     fontSize: FONT_SIZES.normal,
+    color: '#565656',
   },
-
-  // DASHBOARD
+  trialCard: {
+    backgroundColor: COLORS.blanco,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.turquesa,
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 15,
+  },
+  trialTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  trialSubtitle: {
+    fontSize: 12,
+    color: '#666',
+  },
   dashboardSection: {
     marginBottom: 30,
   },
@@ -765,7 +962,6 @@ const styles = StyleSheet.create({
     color: COLORS.morado,
     fontWeight: '700',
   },
-  // MODAL
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -782,22 +978,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.blanco,
   },
   menuHeader: {
-    backgroundColor: COLORS.turquesa,
+    //backgroundColor: COLORS.turquesa,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.content_padding,
     paddingVertical: 15,
-    paddingTop: 80,
+    paddingTop: 20,
   },
   menuTitle: {
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: '700',
-    color: COLORS.blanco,
+    color: COLORS.grey,
   },
   closeBtn: {
     fontSize: 28,
-    color: COLORS.blanco,
+    color: COLORS.turquesa,
     fontWeight: '700',
   },
   menuItem: {
@@ -821,15 +1017,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
   },
-
-  // MENU SEPARADOR
   menuSeparator: {
     height: 1,
     backgroundColor: COLORS.gris,
     marginVertical: 0,
   },
-
-  // MENU PREMIUM FEATURES SECTION
   menuFeatureSection: {
     paddingVertical: 12,
   },
@@ -862,8 +1054,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 8,
   },
-
-  // UPGRADE BUTTON
   upgradeBtn: {
     marginHorizontal: SPACING.content_padding,
     marginVertical: 12,
@@ -877,5 +1067,138 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.normal,
     fontWeight: '700',
     color: COLORS.blanco,
+  },
+  scannerSection: {
+    marginBottom: 20,
+  },
+  eventoCard: {
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.turquesa,
+    marginBottom: 1,
+  },
+  eventoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  eventoTitle: {
+    fontSize: FONT_SIZES.subtitulo,
+    fontWeight: '700',
+    flex: 1,
+  },
+  eventoStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.verde,
+  },
+  eventoDetails: {
+    marginBottom: 16,
+  },
+  eventoDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  eventoLabel: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '500',
+  },
+  eventoValue: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '600',
+  },
+  eventoValueMoney: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '700',
+    color: COLORS.naranja,
+  },
+  eventoButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  eventoBtnEdit: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventoBtnFinish: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventoBtnText: {
+    color: COLORS.blanco,
+    fontWeight: '600',
+    fontSize: FONT_SIZES.normal,
+  },
+  eventoBtnCreate: {
+    borderRadius: 12,
+    padding: SPACING.btn_padding,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.turquesa,
+    marginBottom: 12,
+  },
+  eventoBtnCreateIcon: {
+    fontSize: 32,
+    marginRight: 15,
+  },
+  eventoBtnCreateText: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '600',
+  },
+  eventoBtnCreateSubtext: {
+    fontSize: FONT_SIZES.pequeño,
+    marginTop: 2,
+  },
+  emptyText: {
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 10,
+  },
+  creditoCard: {
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: COLORS.blanco,
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.turquesa,
+    marginBottom: 12,
+  },
+  creditoItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  creditoInfo: {
+    flex: 1,
+  },
+  creditoNombre: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  creditoFecha: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  creditoMonto: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.rojo,
+    marginLeft: 10,
+  },
+  masCreditos: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

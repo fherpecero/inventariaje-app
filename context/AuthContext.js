@@ -5,7 +5,7 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { fetchAndCacheTier } from '../utils/tierUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,7 +25,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
+        setLoading(true);
+
         if (currentUser) {
+          setCuenta(null);
+          setCuentaId(null);
+
           console.log('👤 Usuario encontrado:', currentUser.uid);
           setUser(currentUser);
 
@@ -47,42 +52,34 @@ export function AuthProvider({ children }) {
               
               // ✅ NUEVO: Obtener documento completo
               const cuentaDocRef = doc(db, 'cuentas', cuentaId.toString());
-              const cuentaDocSnap = await getDoc(cuentaDocRef);
-              
-              if (cuentaDocSnap.exists()) {
+              const unsuscribeCuenta = onSnapshot(cuentaDocRef, (cuentaDocSnap) => {
+                if (cuentaDocSnap.exists()) {
                 setCuentaId(cuentaId);
-                setCuenta(cuentaDocSnap.data()); // ✅ Pasar documento completo
+                setCuenta(cuentaDocSnap.data());
+                }
+              });
                 await fetchAndCacheTier(cuentaId);
-              } else {
-                console.warn('⚠️ Documento de cuenta no encontrado');
-                setCuenta(null);
-              }
-
-              await fetchAndCacheTier(cuentaId);
-            } else {
-              console.log('❌ Usuario no tiene cuentaId en documento');
-              setCuenta(null);
-            }
-          } else {
-            console.log('❌ NO se encontró documento de usuario para:', currentUser.uid);
-            setCuenta(null);
+                 // Limpiar listener cuando el usuario cambie
+            return () => unsubscribeCuenta();
           }
-        } else {
-          console.log('❌ No hay usuario autenticado');
-          setUser(null);
-          setCuenta(null);
         }
-      } catch (error) {
-        console.error('❌ Error obteniendo cuenta:', error);
+      } else {
+        console.log('❌ No hay usuario autenticado');
         setUser(null);
         setCuenta(null);
-      } finally {
-        console.log('✅ Fin de verificación de autenticación');
-        setLoading(false);
+        setCuentaId(null);
       }
-        return () => unsubscribe();
-    });
-  }, []);
+    } catch (error) {
+      console.error('❌ Error en AuthStateChanged:', error);
+
+    } finally {
+      setLoading(false);
+      console.log('✅ Fin de verificación de autenticación');
+    }
+  });
+  
+  return () => unsubscribe();
+}, []);
 
       // En AuthContext.jsx, cuando user cambia
       useEffect(() => {
@@ -199,12 +196,17 @@ export function AuthProvider({ children }) {
       });
       console.log('✅ Índice usuariosCuenta creado');
 
-      // 8. Actualizar estado local
+      // 8. Leer la cuenta que acaba de crear
+      const cuentaSnapshot = await getDoc(cuentaRef);
+      const cuentaData = cuentaSnapshot.data();
+
+      // 9. Actualizar estado local con el objeto completo
       setUser(userCredential.user);
-      setCuenta(cuentaId);
-      
+      setCuenta(cuentaData);
+      setCuentaId(cuentaId);
+
       console.log('✅ REGISTRO COMPLETADO - Cuenta:', cuentaId);
-      
+
       return { success: true, cuentaId, userId };
     } catch (error) {
       console.error('❌ Error en registro:', error);
@@ -282,9 +284,13 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       console.log('🔐 Cerrando sesión...');
+      setLoading(true);
       await signOut(auth);
       setUser(null);
       setCuenta(null);
+      setCuentaId(null)
+      await AsyncStorage.removeItem('cuentaId');
+      
       console.log('✅ Sesión cerrada');
     } catch (error) {
       console.error('❌ Error en logout:', error);

@@ -1,315 +1,545 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   Modal,
+  Pressable,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  StyleSheet,
+  ActivityIndicator,
   Alert,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import DatePickerField from '../components/DatePickerField';
 
-export default function ScannerEventModal({ visible, onClose, cuentaId, onEventCreated }) {
-  const [nombre, setNombre] = useState('');
+const COLORS = {
+  turquesa: '#24c5c5',
+  blanco: '#fff',
+  negro: '#000',
+  gris: '#f5f5f5',
+  verde: '#4CAF50',
+  rojito: '#f97272',
+  naranja: '#FF9800',
+};
+
+/**
+ * ModalRegistroEscaner
+ * Modal para crear o editar eventos de escáner biométrico
+ * 
+ * Props:
+ * - visible: boolean - Controla visibilidad del modal
+ * - onClose: function - Callback al cerrar
+ * - onSuccess: function - Callback cuando se guarda exitosamente
+ * - cuentaId: string - ID de la cuenta
+ * - eventoEdicion: object - Evento a editar (null si es crear nuevo)
+ */
+const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdicion = null }) => {
+  const [evento, setEvento] = useState('');
   const [fecha, setFecha] = useState(new Date());
+  const [fechaFormato, setFechaFormato] = useState(new Date().toISOString().split('T')[0]);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [invitados, setInvitados] = useState('1');
-  const [escaneos, setEscaneos] = useState('1');
+  const [personas, setPersonas] = useState(0);
+  const [escaneos, setEscaneos] = useState(0);
   const [monto, setMonto] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Calculamos venta total dinámicamente
-  const escaneoNum = parseInt(escaneos) || 0;
-  const montoNum = parseFloat(monto) || 0;
-  const ventaTotal = escaneoNum * montoNum;
+  // Calcular total automático
+  const total = parseInt(escaneos || 0) * parseFloat(monto || 0);
 
-  // Manejador de fecha
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setFecha(selectedDate);
+  /**
+   * Cargar datos del evento si estamos editando
+   */
+  useEffect(() => {
+    if (visible && eventoEdicion) {
+      // Modo edición: cargar datos del evento
+      console.log('📝 Cargando evento para editar:', eventoEdicion.evento);
+      setEvento(eventoEdicion.evento);
+      setFechaFormato(eventoEdicion.fecha);
+      setFecha(new Date(eventoEdicion.fechaISO));
+      setPersonas(eventoEdicion.personas);
+      setEscaneos(eventoEdicion.escaneos);
+      setMonto(eventoEdicion.montoCobrado.toString());
+    } else if (visible && !eventoEdicion) {
+      // Modo crear: limpiar formulario
+      console.log('🆕 Nuevo evento - limpiando formulario');
+      resetForm();
     }
+  }, [visible, eventoEdicion]);
+
+  /**
+   * Validar campos antes de guardar
+   */
+  const validarCampos = () => {
+    if (!evento.trim()) {
+      Alert.alert('Error', 'El nombre del evento es requerido');
+      return false;
+    }
+    if (!fechaFormato) {
+      Alert.alert('Error', 'La fecha es requerida');
+      return false;
+    }
+    if (escaneos < 0 || personas < 0) {
+      Alert.alert('Error', 'Las cantidades no pueden ser negativas');
+      return false;
+    }
+    if (monto && parseFloat(monto) < 0) {
+      Alert.alert('Error', 'El monto no puede ser negativo');
+      return false;
+    }
+    return true;
   };
 
-  // Guardar evento en Firestore
-  const handleGuardar = async () => {
-    // Validaciones básicas
-    if (!nombre.trim()) {
-      Alert.alert('Error', 'El nombre del evento es requerido');
-      return;
-    }
-    if (ventaTotal <= 0) {
-      Alert.alert('Error', 'La venta total debe ser mayor a 0');
-      return;
-    }
+  /**
+   * Guardar o actualizar evento en Firestore
+   */
+  const guardarEvento = async () => {
+    if (!validarCampos()) return;
 
-    setLoading(true);
     try {
-      const docRef = await addDoc(collection(db, `cuentas/${cuentaId}/scannerEvents`), {
-        nombre: nombre.trim(),
-        fecha: fecha.toISOString(), // ISO string para consistencia
-        fechaFormato: fecha.toLocaleDateString('es-MX'), // Para mostrar en UI
-        invitados: parseInt(invitados) || 0,
-        escaneos: escaneoNum,
-        montoEscaneo: montoNum,
-        ventaTotal: ventaTotal,
-        createdAt: serverTimestamp(),
-        scannerEventId: docRef.id, // Capturo el ID aquí (se sobrescribe después)
-      });
+      setLoading(true);
 
-      // Actualizo con el ID correcto
-      await updateDoc(doc(db, `cuentas/${cuentaId}/scannerEvents`, docRef.id), {
-        scannerEventId: docRef.id,
-      });
+      const ahora = new Date();
+      const fechaISO = new Date(fechaFormato + 'T00:00:00Z').toISOString();
 
-      Alert.alert('Éxito', `Evento "${nombre}" registrado`);
-      onEventCreated?.();
-      resetForm();
-      onClose();
+      // Datos del evento
+      const eventoData = {
+        evento: evento.trim(),
+        fecha: fechaFormato,
+        fechaISO: fechaISO,
+        personas: parseInt(personas) || 0,
+        escaneos: parseInt(escaneos) || 0,
+        montoCobrado: parseFloat(monto) || 0,
+        ventaTotal: total,
+        estado: 'activo',
+        updatedAt: ahora.toISOString(),
+      };
+
+      if (eventoEdicion) {
+        // MODO EDICIÓN: Actualizar documento existente
+        console.log('✏️ Actualizando evento:', eventoEdicion.id);
+        
+        const eventoRef = doc(db, 'cuentas', cuentaId.toString(), 'escaneres', eventoEdicion.id);
+        await updateDoc(eventoRef, eventoData);
+
+        console.log('✅ Evento actualizado');
+        
+        // Limpiar form y notificar
+        resetForm();
+        onClose();
+        
+        if (onSuccess) {
+          onSuccess({ ...eventoData, id: eventoEdicion.id });
+        }
+        
+        Alert.alert('✅ Éxito', `Evento "${evento}" actualizado correctamente`);
+      } else {
+        // MODO CREAR: Crear nuevo documento
+        console.log('📌 Guardando evento nuevo');
+
+        const eventoDataNuevo = {
+          ...eventoData,
+          createdAt: ahora.toISOString(),
+        };
+
+        // Guardar en Firestore
+        const escanerRef = collection(db, 'cuentas', cuentaId.toString(), 'escaneres');
+        const docRef = await addDoc(escanerRef, eventoDataNuevo);
+
+        console.log('✅ Evento guardado con ID:', docRef.id);
+        
+        // Limpiar form y notificar
+        resetForm();
+        onClose();
+        
+        if (onSuccess) {
+          onSuccess({ ...eventoDataNuevo, id: docRef.id });
+        }
+        
+        Alert.alert('✅ Éxito', `Evento "${evento}" creado correctamente`);
+      }
     } catch (error) {
-      console.error('Error guardando evento de escáner:', error);
-      Alert.alert('Error', 'No se pudo guardar el evento');
+      console.error('❌ Error guardando evento:', error);
+      Alert.alert('Error', 'No se pudo guardar el evento: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Limpiar formulario
+   */
   const resetForm = () => {
-    setNombre('');
+    setEvento('');
     setFecha(new Date());
-    setInvitados('1');
-    setEscaneos('1');
+    setFechaFormato(new Date().toISOString().split('T')[0]);
+    setPersonas(0);
+    setEscaneos(0);
     setMonto('');
   };
 
-  const handleCancel = () => {
+  /**
+   * Cerrar modal
+   */
+  const handleClose = () => {
     resetForm();
     onClose();
   };
 
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.container}>
-        <View style={styles.content}>
-          <Text style={styles.title}>Registrar Evento de Escáner</Text>
+  /**
+   * Incrementar/decrementar valores
+   */
+  const incrementar = (setter, valor) => {
+    setter(Math.max(0, valor + 1));
+  };
 
-          <ScrollView style={styles.form}>
-            {/* Nombre del evento */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Nombre del evento</Text>
+  const decrementar = (setter, valor) => {
+    setter(Math.max(0, valor - 1));
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={handleClose}
+    >
+      <Pressable style={styles.overlay} onPress={handleClose}>
+        <Pressable
+          style={styles.container}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {/* HEADER */}
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              {eventoEdicion ? '✏️ Editar Evento' : '💻 Crear Evento de Escáner'}
+            </Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Text style={styles.closeBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* CONTENIDO SCROLLEABLE */}
+          <ScrollView 
+            style={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            {/* NOMBRE DEL EVENTO */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Nombre del evento/cliente:</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Ej: Expo Salud 2026"
-                value={nombre}
-                onChangeText={setNombre}
-                placeholderTextColor="#ccc"
+                placeholder="Ej: Scanner Party Lola"
+                value={evento}
+                onChangeText={setEvento}
+                editable={!loading}
               />
             </View>
 
-            {/* Fecha */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Fecha</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dateButtonText}>
-                  {fecha.toLocaleDateString('es-MX')}
-                </Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={fecha}
-                  mode="date"
-                  display="default"
-                  onChange={handleDateChange}
-                />
-              )}
+            {/* IMPLEMENTACION HOMOLOGADA */}
+            <DatePickerField
+            label="Fecha del evento:"
+            value={fecha}
+            onDateChange={(nuevaFecha) => {
+              setFecha(nuevaFecha);
+              // Sigues conservando tu formato de string para Firestore
+              const formattedDate = nuevaFecha.toISOString().split('T')[0];
+              setFechaFormato(formattedDate);
+            }}
+            containerStyle={styles.formGroup}
+          />
+
+            {/* DATE PICKER */}
+            {showDatePicker && (
+              <DateTimePicker
+                value={fecha}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onValueChange={(selectedDate) => {
+                  setFecha(selectedDate);
+                  const formattedDate = selectedDate.toISOString().split('T')[0];
+                  setFechaFormato(formattedDate);
+                }}
+                onDismiss={() => setShowDatePicker(false)}
+              />
+            )}
+
+            {/* PERSONAS Y ESCANEOS EN UNA LÍNEA */}
+            <View style={styles.doubleFormGroup}>
+              {/* INVITADOS */}
+              <View style={styles.formGroupHalf}>
+                <Text style={styles.label}>Invitados al evento:</Text>
+                <View style={styles.counterContainerHorizontal}>
+                  <TouchableOpacity
+                    style={styles.counterBtnSmall}
+                    onPress={() => decrementar(setPersonas, personas)}
+                    disabled={loading}
+                  >
+                    <Text style={styles.counterBtnText}>−</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.counterValueHorizontal}>{personas}</Text>
+
+                  <TouchableOpacity
+                    style={styles.counterBtnSmall}
+                    onPress={() => incrementar(setPersonas, personas)}
+                    disabled={loading}
+                  >
+                    <Text style={styles.counterBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* ESCANEOS */}
+              <View style={styles.formGroupHalf}>
+                <Text style={styles.label}>Escaneos cobrados:</Text>
+                <View style={styles.counterContainerHorizontal}>
+                  <TouchableOpacity
+                    style={styles.counterBtnSmall}
+                    onPress={() => decrementar(setEscaneos, escaneos)}
+                    disabled={loading}
+                  >
+                    <Text style={styles.counterBtnText}>−</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.counterValueHorizontal}>{escaneos}</Text>
+
+                  <TouchableOpacity
+                    style={styles.counterBtnSmall}
+                    onPress={() => incrementar(setEscaneos, escaneos)}
+                    disabled={loading}
+                  >
+                    <Text style={styles.counterBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
 
-            {/* Invitados y Escaneos en una fila */}
-            <View style={styles.row}>
-              <View style={[styles.field, styles.halfField]}>
-                <Text style={styles.label}>Invitados</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="1"
-                  value={invitados}
-                  onChangeText={setInvitados}
-                  keyboardType="numeric"
-                  placeholderTextColor="#ccc"
-                />
-              </View>
-              <View style={[styles.field, styles.halfField]}>
-                <Text style={styles.label}>Escaneos</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="1"
-                  value={escaneos}
-                  onChangeText={setEscaneos}
-                  keyboardType="numeric"
-                  placeholderTextColor="#ccc"
-                />
-              </View>
-            </View>
-
-            {/* Monto por escaneo */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Monto por escaneo ($)</Text>
+            {/* MONTO COBRADO */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Monto por escaneo ($):</Text>
               <TextInput
                 style={styles.input}
                 placeholder="0.00"
                 value={monto}
                 onChangeText={setMonto}
                 keyboardType="decimal-pad"
-                placeholderTextColor="#ccc"
+                editable={!loading}
               />
             </View>
 
-            {/* Venta Total (calculada, solo lectura) */}
-            <View style={styles.totalField}>
-              <Text style={styles.label}>Venta Total</Text>
-              <View style={styles.totalBox}>
-                <Text style={styles.totalText}>
-                  ${ventaTotal.toFixed(2)}
-                </Text>
+            {/* TOTAL CALCULADO */}
+            <View style={styles.totalBox}>
+              <View style={styles.totalRowFinal}>
+                <Text style={styles.totalLabelFinal}>TOTAL INGRESO:</Text>
+                <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
               </View>
             </View>
+
+            <View style={styles.totalRowFinal}>
+                <Text style={styles.totalLabelFinal}>Las ventas registradas durante el evento se vincularán automáticamente a los reportes de Analytics.</Text>
+              </View>
+
+            {/* ESPACIADOR */}
+            <View style={{ height: 20 }} />
           </ScrollView>
 
-          {/* Botones */}
+          {/* BOTONES (Fuera del scroll) */}
           <View style={styles.buttons}>
             <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={handleCancel}
+              style={styles.cancelBtn}
+              onPress={handleClose}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.button, styles.saveButton]}
-              onPress={handleGuardar}
+              style={[styles.acceptBtn, loading && styles.disabledBtn]}
+              onPress={guardarEvento}
               disabled={loading}
             >
-              <Text style={styles.saveButtonText}>
-                {loading ? 'Guardando...' : 'Guardar'}
-              </Text>
+              {loading ? (
+                <ActivityIndicator color={COLORS.blanco} />
+              ) : (
+                <Text style={styles.acceptBtnText}>
+                  {eventoEdicion ? '✏️ Actualizar' : 'Crear Evento'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
-  content: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 30,
-    maxHeight: '90%',
+  container: {
+    backgroundColor: COLORS.blanco,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '85%',
+    flexDirection: 'column',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 15,
-  },
-  form: {
-    paddingHorizontal: 20,
-    maxHeight: 400,
-  },
-  field: {
-    marginBottom: 15,
-  },
-  row: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gris,
   },
-  halfField: {
-    width: '48%',
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.negro,
+  },
+  closeBtn: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.negro,
+  },
+  scrollContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  doubleFormGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  formGroupHalf: {
+    flex: 1,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 6,
-    color: '#333',
+    color: COLORS.negro,
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#ccc',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#333',
+    fontStyle: 'italic',
+    backgroundColor: COLORS.gris,
   },
-  dateButton: {
+  datePickerButton: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    justifyContent: 'center',
-  },
-  dateButtonText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  totalField: {
-    marginTop: 20,
-  },
-  totalBox: {
-    backgroundColor: '#f5f5f5',
+    borderColor: '#ccc',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    justifyContent: 'center',
+    backgroundColor: COLORS.gris,
+    alignItems: 'center',
   },
-  totalText: {
+  datePickerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.negro,
+  },
+  counterContainerHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  counterBtnSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 20,
+    backgroundColor: COLORS.turquesa,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterBtnText: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#4CAF50',
+    fontWeight: 'bold',
+    color: COLORS.blanco,
+  },
+  counterValueHorizontal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.turquesa,
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  totalBox: {
+    backgroundColor: '#fff3e0',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.naranja,
+    borderRadius: 8,
+    padding: 14,
+    marginVertical: 16,
+  },
+  totalRowFinal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabelFinal: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.negro,
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.naranja,
   },
   buttons: {
     flexDirection: 'row',
+    gap: 12,
     paddingHorizontal: 20,
-    gap: 10,
-    marginTop: 20,
+    paddingBottom: 20,
   },
-  button: {
+  cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    backgroundColor: COLORS.rojito,
     borderRadius: 8,
     alignItems: 'center',
   },
-  cancelButton: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#f5f5f5',
-  },
-  cancelButtonText: {
+  cancelBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: '700',
+    color: COLORS.blanco,
   },
-  saveButton: {
-    backgroundColor: '#4CAF50',
+  acceptBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: COLORS.verde,
+    borderRadius: 8,
+    alignItems: 'center',
   },
-  saveButtonText: {
+  acceptBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+    color: COLORS.blanco,
+  },
+  disabledBtn: {
+    opacity: 0.5,
   },
 });
+
+export default ModalRegistroEscaner;
