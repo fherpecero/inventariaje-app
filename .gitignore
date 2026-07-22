@@ -2,3 +2,10 @@
 .env*
 .expo/
 .DS_Store
+serviceAccountFirebase.json
+node_modules/
+*.tar.gz
+*.zip
+npm-debug.log
+yarn-error.log
+firebase-debug.log
