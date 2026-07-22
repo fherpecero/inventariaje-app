@@ -259,7 +259,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       
       {/* ✅ 2. Cambiamos el header manual por el ScreenHeader Global */}
       <ScreenHeader
-        title="➕ Entradas"
+        title="Entradas"
         onBackPress={() => onNavigate('home')}
         themeColors={themeColors}
       />

@@ -15,6 +15,8 @@ LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import { fetchAndCacheTier, getTierFromCache } from './utils/tierUtils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, StyleSheet } from 'react-native';
 
 // Importar pantallas
 import LoginScreen from './screens/LoginScreen';
@@ -104,6 +106,8 @@ function AppContent() {
   const [page, setPage] = useState('home');
   const [darkMode, setDarkMode] = useState(false);
   const [userTier, setUserTier] = useState('basic'); 
+
+  const insets = useSafeAreaInsets();
 
   // BACK BUTTON HANDLER
   useEffect(() => {
@@ -246,7 +250,9 @@ function AppContent() {
         <View
           style={[
             styles.navbar,
-            { backgroundColor: themeColors.header },
+            { backgroundColor: themeColors.header,
+            paddingBottom: Math.max(insets.bottom, 25)
+          },
           ]}
         >
           {/* Botón Dashboard */}
