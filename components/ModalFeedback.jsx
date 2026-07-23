@@ -47,7 +47,7 @@ export default function ModalFeedback({ visible, onClose, usuarioEmail, cuentaId
       <View style={styles.overlay}>
         <View style={styles.modalContent}>
           <Text style={styles.titulo}>💡 Enviar Feedback</Text>
-          <Text style={styles.subtitulo}>¿Encontraste un error o tienes una idea para mejorar la app?</Text>
+          <Text style={styles.subtitulo}>En caso de error, favor de agregar en que parte de la app y despues de que acción falló</Text>
 
           {/* Selector de Tipo */}
           <View style={styles.selectorContainer}>

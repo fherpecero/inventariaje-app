@@ -1,5 +1,21 @@
 # Changelog - Inventariaje App
  
+ ## [2.1.1] - 2026-07-22
+
+### 🎯 Major: Módulo de Inversión y Restock (Entry Cost)
+Rediseño completo del flujo de entrada de inventario para rastrear el gasto real (Costo Base) y capturar márgenes de ganancia basados en descuentos de distribuidor/socio.
+
+### ✨ Features
+- **Nuevo Modelo de Pedidos (`EntradasScreen`)**: Transición de registro de un solo producto a un modelo de "Carrito de Pedido" (similar a `SalidasScreen`).
+- **Cálculo Automático de Costos**: Integración con `context/productCatalog.jsx` para leer el `precioCostoStandard` y calcular automáticamente la inversión total del pedido por defecto.
+- **Captura de Descuentos Inteligente**: Campo de total editable. Si el socio ingresa un total pagado menor al costo estándar, el sistema calcula y registra automáticamente el `% de descuento aplicado`.
+- **Folios de Entrada**: Generación de IDs numéricos ascendentes para registrar las órdenes de compra formalmente.
+- **Integración Financiera**: Los gastos de restock ahora se envían a la base de datos de Analytics para medir los márgenes de ganancia reales contra el "Dinero Líquido" de las ventas.
+
+### 🔧 Technical Changes & Security
+- **Catálogo Local**: Se optimizó la lectura del costo usando la fuente de verdad local (`productCatalog`) en lugar de hacer consultas costosas (reads) a `CatalogoGlobal` en Firestore.
+- **Firestore Rules Update**: Se reestructuró la validación `hasAll([...])` en la colección de `/entradas/`. Ahora Firestore exige la estructura del \"Ticket de Carrito\" (`productos` [array], `fecha`, `costoBase`, `descuentoAplicado`, `registradoPor`, `folio`).
+- **Transacciones Seguras**: Permisos actualizados en Firestore Rules para permitir que el cliente escriba el \"documento espejo\" en la subcolección de `analytics` sin romper el principio de seguridad.
 
  ## [2.0.0] - 2026-07-20
 

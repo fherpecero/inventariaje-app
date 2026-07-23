@@ -598,7 +598,7 @@ export default function SettingsScreen({
                 </View>
 
                 <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
-                  20% completado - v2.0.0
+                  40% completado - v2.2.0
                 </Text>
               </View>
             </View>
@@ -661,7 +661,7 @@ export default function SettingsScreen({
               ]}
             >
               <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.0.0
+                📱 Versión Actual: v2.1.1
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
                 Compilada: '16/07/2026',

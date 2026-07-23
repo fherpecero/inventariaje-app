@@ -10,16 +10,19 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  TextInput, 
+  ScrollView,
 } from 'react-native';
 import { imagenes } from '../productosData';
-import { collection, setDoc, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, setDoc, getDocs, doc, getDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import Toast from '../components/Toast';
 import SearchBar from '../components/SearchBar';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // ✅ 1. Importamos la Fuente de la Verdad desde theme.jsx
-import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, } from '../context/theme';
 
 export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   const { user, cuenta, cuentaId } = useContext(AuthContext);
@@ -33,7 +36,40 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     visible: false,
     message: '',
     type: 'success'
+    
   });
+
+  // Estados del "Pedido" (Carrito)
+  const [pedido, setPedido] = useState([]); // Lista de productos a ingresar
+  const [modalResumenVisible, setModalResumenVisible] = useState(false);
+
+  // Estados Financieros del Restock
+  const [costoTotalCalculado, setCostoTotalCalculado] = useState(0); // Suma de precioCostoStandard
+  const [costoTotalFinal, setCostoTotalFinal] = useState(''); // Lo que el usuario realmente pagó
+  const [porcentajeDescuento, setPorcentajeDescuento] = useState(0);
+
+  // ✅ NUEVA LÓGICA: Solo agrega a la memoria de la app (Carrito)
+  const confirmarEntrada = () => {
+    if (!selectedProduct || cantidad < 1) {
+      mostrarToast('Cantidad inválida', 'error');
+      return;
+    }
+
+    // Checamos si el producto ya está en el pedido para sumar la cantidad, o si es nuevo
+    const productoExistente = pedido.find(p => p.id === selectedProduct.id);
+    
+    if (productoExistente) {
+      setPedido(pedido.map(p =>
+        p.id === selectedProduct.id ? { ...p, cantidad: p.cantidad + cantidad } : p
+      ));
+    } else {
+      setPedido([...pedido, { ...selectedProduct, cantidad }]);
+    }
+
+    closeModal();
+    // Mantenemos el Toast, pero ahora confirma que se guardó en el carrito, no en Firestore
+    mostrarToast(`${selectedProduct.nombre}: +${cantidad} añadidos al pedido`, 'success');
+  };
 
   const mostrarToast = (msg, tipo = 'success') => {
     setToastConfig({ visible: true, message: msg, type: tipo });
@@ -133,68 +169,6 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     }
   };
 
-  const confirmarEntrada = async () => {
-    if (!selectedProduct || cantidad < 1) {
-      mostrarToast('Cantidad inválida', 'error');
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const productoRef = doc(
-        db,
-        'cuentas',
-        cuentaId.toString(),
-        'inventarios',
-        'vital_health_principal'
-      );
-
-      const docSnap = await getDoc(productoRef);
-      
-      let productosActuales = {};
-      if (docSnap.exists() && docSnap.data().productos) {
-        productosActuales = docSnap.data().productos;
-      }
-
-      const cantidadActual = productosActuales[selectedProduct.id]?.cantidad || 0;
-      const nuevaCantidad = cantidadActual + cantidad;
-
-      const productosActualizados = {
-        ...productosActuales,
-        [selectedProduct.id]: {
-          ...productosActuales[selectedProduct.id],
-          cantidad: nuevaCantidad,
-          codigo: selectedProduct.codigo,
-          nombre: selectedProduct.nombre,
-          updatedAt: new Date().toISOString(),
-          createdAt: productosActuales[selectedProduct.id]?.createdAt || new Date().toISOString(),
-        }
-      };
-
-      await setDoc(productoRef, {
-        productos: productosActualizados,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-
-      const productosActualizadosLocal = productos.map((p) =>
-        p.id === selectedProduct.id
-          ? { ...p, cantidad: nuevaCantidad }
-          : p
-      );
-      setProductos(productosActualizadosLocal);
-
-      closeModal();
-      mostrarToast(`${selectedProduct.nombre}: +${cantidad} unidades`, 'success');
-
-    } catch (error) {
-      console.error('❌ Error en confirmarEntrada:', error);
-      mostrarToast('Error al agregar producto', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSearch = useCallback((filtrados) => {
     setProductosFiltrados(filtrados);
   }, []);
@@ -202,6 +176,110 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   const productosParaSearch = useMemo(() => {
     return productos;
   }, [productos]);
+
+  // 1. Preparar el resumen y calcular costo estándar
+  const prepararResumenPedido = () => {
+    let totalBase = 0;
+    pedido.forEach(item => {
+      // Ya tienes precioCosto gracias a tu mapeo en cargarProductos()
+      totalBase += (item.precioCosto * item.cantidad);
+    });
+    
+    setCostoTotalCalculado(totalBase);
+    setCostoTotalFinal(totalBase.toString()); 
+    setPorcentajeDescuento(0);
+    setModalResumenVisible(true);
+  };
+
+  // 2. Manejar descuentos si el socio edita el total
+  const handleCostoFinalChange = (valorIngresado) => {
+    setCostoTotalFinal(valorIngresado);
+    const totalPagadoNum = parseFloat(valorIngresado) || 0;
+    
+    if (costoTotalCalculado > 0 && totalPagadoNum >= 0) {
+      const descuento = ((costoTotalCalculado - totalPagadoNum) / costoTotalCalculado) * 100;
+      setPorcentajeDescuento(descuento > 0 ? descuento.toFixed(2) : 0);
+    } else {
+      setPorcentajeDescuento(0);
+    }
+  };
+
+  // 3. 🚨 La Transacción Maestra (ADAPTADA A TU ESQUEMA DE INVENTARIO)
+  const registrarEntradaInventario = async () => {
+    if (pedido.length === 0) return;
+    setLoading(true);
+
+    try {
+      const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
+      const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
+
+      await runTransaction(db, async (transaction) => {
+        // A. Obtener folio
+        const cuentaDoc = await transaction.get(cuentaRef);
+        const nuevoFolio = (cuentaDoc.data()?.ultimoFolioEntrada || 0) + 1;
+        
+        const nuevaEntradaRef = doc(db, `cuentas/${cuentaId}/entradas`, `ENT-${nuevoFolio}`);
+        const analyticsRef = doc(db, `cuentas/${cuentaId}/analytics`, `ENT-${nuevoFolio}`);
+        
+        // B. Obtener Inventario Actual (Tú guardas todo en un solo doc)
+        const inventarioSnap = await transaction.get(inventarioRef);
+        let productosActuales = inventarioSnap.exists() ? (inventarioSnap.data().productos || {}) : {};
+
+        // C. Sumar el carrito al inventario actual
+        pedido.forEach(item => {
+        const cantidadActual = productosActuales[item.id]?.cantidad || 0;
+        const infoPrevia = productosActuales[item.id] || {}; // Evita undefined si es producto nuevo
+        
+        productosActuales[item.id] = {
+          ...infoPrevia,
+          cantidad: cantidadActual + item.cantidad,
+          codigo: item.codigo || 'S/N',
+          nombre: item.nombre || 'Desconocido',
+          updatedAt: new Date().toISOString()
+        };
+      });
+
+      // LIMPIEZA: Extraemos solo lo necesario y ponemos "fallbacks" (|| 0)
+      const pedidoLimpio = pedido.map(item => ({
+        id: item.id || '',
+        codigo: item.codigo || '',
+        nombre: item.nombre || '',
+        cantidad: item.cantidad || 0,
+        precioCosto: item.precioCosto || 0
+      }));
+
+        // D. Crear objeto del recibo (Totalmente sanitizado)
+        const ordenEntrada = {
+          folio: nuevoFolio,
+          fecha: new Date().toISOString(),
+          productos: pedidoLimpio, // 👈 Pasamos el carrito ya limpio sin undefined
+          costoBase: costoTotalCalculado || 0,
+          costoPagado: parseFloat(costoTotalFinal) || costoTotalCalculado || 0,
+          descuentoAplicado: parseFloat(porcentajeDescuento) || 0,
+          ahorroMonetario: (costoTotalCalculado - (parseFloat(costoTotalFinal) || costoTotalCalculado)) || 0,
+          registradoPor: user?.uid || 'sistema' // Protegemos en caso de que user tarde en cargar
+        };
+
+        // E. EJECUTAR ESCRITURAS SIMULTÁNEAS
+        transaction.set(inventarioRef, { productos: productosActuales, updatedAt: new Date().toISOString() }, { merge: true });
+        transaction.set(nuevaEntradaRef, ordenEntrada);
+        transaction.set(analyticsRef, { tipoMovimiento: 'ENTRADA_RESTOCK', ...ordenEntrada });
+        transaction.update(cuentaRef, { ultimoFolioEntrada: nuevoFolio });
+      });
+
+      // Éxito: Limpiar estados y actualizar UI
+      setPedido([]);
+      setModalResumenVisible(false);
+      cargarProductos(); // Refrescamos la pantalla para ver el nuevo stock
+      Alert.alert("¡Restock Exitoso!", "Inventario y costos guardados correctamente.");
+
+    } catch (error) {
+      console.error("❌ Error en transacción de restock:", error);
+      Alert.alert("Error", "No se pudo registrar la entrada.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderProducto = ({ item }) => {
     const imagen = imagenes[item.codigo] || null;
@@ -257,18 +335,58 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
         onHide={() => setToastConfig({ visible: false })}
       />
       
-      {/* ✅ 2. Cambiamos el header manual por el ScreenHeader Global */}
-      <ScreenHeader
-        title="Entradas"
-        onBackPress={() => onNavigate('home')}
-        themeColors={themeColors}
-      />
+      {/* HEADER ESTILO SALIDAS (CON GRADIENTE) */}
+      <View style={[HEADER.headerContainer, { backgroundColor: themeColors.bg }]}>
+        <View style={[HEADER.headerContent, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+          
+          {/* Botón de Regresar */}
+          <TouchableOpacity onPress={() => onNavigate('home')} style={{ width: 40 }}>
+            <Text style={{ color: themeColors.text, fontSize: 24 }}>←</Text>
+          </TouchableOpacity>
+
+          {/* Título */}
+          <Text style={[HEADER.headerTitle, { color: themeColors.text, flex: 1, textAlign: 'center' }]}>
+            Entradas
+          </Text>
+
+          {/* Botón de Pedido (Carrito) o un espacio vacío para balancear */}
+          {pedido.length > 0 ? (
+             <TouchableOpacity 
+               onPress={prepararResumenPedido}
+               style={{
+                 backgroundColor: COLORS.morado,
+                 paddingHorizontal: 12,
+                 paddingVertical: 8,
+                 borderRadius: 20,
+                 minWidth: 50,
+                 alignItems: 'center',
+                 justifyContent: 'center'
+               }}
+             >
+               <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 14 }}>
+                 🛒 {pedido.length}
+               </Text>
+             </TouchableOpacity>
+          ) : (
+             <View style={{ width: 50 }} /> /* Espaciador invisible para mantener "Entradas" centrado */
+          )}
+        </View>
+
+        {/* Borde Gradiente Inferior (Igual que en Salidas) */}
+        <LinearGradient
+          colors={['rgba(68, 194, 194, 1)', 'rgba(122, 122, 236, 0.7)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          locations={[0.27, 0.90]}
+          style={HEADER.headerBorderGradient}
+        />
+      </View>
 
       <SearchBar 
         data={productosParaSearch} 
         onSearch={handleSearch}
         searchKeys={['nombre', 'codigo']}
-      />
+      />      
 
       <FlatList
         data={productosFiltrados}
@@ -369,6 +487,114 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                 </View>
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+      {/* ========================================================= */}
+      {/* 2. NUEVO MODAL DE RESUMEN Y COSTOS  */}
+      {/* ========================================================= */}
+      <Modal 
+        visible={modalResumenVisible} 
+        animationType="slide" 
+        transparent={true}
+        onRequestClose={() => setModalResumenVisible(false)}
+      >
+        <Pressable 
+          style={GLOBAL_STYLES.modalOverlay}
+          onPress={() => setModalResumenVisible(false)}
+        >
+          <Pressable 
+            style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg, width: '90%' }]}
+            onPress={(e) => e.stopPropagation()} // Evita que se cierre al picar dentro del cuadro blanco
+          >
+            <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text, marginBottom: 15 }]}>
+              Resumen de Restock
+            </Text>
+            
+            {/* Lista de productos seleccionados */}
+            <View style={{ maxHeight: 120, marginBottom: 15 }}>
+              <ScrollView>
+                {pedido.map((item, idx) => (
+                  <Text key={idx} style={{ color: themeColors.text, fontSize: 16, marginVertical: 3 }}>
+                    {item.cantidad}x {item.nombre}
+                  </Text>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Contenedor financiero editable */}
+            <View style={{ backgroundColor: darkMode ? '#333' : COLORS.gris, padding: 15, borderRadius: 10, marginBottom: 20 }}>
+              <Text style={{ color: themeColors.text, fontSize: 14 }}>
+                Total sin descuentos: ${costoTotalCalculado.toFixed(2)}
+              </Text>
+              
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 15 }}>
+                <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }}>
+                  Total pagado:
+                </Text>
+              </View>
+              <Text style={{ color: 'gray', fontSize: 12, marginBottom: 8, marginTop: 2 }}>
+                (Bono influencer, bono de lealtad, etc...)
+              </Text>
+              
+              <TextInput
+                style={[
+                  GLOBAL_STYLES.input, 
+                  { 
+                    backgroundColor: darkMode ? '#222' : '#FFF', 
+                    color: themeColors.text,
+                    borderWidth: 1,
+                    borderColor: COLORS.negro,
+                    borderRadius: 10,
+                    paddingVertical: 8, // Lo hace más alto y fácil de tocar con el dedo
+                    paddingHorizontal: 10,
+                    fontSize: 14, // Letra más grande para los números
+                    fontWeight: 'bold',
+                    textAlign: 'left', // Centrado parece más una calculadora/caja de pago
+                  }
+                ]}
+                keyboardType="numeric"
+                value={costoTotalFinal}
+                onChangeText={handleCostoFinalChange}
+                selectTextOnFocus={true} // ✨ Magia de UX: Selecciona todo al tocar
+                placeholderTextColor="gray"
+              />
+
+
+              {/* Si se calcula un descuento válido, mostramos los globos verdes de ahorro */}
+              {parseFloat(porcentajeDescuento) > 0 && (
+                <View style={{ marginTop: 12, padding: 10, backgroundColor: 'rgba(76, 175, 80, 0.15)', borderRadius: 8 }}>
+                  <Text style={{ color: COLORS.negro, fontWeight: 'bold', fontSize: 14 }}>
+                    Descuento Aplicado: {porcentajeDescuento}%
+                  </Text>
+                  <Text style={{ color: COLORS.negro, fontSize: 13, marginTop: 2 }}>
+                    Margen de ganancia adicional: ${(costoTotalCalculado - parseFloat(costoTotalFinal)).toFixed(2)}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Botones de acción globales */}
+            <View style={GLOBAL_STYLES.modalButtons}>
+              <TouchableOpacity 
+                style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} 
+                onPress={() => setModalResumenVisible(false)}
+              >
+                <Text style={GLOBAL_STYLES.btnText}>Volver</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} 
+                onPress={registrarEntradaInventario}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={GLOBAL_STYLES.btnText}>Confirmar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
