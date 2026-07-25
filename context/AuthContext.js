@@ -3,302 +3,419 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  getAuth,
+  updateProfile,
 } from 'firebase/auth';
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { fetchAndCacheTier } from '../utils/tierUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 
-console.log("DEBUG AUTH:", auth); 
-console.log("DEBUG DB:", db); 
+// 🛡️ SINGLE SOURCE OF TRUTH: Estilos e identidad visual centralizada
+import { COLORS, FONT_SIZES, GLOBAL_STYLES } from '../context/theme';  
 
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [userData, setUserData] = useState(null); // 💡 Single Source of Truth para Perfil + Rol
   const [cuenta, setCuenta] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [cuentaId, setCuentaId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
-  // Listener de cambios de autenticación
+  // 🛟 RUTA DE ESCAPE DE EMERGENCIA
+  const handleEmergencyLogout = async () => {
+    try {
+      setLoading(true);
+      const authObj = getAuth();
+      await signOut(authObj);
+      setUser(null);
+      setUserData(null);
+      setCuenta(null);
+      setCuentaId(null);
+      setAuthError(null);
+    } catch (err) {
+      console.log('❌ Error en logout de emergencia:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // 🔄 LISTENER PRINCIPAL DE AUTENTICACIÓN (Single Source of Truth)
+  // ============================================================
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeCuenta = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      // Limpiar suscripción previa a /cuentas si existía
+      if (unsubscribeCuenta) {
+        unsubscribeCuenta();
+        unsubscribeCuenta = null;
+      }
+
       try {
         setLoading(true);
 
-        if (currentUser) {
+        if (!currentUser) {
+          console.log('❌ No hay usuario autenticado');
+          setUser(null);
+          setUserData(null);
           setCuenta(null);
           setCuentaId(null);
+          setAuthError(null);
+          setLoading(false);
+          return;
+        }
 
-          console.log('👤 Usuario encontrado:', currentUser.uid);
-          setUser(currentUser);
+        console.log('👤 Usuario detectado en Auth:', currentUser.uid);
+        setUser(currentUser);
 
-          if (!db) {
-            console.error("Firestore no está disponible");
-            return;
-          }
-          
-          // Obtener datos del usuario
-          const usuarioDocRef = doc(db, 'usuarios', currentUser.uid);
-          const usuarioDocSnap = await getDoc(usuarioDocRef);
-          
-          if (usuarioDocSnap.exists()) {
-            const userData = usuarioDocSnap.data();
-            const cuentaId = userData.cuentaId;
-            
-            if (cuentaId) {
-              console.log('🏢 Cuenta encontrada:', cuentaId);
-              
-              // ✅ NUEVO: Obtener documento completo
-              const cuentaDocRef = doc(db, 'cuentas', cuentaId.toString());
-              const unsuscribeCuenta = onSnapshot(cuentaDocRef, (cuentaDocSnap) => {
-                if (cuentaDocSnap.exists()) {
-                setCuentaId(cuentaId);
-                setCuenta(cuentaDocSnap.data());
-                }
+        if (!db) {
+          console.error("❌ Firestore no está disponible");
+          setLoading(false);
+          return;
+        }
+
+        // 1. Cargar Perfil de Usuario (/usuarios/{uid})
+        const usuarioDocRef = doc(db, 'usuarios', currentUser.uid);
+        const usuarioDocSnap = await getDoc(usuarioDocRef);
+
+        if (!usuarioDocSnap.exists()) {
+          console.warn('⚠️ No existe documento de usuario en /usuarios');
+          setLoading(false);
+          return;
+        }
+
+        const dataUser = usuarioDocSnap.data();
+        
+        // Asignamos el objeto userData estandarizado
+        setUserData({
+          uid: currentUser.uid,
+          email: dataUser.email || currentUser.email,
+          nombre: dataUser.nombre || currentUser.displayName || dataUser.email?.split('@')[0] || 'Usuario',
+          rol: dataUser.rol || 'user', // Default a socio si no existe
+          cuentaId: dataUser.cuentaId,
+          suspendido: dataUser.suspendido || false,
+        });
+
+        // 2. Verificar suspensión de cuenta
+        if (dataUser.suspendido === true) {
+          console.log('🔒 Usuario suspendido detectado');
+          setAuthError('Tu acceso ha sido suspendido. Contacta al administrador de la cuenta.');
+          setLoading(false);
+          return;
+        }
+
+        const userCuentaId = dataUser.cuentaId;
+        if (!userCuentaId) {
+          console.warn('⚠️ El usuario no tiene cuentaId asignado');
+          setLoading(false);
+          return;
+        }
+
+        console.log('🏢 Conectando en tiempo real a cuenta:', userCuentaId);
+
+        // 3. Suscripción en tiempo real a la Cuenta (/cuentas/{cuentaId})
+        const cuentaDocRef = doc(db, 'cuentas', userCuentaId.toString());
+
+        unsubscribeCuenta = onSnapshot(
+          cuentaDocRef,
+          async (cuentaDocSnap) => {
+            if (cuentaDocSnap.exists()) {
+              const cuentaData = cuentaDocSnap.data();
+
+              // 🛡️ LÓGICA INTELIGENTE DE AUTO-DETECCIÓN DE ADMIN:
+              // Si es el dueño de la cuenta (propietarioUid) O su campo rol dice 'admin', es ADMIN.
+              const esPropietario = cuentaData.propietarioUid === currentUser.uid;
+              const rolFinal = dataUser.rol || (esPropietario ? 'admin' : 'user');
+
+              // Actualizamos el Single Source of Truth con el rol corregido
+              setUserData({
+                uid: currentUser.uid,
+                email: dataUser.email || currentUser.email,
+                nombre: dataUser.nombre || currentUser.displayName || dataUser.email?.split('@')[0] || 'Usuario',
+                rol: rolFinal, // 👈 Rol auto-detectado sin errores
+                cuentaId: userCuentaId,
+                suspendido: dataUser.suspendido || false,
               });
-                await fetchAndCacheTier(cuentaId);
-                 // Limpiar listener cuando el usuario cambie
-            return () => unsubscribeCuenta();
+
+              setCuentaId(userCuentaId);
+              setCuenta(cuentaData);
+
+              try {
+                await fetchAndCacheTier(userCuentaId);
+              } catch (err) {
+                console.log("ℹ️ Nota en tier cache:", err.message);
+              }
+
+              setAuthError(null);
+              setLoading(false); // ✅ Apagamos el loader cuando todo está listo
+            } else {
+              setAuthError("No se encontró la información de la cuenta asociada.");
+              setLoading(false);
+            }
+          },
+          (error) => {
+            console.error("❌ Error de permisos en la cuenta:", error.message);
+            setAuthError("Error de seguridad: Tus permisos están desincronizados. Por favor, cierra sesión y reintenta.");
+            setLoading(false);
           }
-        }
-      } else {
-        console.log('❌ No hay usuario autenticado');
-        setUser(null);
-        setCuenta(null);
-        setCuentaId(null);
+        );
+
+      } catch (error) {
+        console.error('❌ Error en AuthStateChanged:', error);
+        setAuthError(error.message);
+        setLoading(false);
       }
+    });
+
+    return () => {
+      if (unsubscribeCuenta) unsubscribeCuenta();
+      unsubscribeAuth();
+    };
+  }, []);
+
+  // ============================================================
+  // ✏️ ACTUALIZAR PERFIL (Single Source of Truth Updates)
+  // ============================================================
+  const actualizarPerfil = async (nuevoNombre) => {
+    try {
+      if (!user) throw new Error('No hay usuario autenticado');
+      const nombreLimpio = nuevoNombre.trim();
+      if (!nombreLimpio) throw new Error('El nombre no puede estar vacío');
+
+      console.log('✏️ Actualizando nombre globalmente a:', nombreLimpio);
+
+      // 1. Firebase Auth Profile
+      await updateProfile(user, { displayName: nombreLimpio });
+
+      // 2. Firestore /usuarios/{uid}
+      const usuarioRef = doc(db, 'usuarios', user.uid);
+      await updateDoc(usuarioRef, {
+        nombre: nombreLimpio,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // 3. Firestore /usuariosCuenta/{uid} (Si aplica)
+      try {
+        const usuarioCuentaRef = doc(db, 'usuariosCuenta', user.uid);
+        await updateDoc(usuarioCuentaRef, {
+          nombre: nombreLimpio,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.log('ℹ️ /usuariosCuenta no requirió actualización:', e.message);
+      }
+
+      // 4. Actualizar Estado Global en Memoria (Redibuja toda la App al instante)
+      setUserData((prev) => ({
+        ...prev,
+        nombre: nombreLimpio,
+      }));
+
+      console.log('✅ Nombre actualizado en Firestore y AuthContext');
+      return { success: true };
     } catch (error) {
-      console.error('❌ Error en AuthStateChanged:', error);
-
-    } finally {
-      setLoading(false);
-      console.log('✅ Fin de verificación de autenticación');
+      console.error('❌ Error en actualizarPerfil:', error);
+      return { success: false, error: error.message };
     }
-  });
-  
-  return () => unsubscribe();
-}, []);
+  };
 
-      // En AuthContext.jsx, cuando user cambia
-      useEffect(() => {
-        if (user && cuenta) {
-       
-        }
-      }, [cuenta, user]);
-
-  
-
-  /**
-   * 🔢 FUNCIÓN: Generar próximo ID de cuenta (LOCAL - SIN CLOUD FUNCTIONS)
-   * 
-   * ¿Cómo funciona?
-   * 1. Lista todos los documentos en /cuentas
-   * 2. Extrae los IDs numéricos
-   * 3. Encuentra el máximo
-   * 4. Suma 1 y retorna
-   * 
-   * ⚠️ NOTA sobre Race Conditions:
-   * Si dos usuarios se registran simultáneamente, ambos podrían obtener el mismo ID.
-   * Para una solución robusta, usar Cloud Functions (Firestore Transactions).
-   * Para MVP/dev, esto es aceptable.
-   * 
-   * RETORNA: String con el próximo ID secuencial
-   */
-    const generarProximoCuentaId = async () => {
+  // ============================================================
+  // 🔢 GENERAR PRÓXIMO ID DE CUENTA
+  // ============================================================
+  const generarProximoCuentaId = async () => {
     try {
       console.log('🔢 Generando próximo ID de cuenta...');
-      
       const cuentasSnap = await getDocs(collection(db, 'cuentas'));
       const cuentaIds = [];
-      
-      cuentasSnap.forEach((doc) => {
-        const id = parseInt(doc.id);
+
+      cuentasSnap.forEach((docSnap) => {
+        const id = parseInt(docSnap.id);
         if (!isNaN(id) && id > 0) {
           cuentaIds.push(id);
         }
       });
-      
+
       const maxId = cuentaIds.length > 0 ? Math.max(...cuentaIds) : 9999;
-      const proximoId = maxId + 1;
-      
-      console.log('📈 Contador actual:', maxId);
-      return proximoId.toString();
+      return maxId + 1;
     } catch (error) {
       console.error('❌ Error generando ID:', error);
-      throw error; // Propagar error en lugar de fallback
-      }
-    };
+      throw error;
+    }
+  };
 
+  // ============================================================
+  // 📝 REGISTRO DE CUENTA NUEVA (ADMIN)
+  // ============================================================
   const registro = async (email, password, nombre) => {
     try {
-      console.log('📝 Iniciando registro...');
-      
-      // 1. Crear usuario en Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const userId = userCredential.user.uid;
-      console.log('✅ Usuario creado en Auth:', userId);
+      console.log('📝 Registrando cuenta nueva (Admin)...');
 
-      // 2. Crear documento inicial en /usuarios/{uid}
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const userId = userCredential.user.uid;
+      const nombreLimpio = nombre.trim();
+
+      await updateProfile(userCredential.user, { displayName: nombreLimpio });
+
       const usuarioDocRef = doc(db, 'usuarios', userId);
       await setDoc(usuarioDocRef, {
         uid: userId,
-        email: email.trim(),
-        nombre: nombre.trim(),
+        email: email.trim().toLowerCase(),
+        nombre: nombreLimpio,
+        rol: 'admin', // 🛡️ El creador siempre nace como ADMIN
         createdAt: new Date().toISOString(),
       });
-      console.log('✅ Usuario creado en /usuarios');
 
-      // 3. Generar próximo ID de cuenta (LOCAL)
-      const cuentaId = await generarProximoCuentaId();
-      console.log(`📊 Nuevo cuentaId asignado: ${cuentaId}`);
+      const nuevoCuentaId = await generarProximoCuentaId();
 
-      // 4. Crear la cuenta en /cuentas/{cuentaId}
-      const cuentaRef = doc(db, 'cuentas', cuentaId);
+      const cuentaRef = doc(db, 'cuentas', nuevoCuentaId.toString());
       await setDoc(cuentaRef, {
-        nombre: `${nombre.trim()} - Inventario`,
+        nombre: nombreLimpio,
         propietarioUid: userId,
         miembros: [userId],
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         tier: 'premium',
         premiumTrialActive: true,
         trialStartDate: new Date().toISOString(),
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
-      console.log('✅ Cuenta creada:', cuentaId);
 
-      // 5. Crear inventario principal
-      const inventarioRef = doc(db, `cuentas/${cuentaId}/inventarios/vital_health_principal`);
+      const inventarioRef = doc(db, `cuentas/${nuevoCuentaId}/inventarios/vital_health_principal`);
       await setDoc(inventarioRef, {
         nombre: 'Vital Health Principal',
         productos: {},
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
-      console.log('✅ Inventario creado');
 
-      // 6. Actualizar documento de usuario con cuentaId
       await updateDoc(usuarioDocRef, {
-        cuentaId: cuentaId,
+        cuentaId: nuevoCuentaId,
         updatedAt: new Date().toISOString(),
       });
-      console.log('✅ Usuario actualizado con cuentaId');
 
-      // 7. Crear índice en /usuariosCuenta/{userId}
       const usuarioCuentaRef = doc(db, 'usuariosCuenta', userId);
       await setDoc(usuarioCuentaRef, {
-        cuentaId: cuentaId,
-        email: email.trim(),
-        nombre: nombre.trim(),
+        cuentaId: nuevoCuentaId,
+        email: email.trim().toLowerCase(),
+        nombre: nombreLimpio,
+        rol: 'admin',
         createdAt: new Date().toISOString(),
       });
-      console.log('✅ Índice usuariosCuenta creado');
 
-      // 8. Leer la cuenta que acaba de crear
-      const cuentaSnapshot = await getDoc(cuentaRef);
-      const cuentaData = cuentaSnapshot.data();
-
-      // 9. Actualizar estado local con el objeto completo
-      setUser(userCredential.user);
-      setCuenta(cuentaData);
-      setCuentaId(cuentaId);
-
-      console.log('✅ REGISTRO COMPLETADO - Cuenta:', cuentaId);
-
-      return { success: true, cuentaId, userId };
+      return { success: true, cuentaId: nuevoCuentaId, userId };
     } catch (error) {
       console.error('❌ Error en registro:', error);
-      
-      // Mensaje más descriptivo para el usuario
       let mensajeError = 'Error en el registro';
-      if (error.code === 'auth/email-already-in-use') {
-        mensajeError = 'Este email ya está registrado';
-      } else if (error.code === 'auth/weak-password') {
-        mensajeError = 'La contraseña es muy débil';
-      } else if (error.code === 'auth/invalid-email') {
-        mensajeError = 'Email inválido';
-      }
-      
+      if (error.code === 'auth/email-already-in-use') mensajeError = 'Este email ya está registrado';
+      else if (error.code === 'auth/weak-password') mensajeError = 'La contraseña es muy débil';
+      else if (error.code === 'auth/invalid-email') mensajeError = 'Email inválido';
       return { success: false, error: mensajeError };
     }
   };
 
-  /**
-   * 🔓 FUNCIÓN: LOGIN
-   * 
-   * FLUJO:
-   * 1. Autentica con email/password
-   * 2. El listener de onAuthStateChanged obtiene automáticamente la cuenta
-   */
+  // ============================================================
+  // 🔓 LOGIN
+  // ============================================================
   const login = async (email, password) => {
     try {
-      console.log('🔓 Iniciando login...');
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userId = userCredential.user.uid;
-      console.log('✅ Login exitoso:', userCredential.user.uid);
-
-      if (db) {
-        const usuarioDocRef = doc(db, 'usuarios', userId);
-        const usuarioSnap = await getDoc(usuarioDocRef);
-
-        if (usuarioSnap.exists()) {
-          const userData = usuarioSnap.data();
-
-          //Suspendido
-          if (userData.suspendido === true) {
-            console.log('🔒Usuario Suspendido');
-            await signOut(auth);
-            return {
-              success: false,
-              error: '🔒Tu cuenta ha sido suspendida\n\nContacta al admin de la cuenta'
-            };
-          }
-        }
-      }
+      console.log('🔓 Iniciando sesión...');
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      console.log('✅ Auth exitosa para UID:', userCredential.user.uid);
       return { success: true, userId: userCredential.user.uid };
     } catch (error) {
       console.error('❌ Error en login:', error);
-      
       let mensajeError = 'Error en el login';
-      if (error.code === 'auth/user-not-found') {
-        mensajeError = 'Usuario no encontrado';
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        mensajeError = 'Usuario o contraseña incorrectos';
       } else if (error.code === 'auth/wrong-password') {
         mensajeError = 'Contraseña incorrecta';
       } else if (error.code === 'auth/invalid-email') {
         mensajeError = 'Email inválido';
       }
-      
       return { success: false, error: mensajeError };
     }
   };
 
-  /**
-   * 🔐 FUNCIÓN: LOGOUT
-   * 
-   * FLUJO:
-   * 1. Cierra sesión en Firebase Auth
-   * 2. El listener de onAuthStateChanged limpia el estado local
-   */
+  // ============================================================
+  // 🔐 LOGOUT
+  // ============================================================
   const logout = async () => {
     try {
       console.log('🔐 Cerrando sesión...');
       setLoading(true);
       await signOut(auth);
       setUser(null);
+      setUserData(null);
       setCuenta(null);
-      setCuentaId(null)
+      setCuentaId(null);
+      setAuthError(null);
       await AsyncStorage.removeItem('cuentaId');
-      
-      console.log('✅ Sesión cerrada');
+      console.log('✅ Sesión cerrada correctamente');
     } catch (error) {
       console.error('❌ Error en logout:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // ============================================================
+  // 🎨 RENDER: PANTALLAS DE CARGA Y FALLBACK (USANDO THEME.JSX)
+  // ============================================================
+  if (loading && !authError) {
+    return (
+      <View style={[GLOBAL_STYLES.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.turquesa} />
+        <Text style={{ marginTop: 12, color: COLORS.textSecondary || '#666', fontSize: FONT_SIZES.normal }}>
+          Sincronizando cuenta...
+        </Text>
+      </View>
+    );
+  }
+
+  if (authError) {
+    return (
+      <View style={[GLOBAL_STYLES.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <Text style={{ fontSize: 50, marginBottom: 15 }}>🔒</Text>
+        
+        <Text style={{ fontSize: FONT_SIZES.titulo, fontWeight: 'bold', color: COLORS.negro, marginBottom: 10 }}>
+          Acceso Restringido
+        </Text>
+        
+        <Text style={{ fontSize: FONT_SIZES.normal, color: COLORS.textSecondary || '#666', textAlign: 'center', marginBottom: 30 }}>
+          {authError}
+        </Text>
+
+        <TouchableOpacity 
+          onPress={handleEmergencyLogout}
+          style={[GLOBAL_STYLES.btnDanger, { width: '100%', paddingVertical: 14 }]}
+        >
+          <Text style={[GLOBAL_STYLES.btnText, { fontSize: FONT_SIZES.subtitulo }]}>
+            Cerrar Sesión
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    <AuthContext.Provider value={{ user, cuenta, cuentaId, loading, registro, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      userData, 
+      cuenta, 
+      cuentaId, 
+      loading, 
+      registro, 
+      login, 
+      logout, 
+      actualizarPerfil,
+      handleEmergencyLogout 
+    }}>
       {children}
     </AuthContext.Provider>
   );

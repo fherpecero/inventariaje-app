@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -16,16 +16,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { addDoc, collection, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import DatePickerField from '../components/DatePickerField';
-
-const COLORS = {
-  turquesa: '#24c5c5',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojito: '#f97272',
-  naranja: '#FF9800',
-};
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, Header, GLOBAL_STYLES } from '../context/theme';
+import { AuthContext } from '../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * ModalRegistroEscaner
@@ -47,6 +40,8 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
   const [escaneos, setEscaneos] = useState(0);
   const [monto, setMonto] = useState('');
   const [loading, setLoading] = useState(false);
+  const { user, userData } = useContext(AuthContext);
+  const insets = useSafeAreaInsets();
 
   // Calcular total automático
   const total = parseInt(escaneos || 0) * parseFloat(monto || 0);
@@ -117,6 +112,8 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
         ventaTotal: total,
         estado: 'activo',
         updatedAt: ahora.toISOString(),
+        creadoPorUid: user.uid,
+        creadoPorNombre: userData?.nombre || user.email,
       };
 
       if (eventoEdicion) {
@@ -342,7 +339,7 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
             </View>
 
             <View style={styles.totalRowFinal}>
-                <Text style={styles.totalLabelFinal}>Las ventas registradas durante el evento se vincularán automáticamente a los reportes de Analytics.</Text>
+                <Text style={{ color: COLORS.rojo, fontWeight: 'bold', textAlign: 'center' }}>AVISO: Las ventas registradas durante el evento se vincularán automáticamente a los reportes de Analytics.</Text>
               </View>
 
             {/* ESPACIADOR */}

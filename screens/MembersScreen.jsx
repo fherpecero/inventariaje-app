@@ -12,29 +12,15 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, setDoc, query, where } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, setDoc, query, where, getFirestore } from 'firebase/firestore';
+import { getAuth, signOut, initializeAuth, updateProfile,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, inMemoryPersistence } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from '../config/firebase';
+import { db, firebaseConfig } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
-
-const COLORS = {
-  turquesa: '#24c5c5',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#f44336',
-  morado: '#7e2b8d',
-  rojito: '#f97272',
-};
-
-const FONT_SIZES = {
-  titulo: 20,
-  subtitulo: 16,
-  normal: 14,
-  pequeño: 12,
-};
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, Header, GLOBAL_STYLES } from '../context/theme';
+import { calculateEffectiveTier } from '../utils/tierUtils';
 
 const getThemeColors = (darkMode) => {
   if (darkMode) {
@@ -294,39 +280,67 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
     if (isMountedRef.current) setCreating(true);
 
     try {
-      console.log('➕ Creando usuario:', emailInput);
-      const auth = getAuth();
+      console.log('➕ Creando usuario fantasma:', emailInput);
 
+      // 1. INSTANCIA FANTASMA (Muta el warning amarillo y separa la sesión)
+      let secondaryApp;
+      let secondaryAuth;
+
+      const apps = getApps();
+      const existingApp = apps.find(app => app.name === "SecondaryApp");
+
+      if (!existingApp) {
+        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+        // Le decimos explícitamente a Firebase: "Usa memoria, no guardes esta sesión"
+        secondaryAuth = initializeAuth(secondaryApp, {
+          persistence: inMemoryPersistence
+        });
+      } else {
+        secondaryApp = existingApp;
+        secondaryAuth = getAuth(secondaryApp);
+      }
+
+      // IMPORTANTE: Creamos una conexión a la BD que viaja con la identidad del fantasma
+      const secondaryDb = getFirestore(secondaryApp);
+
+      // 2. CREAR USUARIO en Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
-        auth,
+        secondaryAuth,
         emailInput.trim(),
         passwordInput
       );
       const nuevoUID = userCredential.user.uid;
+      const nombreUsuario = emailInput.split('@')[0];
 
-      const propietarioEmail = await AsyncStorage.getItem('recordar_email');
-      const propietarioPassword = await AsyncStorage.getItem('recordar_password');
+      // 🛡️ NUEVO: Asignar el nombre directamente al perfil de Firebase Auth
+      await updateProfile(userCredential.user, {
+        displayName: nombreUsuario
+      });
 
-      if (!propietarioEmail || !propietarioPassword) {
-        throw new Error('No se encontraron credenciales del propietario');
-      }
-
-      await auth.signOut();
-      await signInWithEmailAndPassword(auth, propietarioEmail.trim(), propietarioPassword);
-
-      const usuarioDocRef = doc(db, 'usuarios', nuevoUID);
+      // 3A. GUARDAR PERFIL (Usa secondaryDb)
+      const usuarioDocRef = doc(secondaryDb, 'usuarios', nuevoUID);
       await setDoc(usuarioDocRef, {
         uid: nuevoUID,
         email: emailInput.trim(),
         nombre: emailInput.split('@')[0],
-        cuentaId: cuentaId.toString(),
+        cuentaId: cuentaId,
         createdAt: new Date().toISOString(),
       }, { merge: false });
 
+      await setDoc(doc(secondaryDb, 'usuariosCuenta', nuevoUID), {
+        cuentaId: cuentaId,
+        rol: 'socio'
+      });
+
+      // 3B. ACTUALIZAR CUENTA MAESTRA (Usa la db original)
+      // El "Administrador" inyecta el UID en la cuenta, por lo que Firestore lo aprueba ✅
       const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
       await updateDoc(cuentaRef, {
         miembros: arrayUnion(nuevoUID),
       });
+
+      // 4. LIMPIEZA
+      await signOut(secondaryAuth);
 
       if (isMountedRef.current) {
         setMiembros([
@@ -345,7 +359,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
         Alert.alert('✅ Éxito', `Usuario ${emailInput} creado correctamente`);
       }
     } catch (error) {
-      console.error('❌ Error:', error);
+      console.error('❌ Error registrando socio:', error);
       Alert.alert('Error', error.message);
     } finally {
       if (isMountedRef.current) {

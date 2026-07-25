@@ -160,7 +160,7 @@ export default function LoginScreen() {
     <View style={[styles.container, { backgroundColor: COLORS.gris }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Inventariaje</Text>
-        <Text style={styles.subtitle}>Gestiona tus ventas e inventario VH</Text>
+        <Text style={styles.subtitle}>Gestiona tu negocio VH</Text>
       </View>
 
       <View style={styles.formContainer}>

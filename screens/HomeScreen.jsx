@@ -60,7 +60,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   // ==========================================
   // ESTADOS Y CONTEXTOS
   // ==========================================
-  const { user, cuenta, cuentaId, loading: loadingAuth } = useContext(AuthContext);
+  const { user, userData, cuenta, cuentaId, loading: loadingAuth } = useContext(AuthContext);
   const isMountedRef = useRef(true);
   
   // Interfaz y Loaders
@@ -201,7 +201,17 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         const ultimoDiaDelMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
 
         const salidasRef = collection(db, 'cuentas', String(cuentaId), 'salidas');
-        const salidasSnap = await getDocs(salidasRef);
+        
+        // 🛡️ LÓGICA INTELIGENTE DE ROLES (FASE 4)
+        let salidasQuery = salidasRef; // Por defecto (Admin) carga la colección completa
+        
+        if (userData?.rol !== 'admin') {
+          // Si es 'user', aplicamos el filtro mágico para traer solo sus tickets
+          salidasQuery = query(salidasRef, where('creadoPorUid', '==', user.uid));
+        }
+
+        // Ejecutamos la consulta usando la variable que preparamos (salidasQuery)
+        const salidasSnap = await getDocs(salidasQuery);
 
         let ventasDelMes = 0;
         const ultimasOperaciones = [];
@@ -233,8 +243,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
           }
         });
 
-        
-
         ultimasOperaciones.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         if (isMountedRef.current) {
@@ -264,7 +272,20 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
     const cargarEventoActivo = async () => {
       try {
         const escanerRef = collection(db, 'cuentas', String(cuentaId), 'escaneres');
-        const q = query(escanerRef, where('estado', '==', 'activo'));
+
+        let q;
+        if (userData?.rol === 'admin') {
+          // Admin busca cualquier escáner que esté activo en la cuenta
+          q = query(escanerRef, where('estado', '==', 'activo'));
+        } else {
+          // User busca SOLO los escáneres activos que ÉL MISMO creó
+          q = query(
+            escanerRef, 
+            where('estado', '==', 'activo'),
+            where('creadoPorUid', '==', user.uid) // 👈 El filtro mágico
+          );
+        }
+
         const escanerSnap = await getDocs(q);
 
         let eventoAct = null;
@@ -286,7 +307,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
     };
 
     cargarEventoActivo();
-  }, [user, cuentaId]);
+  }, [user, cuentaId, userData?.rol]);
 
   // ==========================================
   // EFECTO 4: Cargar Créditos Pendientes (Tiempo Real)
@@ -410,7 +431,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             Te damos la bienvenida
           </Text>
           <Text style={styles.welcomeTitle}>
-            {cuenta?.nombre?.split(' ')[0]}
+            {userData?.nombre || 'Usuario'}
           </Text>
         </View>
 

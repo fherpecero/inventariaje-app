@@ -257,7 +257,8 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           costoPagado: parseFloat(costoTotalFinal) || costoTotalCalculado || 0,
           descuentoAplicado: parseFloat(porcentajeDescuento) || 0,
           ahorroMonetario: (costoTotalCalculado - (parseFloat(costoTotalFinal) || costoTotalCalculado)) || 0,
-          registradoPor: user?.uid || 'sistema' // Protegemos en caso de que user tarde en cargar
+          creadoPorUid: user.uid || 'sistema', // Protegemos en caso de que user tarde en cargar
+          creadoPorNombre: userData?.nombre || user.email,
         };
 
         // E. EJECUTAR ESCRITURAS SIMULTÁNEAS

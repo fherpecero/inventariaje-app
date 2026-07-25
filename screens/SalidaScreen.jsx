@@ -29,7 +29,7 @@ LogBox.ignoreLogs([
 ]);
 
 export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
-  const { user, cuenta, cuentaId } = useContext(AuthContext);
+  const { user, userData, cuenta, cuentaId } = useContext(AuthContext);
   
   // ==========================================
   // ESTADOS Y REFS (Siempre al inicio del componente)
@@ -224,7 +224,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const calcularDiferenciaIntercambio = () => {
     if (carrito.length === 0 || !Array.isArray(productoRecibir) || productoRecibir.length === 0) return 0;
     
-    const totalDoy = carrito.reduce((sum, item) => sum + (item.precioVenta * item.cantidad || 0), 0);
+    const totalDoy = carrito.reduce((sum, item) => sum + (item.precioVentaStandard * item.cantidad || 0), 0);
     const totalRecibo = productoRecibir.reduce((sum, prod) => sum + (prod?.precioVentaStandard || 0), 0);
     
     return totalDoy - totalRecibo;
@@ -502,6 +502,10 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           escanerFecha: escanerActualActualizado?.fechaFormato || null,
           escanerMonto: escanerActualActualizado?.monto || null,
           escanerInvitados: escanerActualActualizado?.invitados || null,
+
+          // 🛡️ FIRMAS DE TRAZABILIDAD (FASE 3)
+          creadoPorUid: user.uid,
+          creadoPorNombre: userData?.nombre || user.email,
         };
         await addDoc(salidaRef, ventaDoc);
       }
@@ -610,6 +614,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         ventasIds: ventasIds,
         timestamp: ahora,
         creadorEmail: user.email,
+        creadoPorUid: user.uid,
+        creadoPorNombre: userData?.nombre || user.email,
       };
       await addDoc(creditoRef, creditoDoc);
 
@@ -732,6 +738,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       <View style={[HEADER.headerContainer, { backgroundColor: themeColors.header }]}>
         <View style={HEADER.headerContent}>
           <Text style={[HEADER.headerTitle, { color: themeColors.text }]}> Ventas</Text>
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}></View>
           <TouchableOpacity 
             onPress={toggleModoIntercambio}
             disabled={effectiveTier !== 'premium'}
@@ -739,6 +746,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           >
             <Text style={styles.btnIntercambioText}>🔁</Text>
           </TouchableOpacity>
+          
         </View>
         <LinearGradient
           colors={['rgba(68, 194, 194, 1)', 'rgba(122, 122, 236, 0.7)']}
@@ -752,7 +760,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       {/* BANNER INTERCAMBIO */}
       {modoIntercambio && (
         <View style={styles.bannerIntercambio}>
-          <Text style={styles.bannerIntercambioText}>⚡ MODO INTERCAMBIO ACTIVO</Text>
+          <Text style={styles.bannerIntercambioText}>Intercambia productos con asociados</Text>
         </View>
       )}
 

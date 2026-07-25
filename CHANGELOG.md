@@ -1,5 +1,13 @@
 # Changelog - Inventariaje App
  
+ ## [2.2.1] - 2026-07-25
+ ### BUG CORRECTION
+ -Keyboard overlay on modal
+ -New logo update
+ -User management Architechture optimization
+
+
+
  ## [2.1.1] - 2026-07-22
 
 ### 🎯 Major: Módulo de Inversión y Restock (Entry Cost)

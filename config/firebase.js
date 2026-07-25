@@ -1,9 +1,9 @@
-import { initializeApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyBzdQAlX5cXJQdqUKBs3G3RaU-NtskrvGU",
   authDomain: "inventariaje-app.firebaseapp.com",
   projectId: "inventariaje-app",
@@ -12,11 +12,21 @@ const firebaseConfig = {
   appId: "1:576085892723:web:8cedd74660418e117e9406"
 };
 
-const app = initializeApp(firebaseConfig);
+// 🛡️ EL ESCUDO: Evitar inicializar Firebase dos veces durante el Hot Reload de Expo
+let app;
+let auth;
 
-// Inicializar Auth CON AsyncStorage para persistencia real
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+if (getApps().length === 0) {
+  // 1. Es la primera vez que se abre la app
+  app = initializeApp(firebaseConfig);
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+} else {
+  // 2. Acabas de guardar un archivo y Expo recargó la pantalla
+  app = getApp();
+  auth = getAuth(app);
+}
 
+export { auth };
 export const db = getFirestore(app);

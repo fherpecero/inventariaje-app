@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,27 +17,9 @@ import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { AuthContext } from '../context/AuthContext';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
+import { calculateEffectiveTier } from '../utils/tierUtils';
 
-const COLORS = {
-  turquesa: '#24c5c5',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#f44336',
-  naranja: '#FF9800',
-  morado: '#7e2b8d',
-  rojito: '#f97272',
-};
-
-const FONT_SIZES = {
-  titulo: 20,
-  subtitulo: 16,
-  normal: 14,
-  pequeño: 12,
-};
-
-const SPACING = 10;
 
 export default function SettingsScreen({
   onNavigate,
@@ -44,18 +27,22 @@ export default function SettingsScreen({
   themeColors,
   onDarkModeChange,
 }) {
-  const { logout, cuenta, cuentaId } = useContext(AuthContext);
-
-  const [usuario, setUsuario] = useState({
-    nombre: 'Usuario',
-    email: 'usuario@inventariaje.com',
-  });
+  const { userData, cuenta, cuentaId, actualizarPerfil, logout } = useContext(AuthContext);
 
   const [notificaciones, setNotificaciones] = useState(true);
   const [idioma, setIdioma] = useState('es');
-  const [editingNombre, setEditingNombre] = useState(false);
+  const [modalEditVisible, setModalEditVisible] = useState(false);
   const [nombreTemporal, setNombreTemporal] = useState('');
+  
   const [loading, setLoading] = useState(true);
+  const [loadingGuardar, setLoadingGuardar] = useState(false);
+
+  // 💎 Cálculo dinámico del TIER de la cuenta
+  const effectiveTier = calculateEffectiveTier(
+    cuenta?.tier,
+    cuenta?.premiumTrialActive,
+    cuenta?.trialStartDate
+  );
 
   useEffect(() => {
     cargarDatos();
@@ -64,20 +51,6 @@ export default function SettingsScreen({
   const cargarDatos = async () => {
     try {
       setLoading(true);
-
-      // Cargar usuario de Firestore
-      if (auth.currentUser) {
-        const userDocRef = doc(db, 'usuarios', auth.currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          setUsuario({
-            nombre: userData.nombre || 'Usuario',
-            email: userData.email || auth.currentUser.email,
-          });
-        }
-      }
 
       // Cargar preferencias
       try {
@@ -95,65 +68,30 @@ export default function SettingsScreen({
     }
   };
 
-  const guardarUsuario = async (newUsuario) => {
-    try {
-      const userDocRef = doc(db, 'usuarios', auth.currentUser.uid);
-      await updateDoc(userDocRef, {
-        nombre: newUsuario.nombre,
-      });
-      setUsuario(newUsuario);
-    } catch (error) {
-      console.error('Error guardando usuario:', error);
-      Alert.alert('Error', 'No se pudo guardar el perfil');
+    const abrirModalEdicion = () => {
+    setNombreTemporal(userData?.nombre || '');
+    setModalEditVisible(true);
+  };
+
+  // ✏️ ACTUALIZACIÓN CENTRALIZADA: Llama a AuthContext
+  const handleGuardarNombre = async () => {
+    if (!nombreTemporal.trim()) {
+      Alert.alert('Error', 'El nombre no puede estar vacío');
+      return;
+    }
+
+    setLoadingGuardar(true);
+    const res = await actualizarPerfil(nombreTemporal);
+    setLoadingGuardar(false);
+
+    if (res.success) {
+      // ✅ AHORA SÍ: Apagamos el estado correcto del Modal
+      setModalEditVisible(false); 
+      Alert.alert('✅ Éxito', 'Nombre actualizado correctamente');
+    } else {
+      Alert.alert('Error', 'No se pudo guardar: ' + res.error);
     }
   };
-
-  const editarNombre = () => {
-    setNombreTemporal(usuario.nombre);
-    setEditingNombre(true);
-  };
-
-  const guardarNombre = async () => {
-  console.log('1️⃣ Inicio guardarNombre');
-  console.log('   nombreTemporal:', nombreTemporal);
-  console.log('   cuentaId:', cuentaId);  // ✅ Ahora está definido
-
-  if (nombreTemporal.trim().length === 0) {
-    console.log('❌ VALIDACIÓN FALLIDA: nombre vacío');
-    Alert.alert('Error', 'El nombre no puede estar vacío');
-    return;
-  }
-  console.log('✅ Validación pasada');
-
-  try {
-    const nombreNuevo = nombreTemporal.trim();
-    console.log('2️⃣ Preparando actualización:', {
-      colección: 'cuentas',
-      documentId: cuentaId,
-      campo: 'nombre',
-      valorNuevo: nombreNuevo
-    });
-
-    console.log('3️⃣ Enviando a Firestore...');
-    await updateDoc(doc(db, 'cuentas', cuentaId), {
-      nombre: nombreNuevo
-    });
-    console.log('✅ Firestore actualizado exitosamente');
-
-    const newUsuario = { ...usuario, nombre: nombreNuevo };
-    setUsuario(newUsuario);
-    setEditingNombre(false);
-
-    console.log('5️⃣ Mostrando mensaje de éxito');
-    Alert.alert('Éxito', 'Nombre actualizado');
-  } catch (error) {
-    console.log('❌ ERROR CAPTURADO:', {
-      mensaje: error.message,
-      código: error.code,
-    });
-    Alert.alert('Error', 'No se pudo guardar: ' + error.message);
-  }
-};
 
   const toggleNotificaciones = async () => {
     const newValue = !notificaciones;
@@ -169,18 +107,18 @@ export default function SettingsScreen({
     }
   };
 
-  const cambiarIdioma = async (nuevoIdioma) => {
-    setIdioma(nuevoIdioma);
+  // const cambiarIdioma = async (nuevoIdioma) => {
+  //   setIdioma(nuevoIdioma);
 
-    try {
-      const savedSettings = await AsyncStorage.getItem('appSettings');
-      const settings = savedSettings ? JSON.parse(savedSettings) : {};
-      settings.idioma = nuevoIdioma;
-      await AsyncStorage.setItem('appSettings', JSON.stringify(settings));
-    } catch (error) {
-      console.warn('Error guardando idioma:', error);
-    }
-  };
+  //   try {
+  //     const savedSettings = await AsyncStorage.getItem('appSettings');
+  //     const settings = savedSettings ? JSON.parse(savedSettings) : {};
+  //     settings.idioma = nuevoIdioma;
+  //     await AsyncStorage.setItem('appSettings', JSON.stringify(settings));
+  //   } catch (error) {
+  //     console.warn('Error guardando idioma:', error);
+  //   }
+  // };
 
   const cerrarSesion = async () => {
     Alert.alert(
@@ -208,25 +146,19 @@ export default function SettingsScreen({
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]}>
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={COLORS.turquesa} />
-        </View>
+     <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg, justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.turquesa} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.bg }]}>
-      <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
-        {/* HEADER */}
-        <View style={[styles.header, { backgroundColor: themeColors.header }]}>
-          <TouchableOpacity onPress={() => onNavigate('home')}>
-            <Text style={styles.backBtn}>← Atrás</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>⚙️ Configuranza</Text>
-          <View style={{ width: 60 }} />
-        </View>
+    <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+      <ScreenHeader
+        title="⚙️ Configuranza"
+        onBackPress={() => onNavigate('home')}
+        themeColors={themeColors}
+      />
 
         {/* CONTENT */}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -239,128 +171,73 @@ export default function SettingsScreen({
               👤 Mi Cuenta
             </Text>
 
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: themeColors.bgSecondary,
-                  borderColor: themeColors.border,
-                },
-              ]}
-            >
+            <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={abrirModalEdicion}
+            style={[styles.card3Col, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
+          >
+            {/* COLUMNA 1: AVATAR */}
+            <View style={styles.colAvatar}>
               <View style={styles.userAvatar}>
                 <Text style={styles.userAvatarText}>
-                  {usuario.nombre.charAt(0).toUpperCase()}
+                  {userData?.nombre ? userData.nombre.charAt(0).toUpperCase() : 'U'}
                 </Text>
               </View>
-
-              <View style={styles.userInfoContainer}>
-                {editingNombre ? (
-                  <View style={styles.editingContainer}>
-                    <TextInput
-                      style={[
-                        styles.editInput,
-                        {
-                          color: themeColors.text,
-                          borderColor: themeColors.border,
-                          backgroundColor: themeColors.input,
-                        },
-                      ]}
-                      value={nombreTemporal}
-                      onChangeText={setNombreTemporal}
-                      placeholder="Nombre"
-                      placeholderTextColor={themeColors.textSecondary}
-                      autoFocus
-                    />
-                    <View style={styles.editButtons}>
-                      <TouchableOpacity
-                        style={styles.editSaveBtn}
-                        onPress={guardarNombre}
-                      >
-                        <Text style={styles.editSaveBtnText}>✓</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.editCancelBtn}
-                        onPress={() => setEditingNombre(false)}
-                      >
-                        <Text style={styles.editCancelBtnText}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <>
-                 {/* Línea 1: Nombre + Account ID */}
-<View style={styles.userInfoRow}>
-  {/* LEFT */}
-  <View style={styles.userInfoLeft}>
-    <Text style={[styles.userName, { color: themeColors.text }]}>
-      {usuario.nombre}
-    </Text>
-    <Text style={[styles.userEmail, { color: themeColors.textSecondary }]}>
-      {usuario.email}
-    </Text>
-    <TouchableOpacity onPress={editarNombre} style={styles.editBtn}>
-      <Text style={styles.editBtnText}>✏️ Editar nombre</Text>
-    </TouchableOpacity>
-  </View>
-
-  {/* RIGHT */}
-  <View style={styles.userInfoRight}>
-    <Text style={[styles.accountId, { color: themeColors.text }]}>
-      ID: {cuentaId}
-    </Text>
-    <Text style={styles.tierEmoji}>💎</Text>
-    <Text style={[styles.tierLabel, { color: COLORS.turquesa }]}>
-      PREMIUM
-    </Text>
-  </View>
-</View>
-                  </>
-                )}
-              </View>
             </View>
-          </View>
+
+            {/* COLUMNA 2: DETALLES DE USUARIO */}
+            <View style={styles.colInfo}>
+              <Text style={[styles.userName, { color: themeColors.text }]} numberOfLines={1}>
+                {userData?.nombre || 'Usuario'}
+              </Text>
+              <Text style={[styles.userEmail, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                {userData?.email || 'Sin correo'}
+              </Text>
+              
+              {/* 🛡️ TEXTO NORMAL PARA EL ROL (Sin Badge) */}
+              <Text style={{ fontSize: FONT_SIZES.pequeño, fontWeight: '700', color: userData?.rol === 'admin' ? COLORS.morado : COLORS.turquesa }}>
+                {userData?.rol === 'admin' ? '👑 Admin' : '👥 User'}
+              </Text>
+            </View>
+
+            {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
+            <View style={styles.colCuenta}>
+              <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
+                ID: {cuentaId || '---'}
+              </Text>
+              <Text style={styles.tierEmoji}>
+                {effectiveTier === 'premium' ? '💎' : '🪩'}
+              </Text>
+              <Text style={[styles.tierLabel, { color: effectiveTier === 'premium' ? COLORS.turquesa : COLORS.textSecondary }]}>
+                {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
+              </Text>
+            </View>
+            </TouchableOpacity>
+
 
           {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 2. GESTIONAR MIEMBROS (EQUIPO) */}
+          {/* 2. GESTIONAR USUARIOS (SOLO VISIBLE PARA ADMINS) */}
           {/* ═══════════════════════════════════════════════════════════════ */}
+          {userData?.rol === 'admin' && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              👥 Usuarios
-            </Text>
-
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: themeColors.bgSecondary,
-                  borderColor: themeColors.border,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => onNavigate('miembros')}
-              >
+              👥 Usuarios</Text>
+            <View style={[styles.cardSimple, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
+              <TouchableOpacity style={styles.menuItem} onPress={() => onNavigate('miembros')}>
                 <View style={styles.menuContent}>
                   <Text style={styles.menuItemIcon}>👥</Text>
-
                   <View style={styles.menuTextContainer}>
-                    <Text style={[styles.menuItemText, { color: themeColors.text }]}>
-                      Gestionar Usuarios
-                    </Text>
-                    <Text
-                      style={[styles.menuItemSubtext, { color: themeColors.textSecondary }]}
-                    >
-                      Invita a los miembros de tu inventario
+                    <Text style={[styles.menuItemText, { color: themeColors.text }]}>Gestionar Usuarios</Text>
+                    <Text style={[styles.menuItemSubtext, { color: themeColors.textSecondary }]}>
+                      Invita o administra los socios de tu cuenta
                     </Text>
                   </View>
                 </View>
-
                 <Text style={styles.menuItemArrow}>→</Text>
               </TouchableOpacity>
             </View>
           </View>
+        )}
 
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* 3. PREFERENCIAS */}
@@ -387,7 +264,7 @@ export default function SettingsScreen({
                     Modo Oscuro
                   </Text>
                   <Text style={[styles.settingDesc, { color: themeColors.textSecondary }]}>
-                    Cambiar a modo oscuro
+                    Cambiar el tema visual
                   </Text>
                 </View>
               </View>
@@ -426,6 +303,7 @@ export default function SettingsScreen({
                 trackColor={{ false: '#ddd', true: COLORS.turquesa }}
                 thumbColor={notificaciones ? COLORS.turquesa : '#f4f3f4'}
               />
+              </View>
             </View>
 
             {/* Idioma
@@ -479,76 +357,25 @@ export default function SettingsScreen({
           {/* 4. ESTADO DE FUNCIONALIDADES */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              📋 Estado de Funcionalidades
-            </Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📋 Estado de Funcionalidades</Text>
 
-            {/* ✅ COMPLETADAS */}
-            <View style={styles.featureGroup}>
-              <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>
-                ✅ Completadas
-              </Text>
+          <View style={styles.featureGroup}>
+            <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>✅ Completadas</Text>
+            <View style={[styles.featureBox, styles.featureCompleted, { backgroundColor: themeColors.bgSecondary }]}>
+               {/* FASE 1-2 */}
+              <Text style={[styles.featureVersion, { color: themeColors.text }]}>
+                  Fase 1-2 </Text>
+              <Text style={[styles.item, { color: themeColors.text }]}>✓ Dashboard de Inicio</Text>
+              <Text style={[styles.item, { color: themeColors.text }]}>✓ Control de Inventario y productos</Text>
+              <Text style={[styles.item, { color: themeColors.text }]}>✓ Gestión de Cuentas</Text>
+              <Text style={[styles.item, { color: themeColors.text }]}>✓ Base de datos en la nube (real time)</Text>
 
-              <View
-                style={[
-                  styles.featureBox,
-                  styles.featureCompleted,
-                  {
-                    backgroundColor: themeColors.bgSecondary,
-                    borderColor: '#4CAF50',
-                  },
-                ]}
-              >
-                {/* FASE 1 - COMPLETADAS */}
-                  <View style={styles.itemsContainer}>
-                  <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                    Fase 1
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                      ✓ Full Stack dev - App deployment
-                    </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                      ✓ Base de datos en la nube (real time)
-                    </Text>
-                  
-                {/* FASE 2 */}
-                  <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                  Fase 2
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Dashboard con Inicio
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Control de Inventario (entradas y salidas)
-                  </Text>
-
-                {/* FASE 3 */}
-                    <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                    Fase 3
-                    </Text>
-                    <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Autenticación Multi-usuario 
-                    </Text>
-                    <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Estructura Multi-cuenta en Firestore
-                    </Text>
-                    <Text style={[styles.item, { color: themeColors.text }]}>
-                      ✓ Migración Realtime DB → Firestore
-                    </Text>
-                    <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Modo Oscuro
-                    </Text>
-                     <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Catálogo de Productos (existencias y faltantes)
-                    </Text>
-                    <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Gestión de usuarios (crear usuarios adicionales)
-                    </Text>
-                    <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Tier management (version basic & premium)
-                  </Text>
-
-
+               {/* FASE 3 */}
+               <Text style={[styles.featureVersion, { color: themeColors.text }]}>
+                  Fase 3 </Text>
+               <Text style={[styles.item, { color: themeColors.text }]}>✓ Infraestructura multiusuario</Text>
+               <Text style={[styles.item, { color: themeColors.text }]}>✓ Tier management (version basic & premium)</Text>     
+                    
                 {/* FASE 4 */}
                   <Text style={[styles.featureVersion, { color: themeColors.text }]}>
                   Fase 4 | Funciones Premium
@@ -584,7 +411,7 @@ export default function SettingsScreen({
               >
                 <View style={styles.itemsContainer}>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    🏷️ Descuento por producto (checkout)
+                    🏷️ Descuento por producto (checkout)/Bono influencer (entradas)
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     📊 Analytics & Reportes (ingresos & egresos/profits)
@@ -592,21 +419,18 @@ export default function SettingsScreen({
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     🎨 Rediseño de imagen 
                   </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    👥 Team Management (tracking de miembros de mi unidad)
-                  </Text>
                 </View>
 
                 <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
-                  40% completado - v2.2.0
+                  40% completado - v2.3.0
                 </Text>
               </View>
             </View>
 
-            {/* 🎯 PRÓXIMAS */}
+            {/* 🎯 PRÓXIMAS
             <View style={styles.featureGroup}>
               <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>
-                🎯 Próximas (FASE 4+)
+                🎯 Próximas (FASE 5)
               </Text>
 
               <View
@@ -641,7 +465,7 @@ export default function SettingsScreen({
                 </Text>
               </View>
             </View>
-          </View>
+          </View> */}
 
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* 5. INFORMACIÓN */}
@@ -661,13 +485,13 @@ export default function SettingsScreen({
               ]}
             >
               <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.1.1
+                📱 Versión Actual: v2.2.1
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: '16/07/2026',
+                Compilada: '23/07/2026',
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Escaner + Creditos + Intercambios | Rediseño iniciado
+                Última actualización: Escaner + Creditos + Intercambios | Rediseño UX
               </Text>
             </View>
           </View>
@@ -676,58 +500,70 @@ export default function SettingsScreen({
           {/* 6. CERRAR SESIÓN */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <View style={styles.section}>
-            <TouchableOpacity style={styles.dangerBtn} onPress={cerrarSesion}>
-              <Text style={styles.dangerBtnText}>🚪 Cerrar Sesión</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={GLOBAL_STYLES.btnDanger} onPress={cerrarSesion}>
+            <Text style={GLOBAL_STYLES.btnText}>🚪 Cerrar Sesión</Text>
+          </TouchableOpacity>
+        </View>
 
-          <View style={{ height: 20 }} />
-        </ScrollView>
-      </View>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+
+      {/* ✏️ MODAL: EDICIÓN RÁPIDA DE NOMBRE */}
+      <Modal
+        visible={modalEditVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setModalEditVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.bgSecondary }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>✏️ Editar Nombre</Text>
+            
+            <TextInput
+              style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border, marginBottom: 20 }]}
+              value={nombreTemporal}
+              onChangeText={setNombreTemporal}
+              placeholder="Ingresa tu nombre"
+              placeholderTextColor={themeColors.textSecondary}
+              autoFocus
+              editable={!loadingGuardar}
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]}
+                onPress={() => setModalEditVisible(false)}
+                disabled={loadingGuardar}
+              >
+                <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf]}
+                onPress={handleGuardarNombre}
+                disabled={loadingGuardar}
+              >
+                {loadingGuardar ? (
+                  <ActivityIndicator color={COLORS.blanco} />
+                ) : (
+                  <Text style={GLOBAL_STYLES.btnText}>💾 Guardar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+    
   );
 }
 
+// 📐 STYLESHEET ESTRUCTURAL
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* HEADER */
-  header: {
-    paddingHorizontal: SPACING,
-    paddingVertical: SPACING,
-    paddingTop: 50,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  backBtn: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
-    color: COLORS.grey,
-  },
-  title: {
-    fontSize: FONT_SIZES.subtitulo,
-    fontWeight: '700',
-    color: COLORS.grey,
-  },
-
-  /* CONTENT */
   content: {
     flex: 1,
-    padding: SPACING,
+    padding: 15,
   },
-
-  /* SECCIONES */
   section: {
     marginBottom: 20,
   },
@@ -736,128 +572,95 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 10,
   },
+  hintText: {
+    fontSize: FONT_SIZES.pequeño,
+    fontStyle: 'italic',
+    marginTop: 6,
+    textAlign: 'center',
+  },
 
-  /* USUARIO CARD */
-  card: {
-    borderRadius: 12,
-    padding: SPACING,
+  /* CARD 3 COLUMNAS */
+  card3Col: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.turquesa,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.turquesa,
+  },
+  colAvatar: {
+    marginRight: 12,
   },
   userAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#9C27B0',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.morado,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
   userAvatarText: {
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.blanco,
   },
-  userInfoContainer: {
+  colInfo: {
     flex: 1,
-  },
-  userInfoRow: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'space-between',
-},
-userInfoLeft: {
-  flex: 1,
-  marginRight: 10,
-},
-userInfoRight: {
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginRight: 5,
-},
-tierEmoji: {
-  fontSize: 32,
-  marginVertical: 4,
-},
-tierLabel: {
-  fontSize: 12,
-  fontWeight: '600',
-},
-    editingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  editInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
-  },
-  editButtons: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  editSaveBtn: {
-    backgroundColor: COLORS.verde,
-    width: 36,
-    height: 36,
-    borderRadius: 8,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editSaveBtnText: {
-    fontSize: 18,
-    color: COLORS.blanco,
-    fontWeight: '700',
-  },
-  editCancelBtn: {
-    backgroundColor: COLORS.rojo,
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editCancelBtnText: {
-    fontSize: 18,
-    color: COLORS.blanco,
-    fontWeight: '700',
+    paddingRight: 8,
   },
   userName: {
     fontSize: FONT_SIZES.normal,
     fontWeight: '700',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   userEmail: {
     fontSize: FONT_SIZES.pequeño,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  editBtn: {
-    backgroundColor: COLORS.turquesa,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+  badgeRol: {
     alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  editBtnText: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: '600',
+  badgeText: {
     color: COLORS.blanco,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  colCuenta: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(150,150,150,0.2)',
+    minWidth: 70,
+  },
+  accountId: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  tierEmoji: {
+    fontSize: 22,
+    marginVertical: 2,
+  },
+  tierLabel: {
+    fontSize: 10,
+    fontWeight: '800',
   },
 
-  /* MENU ITEM */
+  /* ITEMS Y MENÚS */
+  cardSimple: {
+    borderRadius: 12,
+    borderWidth: 1,
+  },
   menuItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 0,
+    padding: 14,
   },
   menuContent: {
     flex: 1,
@@ -866,30 +669,29 @@ tierLabel: {
     gap: 12,
   },
   menuItemIcon: {
-    fontSize: 24,
+    fontSize: 22,
   },
   menuTextContainer: {
     flex: 1,
   },
   menuItemText: {
-    fontSize: 16,
+    fontSize: FONT_SIZES.normal,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   menuItemSubtext: {
-    fontSize: 12,
+    fontSize: FONT_SIZES.pequeño,
     fontStyle: 'italic',
   },
   menuItemArrow: {
     fontSize: 18,
     color: '#999',
-    marginLeft: 10,
   },
 
-  /* SETTING ITEMS */
+  /* PREFERENCIAS */
   settingItem: {
     borderRadius: 12,
-    padding: SPACING,
+    padding: 14,
     marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -904,11 +706,44 @@ tierLabel: {
     alignItems: 'center',
   },
   settingIcon: {
-    fontSize: 24,
+    fontSize: 22,
     marginRight: 12,
   },
   settingText: {
     flex: 1,
+  },
+  settingLabel: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '600',
+  },
+  settingDesc: {
+    fontSize: FONT_SIZES.pequeño,
+  },
+
+  /* MODAL */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '90%',
+    maxWidth: 380,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: FONT_SIZES.subtitulo,
+    fontWeight: '700',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   settingLabel: {
     fontSize: FONT_SIZES.normal,
@@ -918,29 +753,6 @@ tierLabel: {
   settingDesc: {
     fontSize: FONT_SIZES.pequeño,
   },
-
-  /* IDIOMA */
-  idiomaSection: {
-    backgroundColor: 'transparent',
-    marginBottom: 10,
-  },
-  idiomaBtns: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  idiomaBtn: {
-    flex: 1,
-    borderWidth: 2,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  idiomaBtnText: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
-  },
-
-  /* FUNCIONALIDADES */
   featureGroup: {
     marginBottom: 16,
   },
@@ -957,18 +769,17 @@ tierLabel: {
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
-    borderWidth: 2,
+    borderWidth: 1,
   },
   featureCompleted: {
     borderLeftWidth: 5,
     borderLeftColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
   featureDeveloping: {
     borderLeftWidth: 5,
     borderLeftColor: '#FF9800',
-  },
-  itemsContainer: {
-    marginBottom: 8,
+    borderColor: '#FF9800',
   },
   item: {
     fontSize: FONT_SIZES.pequeño,
@@ -979,42 +790,16 @@ tierLabel: {
     fontSize: FONT_SIZES.pequeño,
     fontWeight: '600',
     color: '#4CAF50',
+    marginBottom: 6,
   },
   featureProgreso: {
     fontSize: FONT_SIZES.pequeño,
     fontWeight: '600',
     color: '#FF9800',
+    marginTop: 8,
   },
-
   /* INFORMACIÓN */
-  versionInfo: {
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  versionTitle: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '700',
-    marginBottom: 8,
-    color: COLORS.turquesa,
-  },
-  versionDesc: {
-    fontSize: FONT_SIZES.pequeño,
-    marginBottom: 4,
-  },
-
-  /* DANGER ZONE */
-  dangerBtn: {
-    backgroundColor: COLORS.rojo,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dangerBtnText: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
-    color: COLORS.blanco,
-  },
+  versionInfo: { borderRadius: 12, padding: 16, borderWidth: 1, marginBottom: 10 },
+  versionTitle: { fontSize: FONT_SIZES.normal, fontWeight: '700', marginBottom: 8, color: COLORS.turquesa },
+  versionDesc: { fontSize: FONT_SIZES.pequeño, marginBottom: 4 },
 });

@@ -1,7 +1,7 @@
 {
   "name": "Inventariaje App",
   "type": "module",
-  "version": "2.0.0",
+  "version": "2.2.1",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -16,6 +16,7 @@
     "expo": "^56.0.12",
     "expo-linear-gradient": "~56.0.4",
     "expo-screen-orientation": "~56.0.5",
+    "expo-status-bar": "~56.0.4",
     "firebase": "^12.14.0",
     "firebase-admin": "^14.0.0",
     "react": "^19.2.3",

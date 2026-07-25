@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { 
   collection,
@@ -294,104 +295,112 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
         animationType="slide"
         onRequestClose={() => setModalEditVisible(false)}
       >
-        <View style={GLOBAL_STYLES.modalOverlay}>
-          <View style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg }]}>
-            {creditoEditando && (
-              <>
-                <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text }]}>
-                  💳 Actualizar Crédito
-                </Text>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={GLOBAL_STYLES.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ width: '100%', alignItems: 'center' }}
+              // IMPORTANTE: En Android a veces el teclado se come un margen.
+              // keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0} 
+            >
+              <View style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg }]}>
+                {creditoEditando && (
+                  <>
+                    <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text }]}>
+                      💳 Actualizar Crédito
+                    </Text>
 
-                <View style={styles.headerInfo}>
-                  <View>
-                    <Text style={[styles.clienteModalName, { color: themeColors.text }]}>
-                      {creditoEditando.clienteNombre}
-                    </Text>
-                    <Text style={[styles.montoOriginal, { color: COLORS.rojo }]}>
-                      Pendiente: ${creditoEditando.monto.toFixed(2)}
-                    </Text>
-                  </View>
-                  <Text style={[styles.fechaModal, { color: themeColors.textSecondary }]}>
-                    Vence:{'\n'}{new Date(creditoEditando.fechaPTP.seconds * 1000).toLocaleDateString('es-MX')}
-                  </Text>
-                </View>
-
-                {productosDelCredito && productosDelCredito.length > 0 && (
-                  <View style={[styles.productosBox, { backgroundColor: darkMode ? '#2a2a2a' : '#f9f9f9' }]}>
-                    <Text style={[styles.productosTitle, { color: themeColors.text }]}>
-                      Productos:
-                    </Text>
-                    {productosDelCredito.map((producto, idx) => (
-                      <Text key={idx} style={[styles.productoItem, { color: themeColors.textSecondary }]}>
-                        • {producto.nombre} ({producto.cantidad})
+                    <View style={styles.headerInfo}>
+                      <View>
+                        <Text style={[styles.clienteModalName, { color: themeColors.text }]}>
+                          {creditoEditando.clienteNombre}
+                        </Text>
+                        <Text style={[styles.montoOriginal, { color: COLORS.rojo }]}>
+                          Pendiente: ${creditoEditando.monto.toFixed(2)}
+                        </Text>
+                      </View>
+                      <Text style={[styles.fechaModal, { color: themeColors.textSecondary }]}>
+                        Vence:{'\n'}{new Date(creditoEditando.fechaPTP.seconds * 1000).toLocaleDateString('es-MX')}
                       </Text>
-                    ))}
-                  </View>
-                )}
+                    </View>
 
-                <View style={styles.formGroup}>
-                  <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>
-                    Abono Recibido ($):
-                  </Text>
-                  <TextInput
-                    style={[
-                      GLOBAL_STYLES.inputBase,
-                      { backgroundColor: darkMode ? '#333' : COLORS.blanco, color: themeColors.text, borderColor: themeColors.border }
-                    ]}
-                    placeholder="0"
-                    placeholderTextColor={themeColors.textSecondary}
-                    value={montoActualizado}
-                    onChangeText={setMontoActualizado}
-                    keyboardType="decimal-pad"
-                    editable={!loadingModal}
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Notas:</Text>
-                  <TextInput
-                    style={[
-                      GLOBAL_STYLES.inputBase,
-                      styles.inputArea, // 💡 Mantenemos inputArea para que respete el minHeight y el multiline top
-                      { backgroundColor: darkMode ? '#333' : COLORS.blanco, color: themeColors.text, borderColor: themeColors.border }
-                    ]}
-                    placeholder="Actualiza las notas del crédito"
-                    placeholderTextColor={themeColors.textSecondary}
-                    value={notasActualizadas}
-                    onChangeText={setNotasActualizadas}
-                    multiline={true}
-                    editable={!loadingModal}
-                  />
-                </View>
-
-                {/* 💡 AQUÍ usamos los botones globales que se acomodan en horizontal (row) automáticamente */}
-                <View style={GLOBAL_STYLES.modalButtons}>
-                  
-                  <TouchableOpacity
-                    style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]}
-                    onPress={() => setModalEditVisible(false)}
-                    disabled={loadingModal}
-                  >
-                    <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loadingModal && GLOBAL_STYLES.disabledBtn]}
-                    onPress={actualizarCredito}
-                    disabled={loadingModal}
-                  >
-                    {loadingModal ? (
-                      <ActivityIndicator color={COLORS.blanco} />
-                    ) : (
-                      <Text style={GLOBAL_STYLES.btnText}>✅ Registrar</Text>
+                    {productosDelCredito && productosDelCredito.length > 0 && (
+                      <View style={[styles.productosBox, { backgroundColor: darkMode ? '#2a2a2a' : '#f9f9f9' }]}>
+                        <Text style={[styles.productosTitle, { color: themeColors.text }]}>
+                          Productos:
+                        </Text>
+                        {productosDelCredito.map((producto, idx) => (
+                          <Text key={idx} style={[styles.productoItem, { color: themeColors.textSecondary }]}>
+                            • {producto.nombre} ({producto.cantidad})
+                          </Text>
+                        ))}
+                      </View>
                     )}
-                  </TouchableOpacity>
 
-                </View>
-              </>
-            )}
+                    <View style={styles.formGroup}>
+                      <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>
+                        Abono Recibido ($):
+                      </Text>
+                      <TextInput
+                        style={[
+                          GLOBAL_STYLES.inputBase,
+                          { backgroundColor: darkMode ? '#333' : COLORS.blanco, color: themeColors.text, borderColor: themeColors.border }
+                        ]}
+                        placeholder="0"
+                        placeholderTextColor={themeColors.textSecondary}
+                        value={montoActualizado}
+                        onChangeText={setMontoActualizado}
+                        keyboardType="decimal-pad"
+                        editable={!loadingModal}
+                      />
+                    </View>
+
+                    <View style={styles.formGroup}>
+                      <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Notas:</Text>
+                      <TextInput
+                        style={[
+                          GLOBAL_STYLES.inputBase,
+                          styles.inputArea,
+                          { backgroundColor: darkMode ? '#333' : COLORS.blanco, color: themeColors.text, borderColor: themeColors.border }
+                        ]}
+                        placeholder="Actualiza las notas del crédito"
+                        placeholderTextColor={themeColors.textSecondary}
+                        value={notasActualizadas}
+                        onChangeText={setNotasActualizadas}
+                        multiline={true}
+                        editable={!loadingModal}
+                      />
+                    </View>
+
+                    <View style={GLOBAL_STYLES.modalButtons}>
+                      
+                      <TouchableOpacity
+                        style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]}
+                        onPress={() => setModalEditVisible(false)}
+                        disabled={loadingModal}
+                      >
+                        <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loadingModal && GLOBAL_STYLES.disabledBtn]}
+                        onPress={actualizarCredito}
+                        disabled={loadingModal}
+                      >
+                        {loadingModal ? (
+                          <ActivityIndicator color={COLORS.blanco} />
+                        ) : (
+                          <Text style={GLOBAL_STYLES.btnText}>✅ Registrar</Text>
+                        )}
+                      </TouchableOpacity>
+
+                    </View>
+                  </>
+                )}
+              </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );

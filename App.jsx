@@ -16,6 +16,7 @@ LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import { fetchAndCacheTier, getTierFromCache } from './utils/tierUtils';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 // Importar pantallas
 import LoginScreen from './screens/LoginScreen';
@@ -330,6 +331,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
     <AuthProvider>
+      <StatusBar style="dark" backgroundColor="#ffffff" />
       <AppContent />
     </AuthProvider>
     </SafeAreaProvider>
