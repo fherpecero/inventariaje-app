@@ -2,6 +2,7 @@ import { StyleSheet } from 'react-native';
 import React from 'react';
 import { View, TouchableOpacity, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 // ============================================
 // PALETA DE COLORES GLOBAL
@@ -219,20 +220,55 @@ export const HEADER = StyleSheet.create({
   },
 });
 
-// ============================================
-// COMPONENTE: ScreenHeader (Reutilizable)
-// ============================================
-export function ScreenHeader({ title, onBackPress, themeColors }) {
+// ==========================================
+// COMPONENTE: SCREEN HEADER (Refactorizado a 3 columnas)
+// ==========================================
+export const ScreenHeader = ({ title, onPress, themeColors, rightAction }) => {
   return (
-    <View style={[HEADER.headerContainer, { backgroundColor: themeColors.header || COLORS.blanco }]}>
-      <View style={HEADER.headerContent}>
-        <TouchableOpacity onPress={onBackPress} style={HEADER.backBtn}>
-          <Text style={[HEADER.backText, { color: themeColors.text || COLORS.grey }]}>
-            ← {title}
-          </Text>
-        </TouchableOpacity>
-        <View style={{ width: 60 }} />
+  <View style={HEADER.headerContainer}>
+    <View style={{
+      backgroundColor: themeColors?.header || '#24c5c5',
+      paddingHorizontal: 10,
+      paddingVertical: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between', // Distribuye las 3 zonas
+    }}>
+      
+      {/* 1. LADO IZQUIERDO: Botón Back */}
+      <View style={{ flex: 1, alignItems: 'flex-start' }}>
+        {onPress && (
+          <TouchableOpacity 
+            onPress={onPress}
+            style={{ padding: 8 }} // Padding interno para que sea fácil de tocar
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={28} color="COLOR.negro" />
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* 2. CENTRO: Título */}
+      <View style={{ flex: 2, alignItems: 'center' }}>
+        <Text 
+          style={{ 
+            fontSize: 20, 
+            fontWeight: '700', 
+            color: COLORS.negro, 
+            textAlign: 'center' 
+          }}
+          numberOfLines={1} 
+        >
+          {title}
+        </Text>
+      </View>
+
+      {/* 3. LADO DERECHO: Botón de acción o Espaciador Fantasma */}
+        <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
+          {rightAction ? rightAction : <View />}
+           </View>
+
+    </View>
       <LinearGradient
         colors={['rgba(68, 194, 194, 1)', 'rgba(122, 122, 236, 0.7)']}
         start={{ x: 0, y: 0 }}
@@ -241,7 +277,7 @@ export function ScreenHeader({ title, onBackPress, themeColors }) {
         style={HEADER.headerBorderGradient}
       />
     </View>
-  );
+  )
 }
 
 // ============================================

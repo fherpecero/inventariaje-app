@@ -20,8 +20,8 @@ import DatePickerField from '../components/DatePickerField';
 import SearchBar from '../components/SearchBar';
 import AutocompleteSearchSocios from '../components/AutocompleteSearchSocios';
 import DropdownProductoRecibir from '../components/DropdownProductoRecibir';
-import { COLORS, HEADER } from '../context/theme';
-import { LogBox } from 'react-native';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, } from '../context/theme';
+import { LogBox, Switch } from 'react-native';
 
 LogBox.ignoreLogs([
   'DateTimePicker: `onChange` is deprecated',
@@ -53,6 +53,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const [tipoPago, setTipoPago] = useState('efectivo');
   const [cliente, setCliente] = useState('');
   const [escanerActual, setEscanerActual] = useState(null);
+  const [esConsumoBono, setEsConsumoBono] = useState(false);
 
   // Modal de crédito
   const [modalCreditoVisible, setModalCreditoVisible] = useState(false);
@@ -471,6 +472,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           cantidad: cantidadActual - item.cantidad,
           codigo: item.codigo,
           nombre: item.nombre,
+          consumoBono: esConsumoBono,
           updatedAt: ahora.toISOString(),
         };
       }
@@ -494,6 +496,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           total: (item.precioVenta * item.cantidad) - (totales.montoDescuento / carrito.length),
           cliente: cliente || 'Sin cliente',
           tipoPago: tipoPago,
+          consumoBono: esConsumoBono,
           usuario: user.email,
           fecha: ahora.toLocaleDateString('es-MX'),
           timestamp: ahora.toISOString(),
@@ -534,6 +537,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   setTipoPago('efectivo');
                   setLoading(false);
                   cargarProductos();
+                  setEsConsumoBono(false);
                 }
               },
           }]
@@ -543,6 +547,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       if (isMountedRef.current) {
         Alert.alert('Error', 'Error al registrar venta: ' + error.message);
         setLoading(false);
+        setEsConsumoBono(false);
       }
     }
   };
@@ -724,8 +729,29 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
-      {/* ESCÁNER INDICADOR */}
+    <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+     
+      {/* 1. HEADER */}
+      <ScreenHeader 
+        title="Ventas" 
+        onPress={() => onNavigate('home')} 
+        themeColors={themeColors} 
+        rightAction={
+          <TouchableOpacity 
+            onPress={toggleModoIntercambio}
+            disabled={effectiveTier !== 'premium'}
+            style={[
+              styles.btnIntercambio, 
+              modoIntercambio && styles.btnIntercambioActive, 
+              effectiveTier !== 'premium' && styles.btnDisabled
+            ]}
+          >
+            <Ionicons name="git-compare" size={24} color={modoIntercambio ? "COLORS.turquesa" : "black"} />
+          </TouchableOpacity>
+        }
+      />
+
+      {/* 2. ESCÁNER INDICADOR  */}
       {escanerActual && (
         <View style={styles.escanerIndicador}>
           <Text style={styles.escanerIndicadorText}>
@@ -733,29 +759,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           </Text>
         </View>
       )}
-
-      {/* HEADER CON ESTILOS DE THEME */}
-      <View style={[HEADER.headerContainer, { backgroundColor: themeColors.header }]}>
-        <View style={HEADER.headerContent}>
-          <Text style={[HEADER.headerTitle, { color: themeColors.text }]}> Ventas</Text>
-          <View style={{ alignItems: 'center', justifyContent: 'center' }}></View>
-          <TouchableOpacity 
-            onPress={toggleModoIntercambio}
-            disabled={effectiveTier !== 'premium'}
-            style={[styles.btnIntercambio, modoIntercambio && styles.btnIntercambioActive, effectiveTier !== 'premium' && styles.btnDisabled]}
-          >
-            <Text style={styles.btnIntercambioText}>🔁</Text>
-          </TouchableOpacity>
-          
-        </View>
-        <LinearGradient
-          colors={['rgba(68, 194, 194, 1)', 'rgba(122, 122, 236, 0.7)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          locations={[0.27, 0.90]}
-          style={HEADER.headerBorderGradient}
-        />
-      </View>
 
       {/* BANNER INTERCAMBIO */}
       {modoIntercambio && (
@@ -985,9 +988,45 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
               <TextInput style={styles.input} placeholder="Nombre del cliente" value={cliente} onChangeText={setCliente} editable={!loading} />
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Descuento (%):</Text>
-              <TextInput style={styles.input} placeholder="Ej: 10" value={descuentoPorcentaje} onChangeText={setDescuentoPorcentaje} keyboardType="decimal-pad" editable={!loading} />
+            {/* FILA EN 2 COLUMNAS: DESCUENTO + BONO INFLUENCER */}
+            <View style={styles.rowFormContainer}>
+              
+              {/* Columna Izquierda: Input de Descuento */}
+              <View style={styles.halfInputContainer}>
+                <TextInput
+                  style={styles.inputHalf}
+                  placeholder="Descuento (%)"
+                  placeholderTextColor={themeColors.textSecondary}
+                  keyboardType="numeric"
+                  value={descuentoPorcentaje}
+                  onChangeText={setDescuentoPorcentaje}
+                />
+              </View>
+
+              {/* Columna Derecha: Botón Toggle de Bono Influencer */}
+              <TouchableOpacity
+                style={[
+                  styles.bonoToggleBtn,
+                  esConsumoBono && styles.bonoToggleBtnActive,
+                ]}
+                onPress={() => setEsConsumoBono(!esConsumoBono)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={esConsumoBono ? "star" : "star-outline"}
+                  size={18}
+                  color={esConsumoBono ? COLORS.blanco : COLORS.turquesa}
+                />
+                <Text
+                  style={[
+                    styles.bonoToggleText,
+                    esConsumoBono && styles.bonoToggleTextActive,
+                  ]}
+                >
+                  {esConsumoBono ? "Bono Activo" : "Bono Influencer"}
+                </Text>
+              </TouchableOpacity>
+
             </View>
           </>
         )}
@@ -1745,5 +1784,50 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.morado
   },
-
+  // --- FILA DOBLE COLUMNA PARA MODAL ---
+  rowFormContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.global,
+  },
+  halfInputContainer: {
+    flex: 1,
+    marginRight: 6,
+    backgroundColor: COLORS.blanco,
+  },
+  inputHalf: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: SPACING.content_padding,
+    height: 48,
+    fontSize: FONT_SIZES.normal,
+  },
+  bonoToggleBtn: {
+    flex: 1,
+    marginLeft: 6,
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.turquesa,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
+  },
+  bonoToggleBtnActive: {
+    backgroundColor: COLORS.turquesa,
+    borderColor: COLORS.turquesa,
+  },
+  bonoToggleText: {
+    fontSize: FONT_SIZES.pequeño,
+    fontWeight: '600',
+    color: COLORS.turquesa,
+    marginLeft: 6,
+  },
+  bonoToggleTextActive: {
+    color: COLORS.blanco,
+  },
 })

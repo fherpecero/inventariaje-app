@@ -613,9 +613,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             <TouchableOpacity style={[styles.eventoBtnCreate, { backgroundColor: themeColors.bgSecondary }]} onPress={() => setModalEventoVisible(true)}>
               <View>
                 <Text style={[styles.eventoBtnCreateText, { color: themeColors.text }]}>Crear Evento de Escáner</Text>
-                <Text style={[styles.eventoBtnCreateSubtext, { color: themeColors.textSecondary }]}>Registrar evento de escaner</Text>
+                <Text style={[styles.eventoBtnCreateSubtext, { color: themeColors.textSecondary }]}>Registro de Scanner Party</Text>
               </View>
-              <Text style={styles.dashboardArrow}>→</Text>
             </TouchableOpacity>
           )}
         </View>

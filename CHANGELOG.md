@@ -1,6 +1,48 @@
 # Changelog - Inventariaje App
- 
- ## [2.2.1] - 2026-07-25
+
+### [2.3.0] - 2026-07-29
+
+- 🎯 Major: Analytics Dashboard, Data Visualization & Report Exporting
+Transformación total del módulo de métricas, incorporando gráficas interactivas, integración de ingresos por eventos y motor de exportación contable.
+
+### ✨ Features
+
+- Gráficos Visuales (Data Visualization): Integración de react-native-chart-kit para renderizar la "Curva de Ingresos" (Line Chart) dinámica de los últimos 7 días y la "Composición del Top 5" (Pie Chart) con los colores de la marca.
+
+- Exportación CSV (Reportes Contables): Nuevo botón en el Header nativo que compila las operaciones filtradas (Ventas, Entradas, Cortesías y Bonos) en un archivo .csv y abre el Share Sheet nativo del teléfono para enviarlo por WhatsApp o Email.
+
+- Módulo de Eventos en Analytics: Tarjeta dedicada a "Eventos de Escáner" integrada perfectamente al cálculo central del Flujo Libre (Ganancia Neta).
+
+- Cálculo Dinámico de Restock: EntradaScreen ahora calcula el margen de ahorro extra y el porcentaje de descuento en tiempo real al sobreescribir el costo total final.
+
+### 🔧 Technical Changes
+
+- Consultas Asíncronas Simultáneas: AnalyticsScreen usa Promise.all para consultar y combinar arreglos de las colecciones salidas, entradas y escaneres en un solo paso optimizado.
+
+- Refactorización DRY (Don't Repeat Yourself): Reestructuración de estilos en AnalyticsScreen utilizando baseCard para herencia de UI y uso del componente centralizado <ScreenHeader>.
+
+- Soporte Legacy FileSystem: Migración de expo-file-system a su ruta /legacy para garantizar soporte con las nuevas directivas del SDK 52+ de Expo.
+
+### Nuevas Dependencias: 
+- Instalación de react-native-chart-kit, react-native-svg, expo-file-system y expo-sharing.
+
+### 🐛 Bug Fixes
+
+- Fallas de Sincronización en KPIs: Corregido el Cerebro Matemático de Analytics que daba $0 en gastos debido a discrepancias en el nombrado de campos de Firestore (fecha vs timestamp vs createdAt y costoBase vs costoPagado).
+
+
+### 📋 Modified Files
+
+- screens/AnalyticsScreen.jsx
+- screens/EntradaScreen.jsx
+- screens/SalidaScreen.jsx
+- package.json / app.json (Nuevas dependencias)
+
+- Registro de costos optimizado: Agregado boton de bono influencer con logica de calculo de costos y ventas mejorado
+- Filtro de Existencias: agregar productos con descuento 
+
+
+## [2.2.1] - 2026-07-25
  ### BUG CORRECTION
  -Keyboard overlay on modal
  -New logo update
@@ -8,7 +50,7 @@
 
 
 
- ## [2.1.1] - 2026-07-22
+## [2.1.1] - 2026-07-22
 
 ### 🎯 Major: Módulo de Inversión y Restock (Entry Cost)
 Rediseño completo del flujo de entrada de inventario para rastrear el gasto real (Costo Base) y capturar márgenes de ganancia basados en descuentos de distribuidor/socio.

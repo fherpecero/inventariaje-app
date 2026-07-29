@@ -12,11 +12,13 @@ import {
 
 LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
-
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import { fetchAndCacheTier, getTierFromCache } from './utils/tierUtils';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+
+// ✅ IMPORTACIÓN CENTRALIZADA DE TEMA Y ESTILOS
+import { COLORS, FONT_SIZES, SPACING } from './context/theme';
 
 // Importar pantallas
 import LoginScreen from './screens/LoginScreen';
@@ -27,51 +29,12 @@ import SettingsScreen from './screens/SettingsScreen';
 import ExistenciasScreen from './screens/ExistenciasScreen'; 
 import MembersScreen from './screens/MembersScreen';
 import ClientesScreen from './screens/ClientesScreen';
+import AnalyticsScreen from './screens/AnalyticsScreen';
 
 // Importar items de Diseño
 import HomeIcon from './assets/icons/IconHome.svg';
 import AddIcon from './assets/icons/IconAdd.svg';
 import VentaIcon from './assets/icons/IconVenta.svg';
-
-
-
-const handleNavigation = async (screen) => {
-  console.log('Navegando a:', screen);
-  cerrarMenu();
-  
-  // Pequeño delay para evitar cambios visuales rápidos
-  setTimeout(() => {
-    onNavigate(screen);
-  }, 100);
-};
-
-const COLORS = {
-  turquesa: '#24c5c5',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#f44336',
-  naranja: '#FF9800',
-  morado: '#7e2b8d',
-  rojito: '#f97272',
-  grey: '#565656',
-};
-
-const FONT_SIZES = {
-  titulo: 24,
-  subtitulo: 20,
-  normal: 14,
-  pequeño: 12,
-};
-
-const SPACING = {
-  header_padding: 50,
-  content_padding: 15,
-  bottom_padding: 30,
-  btn_padding: 15,
-  global: 10,
-};
 
 // FUNCIÓN PARA OBTENER COLORES SEGÚN DARK MODE
 const getThemeColors = (darkMode) => {
@@ -88,14 +51,14 @@ const getThemeColors = (darkMode) => {
     };
   } else {
     return {
-      bg: COLORS.gris,
-      bgSecondary: COLORS.blanco,
-      text: COLORS.negro,
+      bg: COLORS.gris || '#f5f5f5',
+      bgSecondary: COLORS.blanco || '#ffffff',
+      text: COLORS.negro || '#000000',
       textSecondary: '#666666',
-      header: COLORS.blanco,
+      header: COLORS.blanco || '#ffffff',
       border: '#e0e0e0',
-      input: COLORS.blanco,
-      cardBg: COLORS.blanco,
+      input: COLORS.blanco || '#ffffff',
+      cardBg: COLORS.blanco || '#ffffff',
     };
   }
 };
@@ -155,7 +118,7 @@ function AppContent() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: themeColors.bg, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.turquesa} />
+        <ActivityIndicator size="large" color={COLORS.turquesa || COLORS.primary} />
         <Text style={[styles.loadingText, { color: themeColors.text }]}>Cargando...</Text>
       </View>
     );
@@ -201,20 +164,20 @@ function AppContent() {
           onDarkModeChange={toggleDarkMode}
         />
       )}
-      {page === 'existencias' && (  // ← AGREGAR ESTAS LÍNEAS
+      {page === 'existencias' && (
         <ExistenciasScreen
           onNavigate={setPage}
           darkMode={darkMode}
           themeColors={themeColors}
         />
       )}
-      {page === 'miembros' && 
+      {page === 'miembros' && (
         <MembersScreen 
           onNavigate={setPage} 
           darkMode={darkMode} 
           themeColors={themeColors} 
         />
-      }
+      )}
       {/* PANTALLAS PREMIUM */}
       {page === 'clientes' && (
         <ClientesScreen
@@ -224,9 +187,15 @@ function AppContent() {
         />
       )}
 
+      {/* SECCIÓN ANALYTICS INTEGRADA */}
       {page === 'analytics' && (
-        <AnalyticsPlaceholder onNavigate={setPage} themeColors={themeColors} />
+        <AnalyticsScreen 
+          onNavigate={setPage} 
+          darkMode={darkMode} 
+          themeColors={themeColors} 
+        />
       )}
+      
       {page === 'alertas' && (
         <AlertasPlaceholder onNavigate={setPage} themeColors={themeColors} />
       )}
@@ -238,8 +207,8 @@ function AppContent() {
           onNavigate={setPage}
           darkMode={darkMode}
           themeColors={themeColors}
-          modoSoloSinStock={true}  // ← PARÁMETRO QUE ACTIVA EL FILTRO
-  />
+          modoSoloSinStock={true}
+        />
       )}
       {page === 'logout' && (
         <LogoutScreen onNavigate={setPage} onLogout={logout} themeColors={themeColors} />
@@ -250,9 +219,10 @@ function AppContent() {
         <View
           style={[
             styles.navbar,
-            { backgroundColor: themeColors.header,
-            paddingBottom: Math.max(insets.bottom, 25)
-          },
+            { 
+              backgroundColor: themeColors.header,
+              paddingBottom: Math.max(insets.bottom, 25)
+            },
           ]}
         >
           {/* Botón Dashboard */}
@@ -326,20 +296,19 @@ function AppContent() {
   );
 }
 
-// COMPONENTE RAÍZ (CON PROVIDER)
+// COMPONENTE RAÍZ
 export default function App() {
   return (
     <SafeAreaProvider>
-    <AuthProvider>
-      <StatusBar style="dark" backgroundColor="#ffffff" />
-      <AppContent />
-    </AuthProvider>
+      <AuthProvider>
+        <StatusBar style="dark" backgroundColor="#ffffff" />
+        <AppContent />
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
 
-
-// PLACEHOLDER: InventarioScreen
+// ZONA DE PLACEHOLDERS RESTANTES
 function InventarioPlaceholder({ onNavigate, themeColors }) {
   return (
     <View style={[styles.placeholder, { backgroundColor: themeColors.bg }]}>
@@ -368,65 +337,6 @@ function InventarioPlaceholder({ onNavigate, themeColors }) {
   );
 }
 
-// PLACEHOLDER: SinStockScreen
-function SinStockPlaceholder({ onNavigate, themeColors }) {
-  return (
-    <View style={[styles.placeholder, { backgroundColor: themeColors.bg }]}>
-      <View style={[styles.placeholderHeader, { backgroundColor: themeColors.header }]}>
-        <TouchableOpacity onPress={() => onNavigate('home')}>
-          <Text style={styles.placeholderBackBtn}>← Atrás</Text>
-        </TouchableOpacity>
-        <Text style={styles.placeholderTitle}>⚠️ Sin Stock</Text>
-        <View style={{ width: 60 }} />
-      </View>
-      <View style={styles.placeholderContent}>
-        <Text style={[styles.placeholderText, { color: themeColors.text }]}>
-          ⚠️ Productos sin Stock
-        </Text>
-        <Text style={[styles.placeholderSubtext, { color: themeColors.textSecondary }]}>
-          Próximamente...
-        </Text>
-        <TouchableOpacity
-          style={styles.placeholderBtn}
-          onPress={() => onNavigate('home')}
-        >
-          <Text style={styles.placeholderBtnText}>Volver</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-// PLACEHOLDER: AnalyticsScreen
-function AnalyticsPlaceholder({ onNavigate, themeColors }) {
-  return (
-    <View style={[styles.placeholder, { backgroundColor: themeColors.bg }]}>
-      <View style={[styles.placeholderHeader, { backgroundColor: themeColors.header }]}>
-        <TouchableOpacity onPress={() => onNavigate('home')}>
-          <Text style={styles.placeholderBackBtn}>← Atrás</Text>
-        </TouchableOpacity>
-        <Text style={styles.placeholderTitle}>📊 Analytics</Text>
-        <View style={{ width: 60 }} />
-      </View>
-      <View style={styles.placeholderContent}>
-        <Text style={[styles.placeholderText, { color: themeColors.text }]}>
-          📊 Reportes de Ventas
-        </Text>
-        <Text style={[styles.placeholderSubtext, { color: themeColors.textSecondary }]}>
-          Próximamente...
-        </Text>
-        <TouchableOpacity
-          style={styles.placeholderBtn}
-          onPress={() => onNavigate('home')}
-        >
-          <Text style={styles.placeholderBtnText}>Volver</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-// PLACEHOLDER: AlertasScreen
 function AlertasPlaceholder({ onNavigate, themeColors }) {
   return (
     <View style={[styles.placeholder, { backgroundColor: themeColors.bg }]}>
@@ -455,11 +365,10 @@ function AlertasPlaceholder({ onNavigate, themeColors }) {
   );
 }
 
-// LOGOUT SCREEN
 function LogoutScreen({ onNavigate, onLogout, themeColors }) {
   const handleLogout = async () => {
-    await onLogout();  // Esperar a que logout() termine
-    onNavigate('home');  // Redirige a home (que mostrará LoginScreen si user === null)
+    await onLogout();
+    onNavigate('home');
   };
   
   return (
@@ -477,9 +386,7 @@ function LogoutScreen({ onNavigate, onLogout, themeColors }) {
         </Text>
         <TouchableOpacity
           style={styles.placeholderBtn}
-          onPress={() => {
-            handleLogout();
-          }}
+          onPress={handleLogout}
         >
           <Text style={styles.placeholderBtnText}>Cerrar</Text>
         </TouchableOpacity>
@@ -498,105 +405,78 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     fontWeight: '600',
   },
-
-  // NAVBAR STYLES
   navbar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 30,
-    paddingBottom: 25,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: COLORS.gris,
+    borderTopColor: COLORS.gris || '#f5f5f5',
     boxShadow: '0px 0px 5px -3px #00000042',
   },
   navBtn: {
     flex: 1,
     alignItems: 'center',
-    //paddingVertical: 10,
-    //borderRadius: 50,
-    //marginHorizontal: 4,
-    //width: 100,
-    //height: 100,
-    //borderRadius: 50,
     justifyContent: 'center',
-    //alignItems: 'center',
     marginHorizontal: 4,
-    //color: COLORS.gris, 
   },
-  //navBtnActive: {
-    //backgroundColor: COLORS.turquesa,
-  //},
   navIconContainer: {
-  width: 45,
-  height: 45,
-  borderRadius: 25, 
-  backgroundColor: 'transparent',
-  justifyContent: 'center',
-  alignItems: 'center',
-  marginBottom: 4,
-  padding: 10,
+    width: 45,
+    height: 45,
+    borderRadius: 25, 
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    padding: 10,
   },
   navIconContainerActive: {
-    backgroundColor: COLORS.turquesa,
+    backgroundColor: COLORS.turquesa || COLORS.primary,
     borderRadius: 25, 
   },
   navIcon: {
-    //fontSize: 30,
-    //marginBottom: 8,
-    //color: COLORS.gris,
-    //width: 1,
-    //height: 1,
-    //borderRadius: 25,
-    //backgroundColor: 'transparent', 
-    color: COLORS.grey,
+    color: COLORS.grey || '#565656',
     marginBottom: 4,
-    //textAlign: 'center',
-    
   },
   navIconActive: {
-    //backgroundColor: COLORS.turquesa,
-    color: COLORS.blanco,
+    color: COLORS.blanco || '#ffffff',
   },
   navLabel: {
-    fontSize: FONT_SIZES.pequeño,
+    fontSize: FONT_SIZES.pequeño || FONT_SIZES.xs || 12,
     fontWeight: '600',
-    color: COLORS.grey,
+    color: COLORS.grey || '#565656',
     textAlign: 'center',
   },
   navLabelActive: {
-    color: COLORS.turquesa,
+    color: COLORS.turquesa || COLORS.primary,
   },
-
-  // PLACEHOLDER STYLES
   placeholder: {
     flex: 1,
   },
   placeholderHeader: {
-    paddingHorizontal: SPACING.content_padding,
-    paddingVertical: SPACING.header_padding,
+    paddingHorizontal: SPACING.content_padding || SPACING.md || 15,
+    paddingVertical: SPACING.header_padding || 50,
     paddingTop: 50,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   placeholderBackBtn: {
-    fontSize: FONT_SIZES.normal,
+    fontSize: FONT_SIZES.normal || FONT_SIZES.md || 14,
     fontWeight: '600',
-    color: COLORS.blanco,
+    color: COLORS.blanco || '#ffffff',
   },
   placeholderTitle: {
-    fontSize: FONT_SIZES.subtitulo,
+    fontSize: FONT_SIZES.subtitulo || FONT_SIZES.lg || 20,
     fontWeight: '700',
-    color: COLORS.blanco,
+    color: COLORS.blanco || '#ffffff',
   },
   placeholderContent: {
     flex: 1,
@@ -609,18 +489,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   placeholderSubtext: {
-    fontSize: FONT_SIZES.normal,
+    fontSize: FONT_SIZES.normal || FONT_SIZES.md || 14,
     marginBottom: 20,
   },
   placeholderBtn: {
-    backgroundColor: COLORS.turquesa,
+    backgroundColor: COLORS.turquesa || COLORS.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     marginBottom: 10,
   },
   placeholderBtnText: {
-    color: COLORS.blanco,
+    color: COLORS.blanco || '#ffffff',
     fontWeight: '600',
   },
 });
