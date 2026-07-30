@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tu asistente de negocio Vital Health",
     "slug": "inventariaje-app",
-    "version": "2.3.0",
+    "version": "2.3.1",
     "orientation": "portrait",
     "icon": "./assets/newlogo.png",
     "splash": {
@@ -15,7 +15,7 @@
     ],
     "android": {
       "package": "com.fherpecero.inventariajeapp",
-      "versionCode": 4,
+      "versionCode": 5,
       "icon": "./assets/newlogo.png"
     },
     "extra": {
@@ -26,7 +26,8 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-status-bar",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-splash-screen"
     ],
     "owner": "fherpecero",
     "ios": {

@@ -50,11 +50,19 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let unsubscribeCuenta = null;
 
+    // 🚀 NUEVO: Temporizador de rescate (Failsafe) para el bug de Android
+    const failsafeTimeout = setTimeout(() => {
+      console.warn('⚠️ Firebase no respondió a tiempo. Forzando entrada...');
+      setLoading(false); // Apagamos la carga a la fuerza
+    }, 3000);
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      clearTimeout(failsafeTimeout);
       // Limpiar suscripción previa a /cuentas si existía
       if (unsubscribeCuenta) {
         unsubscribeCuenta();
         unsubscribeCuenta = null;
+        
       }
 
       try {

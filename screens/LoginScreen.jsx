@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons'; // 🚀 NUEVO: Importación de íconos
 
 const COLORS = {
   turquesa: '#24c5c5',
@@ -28,21 +29,16 @@ export default function LoginScreen() {
   const [showRegister, setShowRegister] = useState(false);
   const [recordarUsuario, setRecordarUsuario] = useState(false);
   const [cargandoCredenciales, setCargandoCredenciales] = useState(true);
+  
+  // 🚀 NUEVO: Estado para ver/ocultar contraseña en Login
+  const [showPassword, setShowPassword] = useState(false); 
+  
   const { login } = useContext(AuthContext);
 
-  // ✅ PASO 1: Cargar credenciales guardadas al montar el componente
   useEffect(() => {
     cargarCredencialesGuardadas();
   }, []);
 
-  /**
-   * FUNCIÓN: Cargar credenciales de AsyncStorage
-   * 
-   * ¿QUÉ HACE?
-   * 1. Lee email y password guardados (si existen)
-   * 2. Prelena los inputs automáticamente
-   * 3. Marca checkbox "Recordar usuario" si estaban guardados
-   */
   const cargarCredencialesGuardadas = async () => {
     try {
       console.log('📱 Buscando credenciales guardadas...');
@@ -57,7 +53,7 @@ export default function LoginScreen() {
 
       if (passwordGuardado) {
         setPassword(passwordGuardado);
-        setRecordarUsuario(true); // Marcar checkbox si hay password guardado
+        setRecordarUsuario(true);
         console.log('✅ Contraseña prellenada (oculta)');
       }
     } catch (error) {
@@ -67,26 +63,15 @@ export default function LoginScreen() {
     }
   };
 
-  /**
-   * FUNCIÓN: Guardar credenciales en AsyncStorage
-   * 
-   * ¿QUÉ HACE?
-   * Si "Recordar usuario" está marcado:
-   * - Guarda email (siempre)
-   * - Guarda password (solo si usuario marca checkbox)
-   */
   const guardarCredenciales = async () => {
     try {
       if (recordarUsuario) {
-        // Guardar email siempre
         await AsyncStorage.setItem('recordar_email', email);
         console.log('💾 Email guardado:', email);
 
-        // Guardar password solo si usuario lo autoriza
         await AsyncStorage.setItem('recordar_password', password);
         console.log('💾 Contraseña guardada (encriptación recomendada para producción)');
       } else {
-        // Si desmarca, elimina credenciales
         await AsyncStorage.removeItem('recordar_email');
         await AsyncStorage.removeItem('recordar_password');
         console.log('🗑️ Credenciales eliminadas');
@@ -96,9 +81,6 @@ export default function LoginScreen() {
     }
   };
 
-  /**
-   * FUNCIÓN: Olvidar credenciales (botón para borrar)
-   */
   const olvidarCredenciales = async () => {
     try {
       await AsyncStorage.removeItem('recordar_email');
@@ -113,9 +95,6 @@ export default function LoginScreen() {
     }
   };
 
-  /**
-   * FUNCIÓN: Login con guardado de credenciales
-   */
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Por favor completa todos los campos');
@@ -124,11 +103,9 @@ export default function LoginScreen() {
 
     setLoading(true);
 
-    // Guardar credenciales ANTES de intentar login
     if (recordarUsuario) {
       await guardarCredenciales();
     } else {
-      // Si desmarca, limpiar
       await AsyncStorage.removeItem('recordar_email');
       await AsyncStorage.removeItem('recordar_password');
     }
@@ -177,18 +154,31 @@ export default function LoginScreen() {
           keyboardType="email-address"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!loading}
-          autoComplete="off"
-        />
+        {/* 🚀 NUEVO: Contenedor con Input de Contraseña e Ícono (Login) */}
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Contraseña"
+            placeholderTextColor="#999"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword} // Depende del estado
+            editable={!loading}
+            autoComplete="off"
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowPassword(!showPassword)}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={showPassword ? "eye-off-outline" : "eye-outline"} 
+              size={24} 
+              color="#999" 
+            />
+          </TouchableOpacity>
+        </View>
 
-        {/* ✅ CHECKBOX: Recordar usuario */}
         <View style={styles.checkboxContainer}>
           <TouchableOpacity
             style={[
@@ -202,7 +192,6 @@ export default function LoginScreen() {
           </TouchableOpacity>
           <Text style={styles.checkboxLabel}>Recordar usuario</Text>
           
-          {/* Botón para olvidar credenciales (si hay guardadas) */}
           {email && (
             <TouchableOpacity
               onPress={olvidarCredenciales}
@@ -214,7 +203,6 @@ export default function LoginScreen() {
           )}
         </View>
 
-        {/* Link para crear cuenta */}
         <TouchableOpacity 
           onPress={() => setShowRegister(true)} 
           disabled={loading}
@@ -245,6 +233,11 @@ function RegistroScreen({ onBackToLogin }) {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // 🚀 NUEVO: Estados para ver/ocultar contraseñas en Registro
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+
   const { registro } = useContext(AuthContext);
 
   const handleRegistro = async () => {
@@ -272,12 +265,10 @@ function RegistroScreen({ onBackToLogin }) {
       if (resultado.success) {
         console.log('✅ Registro exitoso, cuentaId:', resultado.cuentaId);
         Alert.alert('¡Éxito!', 'Cuenta creada correctamente');
-
         setNombre('');
         setEmail('');
         setPassword('');
         setPasswordConfirm('');
-
         onBackToLogin();
       } else {
         Alert.alert('Error', resultado.error || 'Error en el registro');
@@ -324,27 +315,55 @@ function RegistroScreen({ onBackToLogin }) {
           autoCorrect={false}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!loading}
-          autoComplete="off"
-        />
+        {/* 🚀 NUEVO: Input Contraseña Registro */}
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Contraseña"
+            placeholderTextColor="#999"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            editable={!loading}
+            autoComplete="off"
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowPassword(!showPassword)}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={showPassword ? "eye-off-outline" : "eye-outline"} 
+              size={24} 
+              color="#999" 
+            />
+          </TouchableOpacity>
+        </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Confirmar contraseña"
-          placeholderTextColor="#999"
-          value={passwordConfirm}
-          onChangeText={setPasswordConfirm}
-          secureTextEntry
-          editable={!loading}
-          autoComplete="off"
-        />
+        {/* 🚀 NUEVO: Input Confirmar Contraseña Registro */}
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Confirmar contraseña"
+            placeholderTextColor="#999"
+            value={passwordConfirm}
+            onChangeText={setPasswordConfirm}
+            secureTextEntry={!showPasswordConfirm}
+            editable={!loading}
+            autoComplete="off"
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowPasswordConfirm(!showPasswordConfirm)}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={showPasswordConfirm ? "eye-off-outline" : "eye-outline"} 
+              size={24} 
+              color="#999" 
+            />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -374,57 +393,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
   },
-
   loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   loaderText: {
     marginTop: 10,
     fontSize: 16,
     color: '#666',
   },
-
   header: {
     paddingTop: 80,
     paddingBottom: 5,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-
   headerRegistro: {
     paddingTop: 80,
     paddingBottom: 5,
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
-
-  backBtn: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.turquesa,
-  },
-
   title: {
     fontSize: 34,
     fontWeight: '800',
     color: COLORS.turquesa,
     marginBottom: 5,
   },
-
   subtitle: {
     fontSize: 14,
     color: '#666',
   },
-
   formContainer: {
     flex: 1,
     justifyContent: 'flex-start',
     paddingTop: 150,
   },
-
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -436,14 +441,35 @@ const styles = StyleSheet.create({
     color: COLORS.negro,
   },
 
-  // ✅ ESTILOS CHECKBOX
+  // 🚀 NUEVOS ESTILOS PARA LAS CONTRASEÑAS
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 15,
+    borderRadius: 8,
+    backgroundColor: COLORS.blanco,
+  },
+  passwordInput: {
+    flex: 1, // Toma todo el espacio disponible dejando espacio al ícono
+    padding: 14,
+    fontSize: 16,
+    color: COLORS.negro,
+  },
+  eyeIcon: {
+    padding: 14, // Hace que el área táctil del ícono sea más grande
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // ----------------------------------------
+
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
     paddingHorizontal: 5,
   },
-
   checkbox: {
     width: 24,
     height: 24,
@@ -455,31 +481,26 @@ const styles = StyleSheet.create({
     marginRight: 10,
     backgroundColor: COLORS.blanco,
   },
-
   checkboxChecked: {
     backgroundColor: COLORS.turquesa,
     borderColor: COLORS.turquesa,
   },
-
   checkboxText: {
     color: COLORS.blanco,
     fontSize: 16,
     fontWeight: 'bold',
   },
-
   checkboxLabel: {
     fontSize: 14,
     color: COLORS.negro,
     fontWeight: '500',
   },
-
   olvidarBtn: {
     fontSize: 12,
     color: COLORS.rojo,
     fontWeight: '600',
     paddingHorizontal: 8,
   },
-
   button: {
     backgroundColor: COLORS.turquesa,
     padding: 15,
@@ -487,36 +508,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
-
   buttonDisabled: {
     opacity: 0.6,
   },
-
   buttonText: {
     color: COLORS.blanco,
     fontSize: 16,
     fontWeight: '600',
   },
-
   createAccountLink: {
     color: COLORS.turquesa,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },
-
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 80,
   },
-
-  footerText: {
-    fontSize: 14,
-    color: '#666',
-  },
-
   footerLink: {
     color: COLORS.turquesa,
     fontSize: 14,

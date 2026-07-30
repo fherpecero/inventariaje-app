@@ -156,7 +156,7 @@ export default function SettingsScreen({
     <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <ScreenHeader
         title="⚙️ Configuranza"
-        onBackPress={() => onNavigate('home')}
+        onPress={() => onNavigate('home')}
         themeColors={themeColors}
       />
 

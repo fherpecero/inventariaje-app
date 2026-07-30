@@ -246,7 +246,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <ScreenHeader
         title="👥 Clientes"
-        onBackPress={() => onNavigate('home')}
+        onPress={() => onNavigate('home')}
         themeColors={themeColors}
       />
 

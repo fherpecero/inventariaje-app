@@ -893,8 +893,8 @@ const styles = StyleSheet.create({
     padding: SPACING.content_padding,
   },
   welcomeSection: {
-    marginTop: 20,
-    marginBottom: 25,
+    marginTop: 10,
+    marginBottom: 10,
   },
   welcomeTitle: {
     fontSize: FONT_SIZES.titulo,
@@ -908,9 +908,7 @@ const styles = StyleSheet.create({
   },
   trialCard: {
     backgroundColor: COLORS.blanco,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.turquesa,
-    padding: 12,
+    padding: 10,
     borderRadius: 6,
     marginBottom: 15,
   },
@@ -998,7 +996,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.blanco,
   },
   menuHeader: {
-    //backgroundColor: COLORS.turquesa,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1163,6 +1160,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderLeftWidth: 5,
     borderLeftColor: COLORS.turquesa,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
     marginBottom: 12,
   },
   eventoBtnCreateIcon: {

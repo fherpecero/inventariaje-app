@@ -207,8 +207,9 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
     >
       <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable
-          style={styles.container}
+          style={styles.container,{ paddingBottom: Math.max(insets.bottom, 20) }}
           onPress={(e) => e.stopPropagation()}
+          
         >
           {/* HEADER */}
           <View style={styles.header}>
@@ -508,7 +509,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingBottom: 20,
   },
   cancelBtn: {
     flex: 1,

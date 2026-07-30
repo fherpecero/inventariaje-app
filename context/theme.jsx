@@ -173,7 +173,7 @@ export const GLOBAL_STYLES = StyleSheet.create({
 export const HEADER = StyleSheet.create({
   headerContainer: {
     backgroundColor: COLORS.blanco,
-    paddingTop: 65,
+    paddingTop: 50,
   },
   headerContent: {
     flexDirection: 'row',
@@ -243,7 +243,7 @@ export const ScreenHeader = ({ title, onPress, themeColors, rightAction }) => {
             style={{ padding: 8 }} // Padding interno para que sea fácil de tocar
             activeOpacity={0.7}
           >
-            <Ionicons name="chevron-back" size={28} color="COLOR.negro" />
+            <Ionicons name="chevron-back" size={28} color={COLORS.negro} />
           </TouchableOpacity>
         )}
       </View>
