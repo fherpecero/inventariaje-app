@@ -353,6 +353,16 @@ export default function SettingsScreen({
             </View> */}
           </View>
 
+          <Text style={[styles.versionTitle, { color: themeColors.text }]}>
+                📱 Versión Actual: v2.3.2
+              </Text>
+              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
+                Compilada: '31/07/2026',
+              </Text>
+              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
+                Última actualización: Descontar productos de bono influencer/ Analytics/ Minor bug fix
+              </Text>
+
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* 4. ESTADO DE FUNCIONALIDADES */}
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -389,6 +399,9 @@ export default function SettingsScreen({
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     ✓ Modulo de intercambio de productos (socios)
                   </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Analytics & Reportes (ingresos & egresos/profits)
+                  </Text>
                 </View>
               </View>
             </View>
@@ -414,7 +427,7 @@ export default function SettingsScreen({
                     🏷️ Descuento por producto (checkout)/Bono influencer (entradas)
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    📊 Analytics & Reportes (ingresos & egresos/profits)
+                    ✓ Analytics: mejora de reportes y descarga CSV
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     🎨 Rediseño de imagen 
@@ -422,7 +435,7 @@ export default function SettingsScreen({
                 </View>
 
                 <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
-                  40% completado - v2.3.0
+                  40% completado - v2.4.0
                 </Text>
               </View>
             </View>
@@ -484,15 +497,7 @@ export default function SettingsScreen({
                 },
               ]}
             >
-              <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.2.1
-              </Text>
-              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: '23/07/2026',
-              </Text>
-              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Escaner + Creditos + Intercambios | Rediseño UX
-              </Text>
+              
             </View>
           </View>
 

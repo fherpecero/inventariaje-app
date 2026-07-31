@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tu asistente de negocio Vital Health",
     "slug": "inventariaje-app",
-    "version": "2.3.1",
+    "version": "2.3.2",
     "orientation": "portrait",
     "icon": "./assets/newlogo.png",
     "splash": {
