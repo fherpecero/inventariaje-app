@@ -360,7 +360,7 @@ export default function SettingsScreen({
                 Compilada: '31/07/2026',
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Descontar productos de bono influencer/ Analytics/ Minor bug fix
+                Última actualización: Uso Bono Influencer/Nuevos productos/ Analytics/ Minor bug fix
               </Text>
 
           {/* ═══════════════════════════════════════════════════════════════ */}
