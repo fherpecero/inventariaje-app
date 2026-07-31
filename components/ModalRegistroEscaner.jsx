@@ -207,7 +207,7 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
     >
       <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable
-          style={styles.container,{ paddingBottom: Math.max(insets.bottom, 20) }}
+          style={[styles.container,{ paddingBottom: Math.max(insets.bottom, 20) }]}
           onPress={(e) => e.stopPropagation()}
           
         >

@@ -21,6 +21,7 @@ import Toast from '../components/Toast';
 import SearchBar from '../components/SearchBar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { getProductosActivos } from '../context/productCatalog';
 
 // ✅ Importaciones Globales
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, } from '../context/theme';
@@ -280,13 +281,17 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           ahorroMonetario: (costoTotalCalculado - (parseFloat(costoTotalFinal) || costoTotalCalculado)) || 0,
           creadoPorUid: user.uid || 'sistema',
           creadoPorNombre: user.email,
+          registradoPor: user.uid || 'sistema',
         };
 
+        // E. EJECUTAR ESCRITURAS SIMULTÁNEAS PARA TODOS LOS USUARIOS
         transaction.set(inventarioRef, { productos: productosActuales, updatedAt: new Date().toISOString() }, { merge: true });
         transaction.set(nuevaEntradaRef, ordenEntrada);
-        transaction.set(analyticsRef, { tipoMovimiento: 'ENTRADA_RESTOCK', ...ordenEntrada });
         transaction.update(cuentaRef, { ultimoFolioEntrada: nuevoFolio });
-      });
+        
+        // El espejo siempre se guarda para nutrir la base de datos
+        transaction.set(analyticsRef, { tipoMovimiento: 'ENTRADA_RESTOCK', ...ordenEntrada });
+        });
 
       setPedido([]);
       setModalResumenVisible(false);
@@ -360,6 +365,27 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
         title="Agregar Inventario" 
         onPress={() => onNavigate('home')} 
         themeColors={themeColors} 
+        rightAction={
+          pedido.length > 0 ? (
+            <TouchableOpacity 
+              onPress={prepararResumenPedido} 
+              style={styles.cartIconWrapper}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="cart-outline" size={28} color={themeColors.text} />
+              
+              {/* BADGE DEL CARRITO */}
+              <View style={styles.badgeContainer}>
+                <Text style={styles.badgeText}>
+                  {pedido.reduce((acc, curr) => acc + curr.cantidad, 0)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            /* 👻 ESPACIADOR FANTASMA: Mantiene el título centrado cuando no hay carrito */
+            <View style={{ width: 35 }} /> 
+          )
+        }
       />
 
       <SearchBar 
@@ -829,5 +855,32 @@ const styles = StyleSheet.create({
     color: COLORS.negro, 
     fontSize: 13, 
     marginTop: 2,
-  }
+  },
+  cartIconWrapper: {
+    padding: 4,
+    // position: 'relative' hace que el position: 'absolute' del badge 
+    // tome como límite este botón, no la pantalla completa.
+    position: 'relative', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: COLORS.morado, // Un color que resalte (o rojo)
+    minWidth: 20, // Min width permite que se estire si el número es "100"
+    height: 20,
+    borderRadius: 10, // Mitad de la altura para hacerlo perfectamente redondo
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4, // Da aire a los números de dos dígitos
+    borderWidth: 1.5,
+    borderColor: '#FFF', // Borde blanco (o del color del header) para recortar el ícono
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
 });

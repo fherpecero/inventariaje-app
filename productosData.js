@@ -33,4 +33,6 @@ export const imagenes = {
   '789233333333': require('./assets/productos/789233333333.webp'), // V-PRIME
   '789222222222': require('./assets/productos/789222222222.webp'), // V-HARMONY
   '783495495154': require('./assets/productos/783495495154.webp'), // Collagen
+  '789234444444': require('./assets/productos/789234444444.webp'), //nourish+
+  '789234555555': require('./assets/productos/789234555555.webp'), //performance+
 };

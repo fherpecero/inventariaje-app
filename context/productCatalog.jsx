@@ -458,20 +458,34 @@ export const PRODUCT_CATALOG = {
     updatedAt: new Date('2026-06-11'),
     createdBy: 'populate-catalog'
   },
-  '782706461230': {
-    codigo: '782706461230',
-    nombre: 'VITARLY-L',
-    descripcion: '1 BOLSA CON 60 CÁPSULAS',
-    categoria: 'capsulas',
-    precioCostoStandard: 375,
-    precioVentaStandard: 750,
+  '789234444444': {
+    codigo: '789234444444',
+    nombre: 'NOURISH +',
+    descripcion: '1 BOLSA DE 450 G',
+    categoria: 'polvos',
+    precioCostoStandard: 800,
+    precioVentaStandard: 1600,
     stock: 3,
     activo: true,
-    imagen: require('../assets/productos/782706461230.webp'),
-    createdAt: new Date('2026-06-11'),
-    updatedAt: new Date('2026-06-11'),
+    imagen: require('../assets/productos/789234444444.webp'),
+    createdAt: new Date('2026-07-31'),
+    updatedAt: new Date('2026-07-31'),
     createdBy: 'populate-catalog'
-  }
+  },
+  '789234555555': {
+    codigo: '789234555555',
+    nombre: 'PERFORMANCE +',
+    descripcion: '1 BOLSA DE 420 G',
+    categoria: 'polvos',
+    precioCostoStandard: 800,
+    precioVentaStandard: 1600,
+    stock: 3,
+    activo: true,
+    imagen: require('../assets/productos/789234555555.webp'),
+    createdAt: new Date('2026-07-31'),
+    updatedAt: new Date('2026-07-31'),
+    createdBy: 'populate-catalog'
+  },
 };
 
 /**

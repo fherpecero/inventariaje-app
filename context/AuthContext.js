@@ -264,23 +264,28 @@ export function AuthProvider({ children }) {
     try {
       console.log('📝 Registrando cuenta nueva (Admin)...');
 
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+            const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const userId = userCredential.user.uid;
       const nombreLimpio = nombre.trim();
 
       await updateProfile(userCredential.user, { displayName: nombreLimpio });
 
+      // 1. PRIMERO generamos el ID de la cuenta
+      const nuevoCuentaId = await generarProximoCuentaId();
+
+      // 2. LUEGO guardamos al usuario UNA SOLA VEZ con todos sus datos completos
       const usuarioDocRef = doc(db, 'usuarios', userId);
       await setDoc(usuarioDocRef, {
         uid: userId,
         email: email.trim().toLowerCase(),
         nombre: nombreLimpio,
-        rol: 'admin', // 🛡️ El creador siempre nace como ADMIN
+        rol: 'admin', 
+        cuentaId: nuevoCuentaId, // 🛡️ Inyectado directamente, sin necesidad de hacer un updateDoc después
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
 
-      const nuevoCuentaId = await generarProximoCuentaId();
-
+      // 3. Guardamos la cuenta
       const cuentaRef = doc(db, 'cuentas', nuevoCuentaId.toString());
       await setDoc(cuentaRef, {
         nombre: nombreLimpio,
@@ -288,12 +293,14 @@ export function AuthProvider({ children }) {
         miembros: [userId],
         email: email.trim().toLowerCase(),
         tier: 'premium',
+        rol: 'admin',
         premiumTrialActive: true,
         trialStartDate: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
 
+      // 4. Guardamos el inventario
       const inventarioRef = doc(db, `cuentas/${nuevoCuentaId}/inventarios/vital_health_principal`);
       await setDoc(inventarioRef, {
         nombre: 'Vital Health Principal',
@@ -302,21 +309,11 @@ export function AuthProvider({ children }) {
         updatedAt: new Date().toISOString()
       });
 
-      await updateDoc(usuarioDocRef, {
-        cuentaId: nuevoCuentaId,
-        updatedAt: new Date().toISOString(),
-      });
-
-      const usuarioCuentaRef = doc(db, 'usuariosCuenta', userId);
-      await setDoc(usuarioCuentaRef, {
-        cuentaId: nuevoCuentaId,
-        email: email.trim().toLowerCase(),
-        nombre: nombreLimpio,
-        rol: 'admin',
-        createdAt: new Date().toISOString(),
-      });
+      // 🗑️ ELIMINAMOS: El bloque de updateDoc
+      // 🗑️ ELIMINAMOS: El bloque de usuariosCuenta
 
       return { success: true, cuentaId: nuevoCuentaId, userId };
+
     } catch (error) {
       console.error('❌ Error en registro:', error);
       let mensajeError = 'Error en el registro';

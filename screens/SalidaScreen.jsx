@@ -22,6 +22,7 @@ import AutocompleteSearchSocios from '../components/AutocompleteSearchSocios';
 import DropdownProductoRecibir from '../components/DropdownProductoRecibir';
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, } from '../context/theme';
 import { LogBox, Switch } from 'react-native';
+import { getProductosActivos } from '../context/productCatalog'; 
 
 LogBox.ignoreLogs([
   'DateTimePicker: `onChange` is deprecated',
@@ -463,15 +464,31 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       const docSnap = await getDoc(inventarioRef);
       let productosActuales = docSnap.data()?.productos || {};
 
-      const productosActualizados = { ...productosActuales };
+            const productosActualizados = { ...productosActuales };
+      
       for (let i = 0; i < carrito.length; i++) {
         const item = carrito[i];
+        
+        // 1. Obtenemos los valores actuales (o 0 si no existen)
         const cantidadActual = productosActualizados[item.id]?.cantidad || 0;
+        const piezasConDescuentoActual = productosActualizados[item.id]?.piezasConDescuento || 0;
+
+        // 2. Lógica de deducción del Bono Influencer
+        let nuevasPiezasConDescuento = piezasConDescuentoActual;
+        
+        if (esConsumoBono) {
+          // Usamos Math.max para proteger la base de datos contra inventarios negativos. 
+          // Si tenía 2 bonos y vende 3, el stock de bonos quedará en 0, no en -1.
+          nuevasPiezasConDescuento = Math.max(0, piezasConDescuentoActual - item.cantidad);
+        }
+
+        // 3. Actualizamos el documento del producto
         productosActualizados[item.id] = {
           ...productosActualizados[item.id],
           cantidad: cantidadActual - item.cantidad,
-          codigo: item.codigo,
-          nombre: item.nombre,
+          piezasConDescuento: nuevasPiezasConDescuento, // 🛡️ AQUÍ SE REFLEJA LA RESTA
+          codigo: item.codigo, 
+          // nombre: item.nombre, // (Opcional: podrías borrar esta línea recordando nuestra regla de "Única fuente de verdad" local)
           consumoBono: esConsumoBono,
           updatedAt: ahora.toISOString(),
         };
@@ -739,11 +756,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         rightAction={
           <TouchableOpacity 
             onPress={toggleModoIntercambio}
-            disabled={effectiveTier !== 'premium'}
+            //disabled={effectiveTier !== 'premium'}
             style={[
               styles.btnIntercambio, 
               modoIntercambio && styles.btnIntercambioActive, 
-              effectiveTier !== 'premium' && styles.btnDisabled
+              //effectiveTier !== 'premium' && styles.btnDisabled
             ]}
           >
             <Ionicons name="git-compare" size={24} color={modoIntercambio ? "COLORS.turquesa" : "black"} />

@@ -171,15 +171,31 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   const eliminarUsuario = async () => {
-    Alert.alert(
-      '⚠️ ELIMINACIÓN PERMANENTE',
-      `¿Eliminar a ${usuarioSeleccionado.email}?\n\nEsto preservará logs para reportes.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
+  Alert.alert(
+    '⚠️ ELIMINACIÓN PERMANENTE',
+    `¿Eliminar a ${usuarioSeleccionado.email}?\n\nEsto preservará logs para reportes.`,
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // 1️⃣ PRIMERO: Quitarlo de la cuenta (Esto sí lo permite Firebase porque eres el Admin)
+            const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
+            const cuentaSnap = await getDoc(cuentaRef);
+            const miembrosActuales = cuentaSnap.data()?.miembros || [];
+
+            const miembrosActualizados = miembrosActuales.filter(
+              (uid) => uid !== usuarioSeleccionado.uid
+            );
+
+            // Actualizamos la base de datos para revocarle el acceso
+            await updateDoc(cuentaRef, { miembros: miembrosActualizados });
+
+            // 2️⃣ SEGUNDO: Intentar marcar su perfil personal
+            // Lo ponemos en su propio try/catch porque si Firebase lo bloquea por reglas de seguridad, 
+            // NO queremos que cancele la eliminación visual de la pantalla.
             try {
               const usuarioDocRef = doc(db, 'usuarios', usuarioSeleccionado.uid);
               await updateDoc(usuarioDocRef, {
@@ -187,29 +203,25 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
                 deletionRequestedAt: new Date().toISOString(),
                 eliminadoPor: user.uid,
               });
-
-              const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
-              const cuentaSnap = await getDoc(cuentaRef);
-              const miembrosActuales = cuentaSnap.data()?.miembros || [];
-
-              const miembrosActualizados = miembrosActuales.filter(
-                (uid) => uid !== usuarioSeleccionado.uid
-              );
-
-              await updateDoc(cuentaRef, { miembros: miembrosActualizados });
-
-              setMiembros(miembros.filter((m) => m.uid !== usuarioSeleccionado.uid));
-              setUserSettingsVisible(false);
-
-              Alert.alert('✅ Eliminado', `${usuarioSeleccionado.email} ha sido eliminado\n\n📊 Los registros se mantienen`);
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo eliminar el usuario');
+            } catch (perfilError) {
+              console.warn('⚠️ Nota: Se borró de la cuenta, pero las reglas de Firebase bloquearon la edición de su perfil personal.');
             }
-          },
+
+            // 3️⃣ TERCERO: Limpiar la pantalla y cerrar el modal
+            setMiembros(miembros.filter((m) => m.uid !== usuarioSeleccionado.uid));
+            setUserSettingsVisible(false);
+
+            Alert.alert('✅ Eliminado', `${usuarioSeleccionado.email} ha sido eliminado de la cuenta\n\n📊 Los registros se mantienen`);
+          } catch (error) {
+            // 🚀 Cambiamos este Alert para que nos diga EXACTAMENTE por qué falla si vuelve a pasar
+            console.error(error);
+            Alert.alert('Error al eliminar', error.message);
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
   const crearUsuarioYAgregarACuenta = async () => {
     if (!isMountedRef.current) return;
@@ -252,16 +264,19 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
 
       await updateProfile(userCredential.user, { displayName: nombreUsuario });
 
+            // 1. Centralizamos todos los datos en una sola referencia
       const usuarioDocRef = doc(secondaryDb, 'usuarios', nuevoUID);
+      
+      // 2. Insertamos el campo "rol" directamente en el perfil principal
       await setDoc(usuarioDocRef, {
         uid: nuevoUID,
         email: emailInput.trim(),
         nombre: emailInput.split('@')[0],
         cuentaId: cuentaId,
+        rol: 'socio', // <-- Campo agregado al documento principal
         createdAt: new Date().toISOString(),
       }, { merge: false });
 
-      await setDoc(doc(secondaryDb, 'usuariosCuenta', nuevoUID), { cuentaId: cuentaId, rol: 'socio' });
 
       const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
       await updateDoc(cuentaRef, { miembros: arrayUnion(nuevoUID) });

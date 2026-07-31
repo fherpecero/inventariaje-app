@@ -20,6 +20,7 @@ import { AuthContext } from '../context/AuthContext';
 import SearchBar from '../components/SearchBar';
 import { LinearGradient } from 'expo-linear-gradient';
 
+
 // ✅ 1. Importamos la Fuente de la Verdad y los componentes globales
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER } from '../context/theme';
 

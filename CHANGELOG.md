@@ -1,5 +1,31 @@
 # Changelog - Inventariaje App
 
+### [2.3.2] - 2026-07-31
+- Refactorización del Modelo de Datos: Eliminación definitiva de la colección redundante usuariosCuenta.
+- Aplanamiento de Datos (NoSQL): Centralización de los campos rol y cuentaId directamente en el documento raíz de la colección usuarios.
+- Optimización de Consultas (Reads): Reducción del 50% en las lecturas de Firestore necesarias para validar perfiles y permisos de acceso.
+- Optimización de Escrituras (Writes): Refactorización del flujo de registro de administradores y socios, inyectando el cuentaId previo a la inserción para eliminar dobles operaciones (updateDoc) y reducir costos operativos.
+- Ventas: descuento de inventario al consumir bono influencer
+- Update Catalog: Nourish+ & Performance+ agregados
+- Bug Fix: Boton de agregar carrito visible
+
+
+
+[2.3.1] - 2026-07-30
+🚀 Parche de Interfaz y Estabilidad
+
+✨ Nuevo: Botón para mostrar/ocultar contraseñas en pantallas de Login y Registro.
+
+🐛 Corregido: Botones de retroceso (Back) ya son visibles y funcionales en Configuranza y Miembros.
+
+🐛 Corregido: Solucionada la pantalla de carga infinita (congelada) al instalar la app por primera vez.
+
+🐛 Corregido: Arreglado el margen inferior aplastado en el modal del Escáner.
+
+🐛 Corregido: Eliminado el bug de "eventos activos fantasma" limpiando el caché al finalizar.
+
+🔧 Técnico: Configurada la limpieza de caché (--clear-cache) para forzar la actualización del nuevo ícono de la app.
+
 ### [2.3.0] - 2026-07-29
 
 - 🎯 Major: Analytics Dashboard, Data Visualization & Report Exporting
