@@ -15,7 +15,7 @@
     ],
     "android": {
       "package": "com.fherpecero.inventariajeapp",
-      "versionCode": 5,
+      "versionCode": 6,
       "icon": "./assets/newlogo.png"
     },
     "extra": {
