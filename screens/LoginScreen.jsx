@@ -101,7 +101,8 @@ export default function LoginScreen() {
       return;
     }
 
-    setLoading(true);
+    try {
+      setLoading(true);
 
     if (recordarUsuario) {
       await guardarCredenciales();
@@ -116,6 +117,15 @@ export default function LoginScreen() {
     if (!result.success) {
       Alert.alert('Error', result.error);
     }
+    } catch (error) {
+    console.error("Error inesperado en la vista de login:", error);
+    Alert.alert('Error', 'Ocurrió un problema inesperado.');
+  } finally {
+    // 🛡️ EL ESCUDO DE ACCIÓN: 
+    // Pase lo que pase (error de credenciales, error de red, o éxito),
+    // debemos apagar el loader del botón o de la pantalla local.
+    setLoading(false); 
+  }
   };
 
   if (showRegister) {

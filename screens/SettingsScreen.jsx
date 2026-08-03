@@ -352,16 +352,37 @@ export default function SettingsScreen({
               </View>
             </View> */}
           </View>
+             {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* 5. INFORMACIÓN */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+              ℹ️ Información
+            </Text>
+              
+            <View
+              style={[
+                styles.versionInfo,
+                {
+                  backgroundColor: themeColors.bgSecondary,
+                  borderColor: themeColors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.versionTitle, { color: themeColors.text }]}>
+                📱 Versión Actual: v2.3.3
+              </Text>
+              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
+                Compilada: '03/08/2026',
+              </Text>
+              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
+                Última actualización: Uso Bono Influencer/Nuevos productos/ Analytics Optimizado / Minor bug fix
+              </Text>
+            </View>
+          </View>
 
-          <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.3.2
-              </Text>
-              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: '31/07/2026',
-              </Text>
-              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Uso Bono Influencer/Nuevos productos/ Analytics/ Minor bug fix
-              </Text>
+
+          
 
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* 4. ESTADO DE FUNCIONALIDADES */}
@@ -400,7 +421,10 @@ export default function SettingsScreen({
                     ✓ Modulo de intercambio de productos (socios)
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Analytics & Reportes (ingresos & egresos/profits)
+                     Analytics & Reportes (ingresos & egresos/profits)
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Descuento por producto (checkout)/Bono influencer (entradas)
                   </Text>
                 </View>
               </View>
@@ -423,14 +447,18 @@ export default function SettingsScreen({
                 ]}
               >
                 <View style={styles.itemsContainer}>
+                  
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    🏷️ Descuento por producto (checkout)/Bono influencer (entradas)
+                    📈 Analytics: mejora de reportes y descarga CSV
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Analytics: mejora de reportes y descarga CSV
+                    🎨 Mejora de UX 
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    🎨 Rediseño de imagen 
+                    🍏 Desarrollo para iOS
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    🔔 Notificaciones avanzadas
                   </Text>
                 </View>
 
@@ -480,27 +508,7 @@ export default function SettingsScreen({
             </View>
           </View> */}
 
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 5. INFORMACIÓN */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              ℹ️ Información
-            </Text>
-
-            <View
-              style={[
-                styles.versionInfo,
-                {
-                  backgroundColor: themeColors.bgSecondary,
-                  borderColor: themeColors.border,
-                },
-              ]}
-            >
-              
-            </View>
-          </View>
-
+       
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* 6. CERRAR SESIÓN */}
           {/* ═══════════════════════════════════════════════════════════════ */}

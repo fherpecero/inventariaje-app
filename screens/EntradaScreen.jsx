@@ -500,14 +500,41 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                 showsVerticalScrollIndicator={true}
                 contentContainerStyle={styles.resumenScrollContent}
               >
-                {pedido.map((item, idx) => (
-                  <Text key={idx} style={[styles.resumenItemText, { color: themeColors.text }]}>
-                    {item.cantidad}x {item.nombre} {item.bonoInfluencer ? '⭐' : ''}
-                  </Text>
-                ))}
+                {pedido.map((item, idx) => {
+                  // 🎯 OPTIMIZACIÓN: Interfaz "tonta". 
+                  // Consumimos directamente el costo unitario ya calculado en 'confirmarEntrada'
+                  // Blindado con Number() para asegurar la integridad de la UI.
+                  const costoUnitario = Number(item.costoUnitarioAplicado) || 0;
+                  const cantidadNum = Number(item.cantidad) || 0;
+
+                  return (
+                    <View 
+                      key={idx} 
+                      style={{ 
+                        flexDirection: 'row', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        paddingVertical: 8,
+                      }}
+                    >
+                      {/* Lado Izquierdo: Cantidad, Nombre y Badge */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.resumenItemText, { color: themeColors.text }]}>
+                          {cantidadNum}x {item.nombre} {item.bonoInfluencer ? '⭐' : ''}
+                        </Text>
+                      </View>
+
+                      {/* Lado Derecho: Costo Unitario y Subtotal (Renderizados con precisión) */}
+                      <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
+                        <Text style={{ fontSize: 12, color: darkMode ? '#AAA' : '#666' }}>
+                          ${costoUnitario.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </ScrollView>
             </View>
-
             <View style={[styles.resumenFinancieroBox, { backgroundColor: darkMode ? '#333' : COLORS.gris }]}>
               <Text style={[styles.resumenTextoBase, { color: themeColors.text }]}>
                 Total sin descuentos: ${costoTotalCalculado.toFixed(2)}

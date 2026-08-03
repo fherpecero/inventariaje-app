@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; // Asegurado updateDoc
 import { db } from '../config/firebase';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -14,7 +14,6 @@ export const fetchAndCacheTier = async (cuentaId) => {
   }
 
   try {
-    // Paso 1: Obtener documento de la cuenta
     const cuentaDocRef = doc(db, 'cuentas', cuentaId.toString());
     const cuentaDocSnap = await getDoc(cuentaDocRef);
 
@@ -24,22 +23,15 @@ export const fetchAndCacheTier = async (cuentaId) => {
       return 'basic';
     }
 
-    // Paso 2: Extraer tier del documento
-    // Si el campo 'tier' no existe, default a 'basic'
     const tierValue = cuentaDocSnap.data().tier || 'basic';
-
-    // Validar que sea un tier válido
     const validTiers = ['basic', 'premium'];
     const tier = validTiers.includes(tierValue) ? tierValue : 'basic';
 
-    // Paso 3: Guardar en AsyncStorage (cache para acceso rápido)
     await AsyncStorage.setItem('userTier', tier);
-
     console.log(`✅ Tier cargado: ${tier} para cuenta ${cuentaId}`);
     return tier;
   } catch (error) {
     console.error('❌ Error fetching tier:', error);
-    // Fallback seguro a 'basic'
     await AsyncStorage.setItem('userTier', 'basic');
     return 'basic';
   }
@@ -49,17 +41,6 @@ export const fetchAndCacheTier = async (cuentaId) => {
 // 2️⃣ FUNCIÓN: Obtener tier del cache (sin llamar Firestore)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * EDUCACIÓN: Esta función SOLO lee el cache (AsyncStorage)
- * 
- * ¿Cuándo usarla?
- * - En condicionales de renderizado (mostrar/ocultar botones)
- * - Durante interacción del usuario (verificación rápida)
- * - NO para verificaciones de seguridad (usa Firestore Rules para eso)
- * 
- * ¿Por qué es rápida?
- * No hace llamadas a internet, lee de memoria local
- */
 export const getTierFromCache = async () => {
   try {
     const tier = await AsyncStorage.getItem('userTier');
@@ -74,29 +55,10 @@ export const getTierFromCache = async () => {
 // 3️⃣ FUNCIÓN: Verificar si usuario tiene acceso a una feature
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Función de conveniencia para preguntar:
- * "¿Puede el usuario acceder a esto?"
- * 
- * MATRIZ DE ACCESO (Tabla de Verdad):
- * 
- * Feature      | Basic | Premium
- * ─────────────┼───────┼─────────
- * entrada      |  ✅   |   ✅
- * salida       |  ✅   |   ✅
- * existencias  |  ✅   |   ✅
- * bajo-stock   |  ✅   |   ✅
- * scanner      |  ❌   |   ✅
- * analytics    |  ❌   |   ✅
- * clientes     |  ❌   |   ✅
- */
 export const hasAccessToFeature = async (featureName) => {
   const tier = await getTierFromCache();
 
-  // Matriz de features disponibles por tier
-  // Formato: 'feature': ['tier1', 'tier2']
   const featureMatrix = {
-    // Features BASIC (todos tienen acceso)
     'entrada': ['basic', 'premium'],
     'entradas': ['basic', 'premium'],
     'salida': ['basic', 'premium'],
@@ -105,7 +67,7 @@ export const hasAccessToFeature = async (featureName) => {
     'bajo-stock': ['basic', 'premium'],
     'bajo_stock': ['basic', 'premium'],
     
-    // Features PREMIUM (solo premium)
+    // Features PREMIUM
     'scanner': ['premium'],
     'escaner': ['premium'],
     'eventos': ['premium'],
@@ -113,7 +75,7 @@ export const hasAccessToFeature = async (featureName) => {
     'clientes': ['premium'],
     'creditos': ['premium'],
     'alertas': ['premium'],  
-    'scannerEvents': [premium], 
+    'scannerEvents': ['premium'], 
   };
 
   const allowedTiers = featureMatrix[featureName] || [];
@@ -126,14 +88,7 @@ export const hasAccessToFeature = async (featureName) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 4️⃣ FUNCIÓN: Información detallada del tier actual
 // ═══════════════════════════════════════════════════════════════════════════
-/**
- * Retorna información completa del tier actual
- * 
- * ÚTIL PARA:
- * - Screens de upgrade (mostrar qué tiene cada tier)
- * - Debugging (verificar qué tier tiene el usuario)
- * - Settings screen (mostrar tu plan actual)
- */
+
 export const getTierInfo = async () => {
   const tier = await getTierFromCache();
 
@@ -171,75 +126,96 @@ export const getTierInfo = async () => {
   return tierInfo[tier] || tierInfo.basic;
 };
 
-export const calculateEffectiveTier = (tier, premiumTrialActive, trialStartDate) => {
-  // Sin tier, retorna basic
-  if (!tier) return 'basic';
-  
-  // Si no está en trial, retorna tier del documento
-  if (!premiumTrialActive) return tier;
-  
-  // Si está en trial, verificar si expiró
-  if (trialStartDate) {
-    const now = new Date();
-    const endDate = new Date(trialStartDate);
-    endDate.setDate(endDate.getDate() + 30);
-    
-    return now < endDate ? 'premium' : tier;
-  }
-  
-  return tier;
-};
-
 // ═══════════════════════════════════════════════════════════════════════════
-// 5️⃣ FUNCIÓN: Obtener tier actual (para debugging/logging)
+// 5️⃣ FUNCIONES DE CÁLCULO DE TRIAL Y TIER ACTIVO (BLINDADAS)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Simple función para obtener el string del tier actual
- * 
- * ÚTIL PARA:
- * - Logging y debugging
- * - Condicionales en código
- * - Testing
+ * 🛡️ BLINDADA: Calcula el tier efectivo interpretando Fechas y Timestamps
  */
+export const calculateEffectiveTier = (tier, premiumTrialActive, trialStartDate) => {
+  // 1. Si la cuenta ya fue pagada como 'premium', es inamovible
+  if (tier === 'premium') return 'premium';
+
+  // 2. Si no hay trial activo o fecha, cae a basic
+  if (!premiumTrialActive || !trialStartDate) return 'basic';
+
+  try {
+    // 3. Normalizar la fecha (Firestore Timestamp vs JS Date vs String)
+    let fechaInicio;
+    if (trialStartDate?.toDate && typeof trialStartDate.toDate === 'function') {
+      fechaInicio = trialStartDate.toDate(); // Es Timestamp de Firestore
+    } else if (trialStartDate?.seconds) {
+      fechaInicio = new Date(trialStartDate.seconds * 1000); // Es Timestamp crudo
+    } else {
+      fechaInicio = new Date(trialStartDate); // Es String ISO
+    }
+
+    const startMs = fechaInicio.getTime();
+    const nowMs = new Date().getTime();
+
+    // 4. Protección contra fecha corrupta
+    if (isNaN(startMs)) return 'basic'; 
+
+    // 5. Diferencia en días
+    const diffDays = (nowMs - startMs) / (1000 * 60 * 60 * 24);
+
+    // 6. Trial válido (30 días estrictos)
+    if (diffDays >= 0 && diffDays <= 30) {
+      return 'premium';
+    }
+
+    // Trial expirado
+    return 'basic';
+  } catch (error) {
+    console.error("❌ Error calculando effectiveTier:", error);
+    return 'basic';
+  }
+};
+
 export const getCurrentTier = async () => {
   return await getTierFromCache();
 };
 
 /**
- * Obtiene información del trial
- * 
- * Retorna:
- * - isActive: boolean (¿trial sigue válido?)
- * - daysRemaining: número de días
- * - expiresAt: fecha de expiración
- * - startDate: cuándo empezó
+ * 🛡️ BLINDADA: Retorna días restantes del Trial leyendo la "Cuenta" (no el uid)
  */
-export const getTrialInfo = async (uid) => {
+export const getTrialInfo = async (cuentaId) => {
+  if (!cuentaId) return null;
+
   try {
-    const userDocRef = doc(db, 'usuarios', uid);
-    const userDocSnap = await getDoc(userDocRef);
+    const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
+    const cuentaSnap = await getDoc(cuentaRef);
 
-    if (!userDocSnap.exists()) {
-      return null;
+    if (!cuentaSnap.exists()) return null;
+
+    const data = cuentaSnap.data();
+    const { trialStartDate, premiumTrialActive } = data;
+
+    // Si no está el trial activo
+    if (!premiumTrialActive || !trialStartDate) return null;
+
+    // Normalizar la fecha
+    let fechaInicio;
+    if (trialStartDate?.toDate && typeof trialStartDate.toDate === 'function') {
+      fechaInicio = trialStartDate.toDate(); 
+    } else if (trialStartDate?.seconds) {
+      fechaInicio = new Date(trialStartDate.seconds * 1000); 
+    } else {
+      fechaInicio = new Date(trialStartDate); 
     }
 
-    const userData = userDocSnap.data();
-    const { trialStartDate, trialEndDate, isTrialActive } = userData;
+    if (isNaN(fechaInicio.getTime())) return null;
 
-    if (!isTrialActive || !trialEndDate) {
-      return null;
-    }
-
+    const endDate = new Date(fechaInicio.getTime() + (30 * 24 * 60 * 60 * 1000));
     const now = new Date();
-    const endDate = new Date(trialEndDate);
     const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
 
     return {
       isActive: now < endDate,
       daysRemaining: Math.max(0, daysRemaining),
       expiresAt: endDate,
-      startDate: new Date(trialStartDate),
+      startDate: fechaInicio,
     };
   } catch (error) {
     console.error('❌ Error getting trial info:', error);
@@ -248,47 +224,34 @@ export const getTrialInfo = async (uid) => {
 };
 
 /**
- * Inicia trial de 30 días
- * 
- * Se llama cuando un usuario se registra por primera vez
- * Automáticamente pone tier='premium' y calcula fecha de expiración
+ * Inicia trial de 30 días en el documento de CUENTA
  */
-export const startTrialPeriod = async (uid) => {
+export const startTrialPeriod = async (cuentaId) => {
+  if (!cuentaId) throw new Error("Se requiere cuentaId para iniciar trial");
+
   try {
     const now = new Date();
-    // Sumar 30 días a la fecha actual
-    const trialEndDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    const userDocRef = doc(db, 'usuarios', uid);
+    const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
     
-    await updateDoc(userDocRef, {
-      tier: 'premium',                    // ← Comienza en premium
-      isTrialActive: true,                // ← Trial activo
-      trialStartDate: now,                // ← Cuándo empezó
-      trialEndDate: trialEndDate,         // ← Cuándo termina
-      updatedAt: now
+    await updateDoc(cuentaRef, {
+      tier: 'basic',                      // Tier base
+      premiumTrialActive: true,           // Flag de trial encendido
+      trialStartDate: now.toISOString(),  // Formato universal y seguro
+      updatedAt: now.toISOString()
     });
 
-    console.log(`🎁 Trial iniciado para ${uid}. Válido hasta: ${trialEndDate.toLocaleDateString()}`);
-    return trialEndDate;
+    console.log(`🎁 Trial de 30 días iniciado para cuenta ${cuentaId}`);
+    return true;
   } catch (error) {
-    console.error('❌ Error iniciando trial:', error);
+    console.error('❌ Error iniciando trial en cuenta:', error);
     throw error;
   }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 6️⃣ FUNCIÓN: Limpiar cache (para logout o testing)
+// 6️⃣ FUNCIÓN: Limpiar cache
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * EDUCACIÓN: Borra el tier del cache
- * 
- * CUÁNDO USARLA:
- * - En la función logout (limpiar datos del usuario)
- * - En testing
- * - Cuando usuario cambia de cuenta
- */
 export const clearTierCache = async () => {
   try {
     await AsyncStorage.removeItem('userTier');
@@ -298,10 +261,6 @@ export const clearTierCache = async () => {
   }
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// EXPORTAR TODO
-// ═══════════════════════════════════════════════════════════════════════════
-
 export default {
   fetchAndCacheTier,
   getTierFromCache,
@@ -309,7 +268,7 @@ export default {
   getTierInfo,
   getCurrentTier,
   clearTierCache,
-  calculateEffectiveTier,  // ← AGREGAR AQUÍ
-  getTrialInfo,            // ← AGREGAR AQUÍ
-  startTrialPeriod,        // ← AGREGAR AQUÍ
+  calculateEffectiveTier, 
+  getTrialInfo,            
+  startTrialPeriod,       
 };

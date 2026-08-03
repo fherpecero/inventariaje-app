@@ -1,5 +1,17 @@
 # Changelog - Inventariaje App
 
+### [2.3.3] - 2026-08-03
+Hotfix & UI/UX Optimization
+- Refactorización Financiera en EntradaScreen.jsx
+- Blindaje Numérico (Anti-Crash)
+- Mejora de reportes: Corrección de Costos en "Bono Influencer| cortesias"
+Bugs
+- Fix: Carga Infinita en First Launch
+- Fix: Carga Infinita por Credenciales Inválidas
+- UI Fix: Enhancement & ScrollView en Entradas
+- Fix app name on splash
+- Trazabilidad de Errores (Google Play Console)
+
 ### [2.3.2] - 2026-07-31
 - Refactorización del Modelo de Datos: Eliminación definitiva de la colección redundante usuariosCuenta.
 - Aplanamiento de Datos (NoSQL): Centralización de los campos rol y cuentaId directamente en el documento raíz de la colección usuarios.

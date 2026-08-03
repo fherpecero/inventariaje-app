@@ -31,6 +31,9 @@ LogBox.ignoreLogs([
 
 export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const { user, userData, cuenta, cuentaId } = useContext(AuthContext);
+  const effectiveTier = cuenta 
+      ? calculateEffectiveTier(cuenta.tier, cuenta.premiumTrialActive, cuenta.trialStartDate) 
+      : 'basic';
   
   // ==========================================
   // ESTADOS Y REFS (Siempre al inicio del componente)
@@ -60,8 +63,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const [modalCreditoVisible, setModalCreditoVisible] = useState(false);
   const [creditoClienteNombre, setCreditoClienteNombre] = useState('');
   const [creditoFechaPTP, setCreditoFechaPTP] = useState(new Date());
-  const [creditoNotas, setCreditoNotas] = useState('');
-  const [effectiveTier, setEffectiveTier] = useState('basic');
+  const [creditoNotas, setCreditoNotas] = useState(''); 
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Intercambio Avanzado
@@ -87,17 +89,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   useEffect(() => {
     if (user && cuenta) cargarProductos();
   }, [user, cuenta]);
-
-  useEffect(() => {
-    if (user && cuenta && cuentaId) {
-      const tierFinal = calculateEffectiveTier(
-        cuenta?.tier,
-        cuenta?.premiumTrialActive,
-        cuenta?.trialStartDate
-      );
-      setEffectiveTier(tierFinal);
-    }
-  }, [user, cuenta, cuentaId]);
   
   // ==========================================
   // LÓGICA DE DATOS
@@ -293,22 +284,22 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     // 🧠 MÉTRICAS PRE-CALCULADAS PARA ANALYTICS
     // 1. Volumen de items (para no iterar arrays en el dashboard)
     const cantidadTotalEnviada = productosEnviados.reduce((sum, item) => sum + (item.cantidad || 0), 0);
-  const cantidadTotalRecibida = productosRecibidos.reduce((sum, item) => sum + (item.cantidad || 0), 0);
+    const cantidadTotalRecibida = productosRecibidos.reduce((sum, item) => sum + (item.cantidad || 0), 0);
 
-  // 2. Flujo de Caja Real (Separar ingresos de gastos facilita sumar la caja del día)
-  let ingresoCaja = 0;
-  let gastoCaja = 0;
+    // 2. Flujo de Caja Real (Separar ingresos de gastos facilita sumar la caja del día)
+    let ingresoCaja = 0;
+    let gastoCaja = 0;
 
-  if (!tieneSaldoPendiente) {
-    if (diferenciaIntercambio > 0) {
-      ingresoCaja = diferenciaIntercambio; // Me pagaron la diferencia
-    } else if (diferenciaIntercambio < 0) {
-      gastoCaja = Math.abs(diferenciaIntercambio); // Yo pagué la diferencia
+    if (!tieneSaldoPendiente) {
+      if (diferenciaIntercambio > 0) {
+        ingresoCaja = diferenciaIntercambio; // Me pagaron la diferencia
+      } else if (diferenciaIntercambio < 0) {
+        gastoCaja = Math.abs(diferenciaIntercambio); // Yo pagué la diferencia
+      }
     }
-  }
 
-  // 3. Etiqueta de tiempo (Filtros rápidos de mes/año sin procesar fechas complejas)
-  const mesAnio = `${ahora.getMonth() + 1}-${ahora.getFullYear()}`;
+    // 3. Etiqueta de tiempo (Filtros rápidos de mes/año sin procesar fechas complejas)
+    const mesAnio = `${ahora.getMonth() + 1}-${ahora.getFullYear()}`;
 
 
     const intercambioDoc = {
@@ -459,12 +450,15 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     try {
       const totales = calcularTotales();
       const ahora = new Date();
+      
+      // 🛡️ Cargamos el catálogo para tener los costos en memoria
+      const productosLocales = getProductosActivos();
 
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
       const docSnap = await getDoc(inventarioRef);
       let productosActuales = docSnap.data()?.productos || {};
 
-            const productosActualizados = { ...productosActuales };
+      const productosActualizados = { ...productosActuales };
       
       for (let i = 0; i < carrito.length; i++) {
         const item = carrito[i];
@@ -477,8 +471,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         let nuevasPiezasConDescuento = piezasConDescuentoActual;
         
         if (esConsumoBono) {
-          // Usamos Math.max para proteger la base de datos contra inventarios negativos. 
-          // Si tenía 2 bonos y vende 3, el stock de bonos quedará en 0, no en -1.
+          // Usamos Math.max para proteger contra inventarios negativos.
           nuevasPiezasConDescuento = Math.max(0, piezasConDescuentoActual - item.cantidad);
         }
 
@@ -486,9 +479,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         productosActualizados[item.id] = {
           ...productosActualizados[item.id],
           cantidad: cantidadActual - item.cantidad,
-          piezasConDescuento: nuevasPiezasConDescuento, // 🛡️ AQUÍ SE REFLEJA LA RESTA
+          piezasConDescuento: nuevasPiezasConDescuento, 
           codigo: item.codigo, 
-          // nombre: item.nombre, // (Opcional: podrías borrar esta línea recordando nuestra regla de "Única fuente de verdad" local)
           consumoBono: esConsumoBono,
           updatedAt: ahora.toISOString(),
         };
@@ -502,6 +494,12 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
       for (let i = 0; i < carrito.length; i++) {
         const item = carrito[i];
+        
+        // 🛡️ BÚSQUEDA DEL COSTO EXACTO EN ESTE MILISEGUNDO
+        const prodCatalogo = productosLocales.find(p => p.codigo === item.codigo || p.id === item.codigo);
+        const costoUnitarioBase = prodCatalogo ? parseFloat(prodCatalogo.precioCostoStandard || prodCatalogo.costo || prodCatalogo.precioCosto || 0) : 0;
+        const costoTotalLinea = costoUnitarioBase * item.cantidad;
+
         const ventaDoc = {
           producto: item.nombre,
           codigo: item.codigo,
@@ -511,6 +509,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           descuentoPorcentaje: parseFloat(descuentoPorcentaje) || 0,
           descuentoMonto: totales.montoDescuento / carrito.length,
           total: (item.precioVenta * item.cantidad) - (totales.montoDescuento / carrito.length),
+          
+          // 💰 AQUÍ "CONGELAMOS" EL COSTO PARA ANALYTICS
+          costoUnitarioReal: costoUnitarioBase,
+          costoTotalVenta: costoTotalLinea,
+
           cliente: cliente || 'Sin cliente',
           tipoPago: tipoPago,
           consumoBono: esConsumoBono,
@@ -1088,13 +1091,34 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         </View>
         )}
 
-        {/* Botones principales */}
+      {/* Botones principales */}
         <View style={styles.botonesContainer}>
-          <TouchableOpacity style={[styles.confirmBtn, loading && styles.disabledBtn]} onPress={modoIntercambio ? registrarIntercambio : registrarVenta} disabled={loading || carrito.length === 0}>
-            {loading ? <ActivityIndicator color={COLORS.blanco} /> : <Text style={styles.confirmBtnText}>{modoIntercambio ? '🔁 Confirmar cambio' : '✅ Confirmar venta'}</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => { setCarrito([]); setDescuentoPorcentaje(''); setCliente(''); setTipoPago('efectivo'); }} disabled={loading}>
+          {/* 1. Cancelar (Izquierda) */}
+          <TouchableOpacity 
+            style={[styles.btnAccion, styles.cancelBtn]} 
+            onPress={() => { setCarrito([]); setDescuentoPorcentaje(''); setCliente(''); setTipoPago('efectivo'); }} 
+            disabled={loading}
+          >
             <Text style={styles.cancelBtnText}>❌ Cancelar</Text>
+          </TouchableOpacity>
+
+          {/* 2. Confirmar Venta / Cambio (Derecha) */}
+          <TouchableOpacity 
+            style={[
+              styles.btnAccion, 
+              styles.confirmBtn, 
+              (loading || carrito.length === 0) && styles.disabledBtn
+            ]} 
+            onPress={modoIntercambio ? registrarIntercambio : registrarVenta} 
+            disabled={loading || carrito.length === 0}
+          >
+            {loading ? (
+              <ActivityIndicator color={COLORS.blanco} />
+            ) : (
+              <Text style={styles.confirmBtnText}>
+                {modoIntercambio ? '🔁 Confirmar cambio' : '✅ Confirmar venta'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1429,18 +1453,30 @@ const styles = StyleSheet.create({
   },
   botonesContainer: { 
     gap: 10, 
-    marginBottom: 30 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 5,
+    marginBottom: 20,
   },
   confirmBtn: { 
     backgroundColor: COLORS.verde, 
-    paddingVertical: 15, 
+    paddingVertical: 12, 
     borderRadius: 8, 
     alignItems: 'center' 
   },
   confirmBtnText: { 
     color: COLORS.blanco, 
-    fontSize: 16, 
-    fontWeight: 'bold' 
+    fontSize: 14, 
+    fontWeight: '600' 
+  },
+  btnAccion: {
+    flex: 1,
+    paddingVertical: 10, // Un alto más compacto
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelBtn: { 
     backgroundColor: COLORS.rojito, 

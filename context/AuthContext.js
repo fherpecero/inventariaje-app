@@ -50,70 +50,74 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let unsubscribeCuenta = null;
 
-    // 🚀 NUEVO: Temporizador de rescate (Failsafe) para el bug de Android
+    // 🚀 FAILSAFE GLOBAL: Cubre tanto Auth como Firestore.
+    // Si en 7 segundos no hemos resuelto la sesión Y los datos, forzamos la entrada.
     const failsafeTimeout = setTimeout(() => {
-      console.warn('⚠️ Firebase no respondió a tiempo. Forzando entrada...');
-      setLoading(false); // Apagamos la carga a la fuerza
-    }, 3000);
+      console.warn('⚠️ [TIMEOUT CRÍTICO] Firebase (Auth/Firestore) se colgó. Abortando loader...');
+      setLoading(false); 
+    }, 7000);
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      clearTimeout(failsafeTimeout);
-      // Limpiar suscripción previa a /cuentas si existía
+      // Limpiar suscripción previa a /cuentas si existía en un hot-reload
       if (unsubscribeCuenta) {
         unsubscribeCuenta();
         unsubscribeCuenta = null;
-        
       }
 
       try {
         setLoading(true);
 
         if (!currentUser) {
-          console.log('❌ No hay usuario autenticado');
+          console.log('❌ No hay usuario autenticado (Lanzamiento en blanco)');
           setUser(null);
           setUserData(null);
           setCuenta(null);
           setCuentaId(null);
           setAuthError(null);
+          
+          clearTimeout(failsafeTimeout); // ✅ Seguro cancelar: apagamos loader
           setLoading(false);
           return;
         }
 
-        console.log('👤 Usuario detectado en Auth:', currentUser.uid);
+        console.log('👤 Usuario detectado en Auth (posible sesión fantasma):', currentUser.uid);
         setUser(currentUser);
 
         if (!db) {
           console.error("❌ Firestore no está disponible");
+          clearTimeout(failsafeTimeout);
           setLoading(false);
           return;
         }
 
         // 1. Cargar Perfil de Usuario (/usuarios/{uid})
+        // ⚠️ Aquí es donde las instalaciones nuevas suelen colgarse. El timeout nos protege.
         const usuarioDocRef = doc(db, 'usuarios', currentUser.uid);
         const usuarioDocSnap = await getDoc(usuarioDocRef);
 
         if (!usuarioDocSnap.exists()) {
           console.warn('⚠️ No existe documento de usuario en /usuarios');
+          clearTimeout(failsafeTimeout);
           setLoading(false);
           return;
         }
 
         const dataUser = usuarioDocSnap.data();
         
-        // Asignamos el objeto userData estandarizado
         setUserData({
           uid: currentUser.uid,
           email: dataUser.email || currentUser.email,
           nombre: dataUser.nombre || currentUser.displayName || dataUser.email?.split('@')[0] || 'Usuario',
-          rol: dataUser.rol || 'user', // Default a socio si no existe
+          rol: dataUser.rol || 'user', 
           cuentaId: dataUser.cuentaId,
           suspendido: dataUser.suspendido || false,
         });
 
-        // 2. Verificar suspensión de cuenta
+        // 2. Verificar suspensión
         if (dataUser.suspendido === true) {
           console.log('🔒 Usuario suspendido detectado');
           setAuthError('Tu acceso ha sido suspendido. Contacta al administrador de la cuenta.');
+          clearTimeout(failsafeTimeout);
           setLoading(false);
           return;
         }
@@ -121,6 +125,7 @@ export function AuthProvider({ children }) {
         const userCuentaId = dataUser.cuentaId;
         if (!userCuentaId) {
           console.warn('⚠️ El usuario no tiene cuentaId asignado');
+          clearTimeout(failsafeTimeout);
           setLoading(false);
           return;
         }
@@ -136,21 +141,10 @@ export function AuthProvider({ children }) {
             if (cuentaDocSnap.exists()) {
               const cuentaData = cuentaDocSnap.data();
 
-              // 🛡️ LÓGICA INTELIGENTE DE AUTO-DETECCIÓN DE ADMIN:
-              // Si es el dueño de la cuenta (propietarioUid) O su campo rol dice 'admin', es ADMIN.
               const esPropietario = cuentaData.propietarioUid === currentUser.uid;
               const rolFinal = dataUser.rol || (esPropietario ? 'admin' : 'user');
 
-              // Actualizamos el Single Source of Truth con el rol corregido
-              setUserData({
-                uid: currentUser.uid,
-                email: dataUser.email || currentUser.email,
-                nombre: dataUser.nombre || currentUser.displayName || dataUser.email?.split('@')[0] || 'Usuario',
-                rol: rolFinal, // 👈 Rol auto-detectado sin errores
-                cuentaId: userCuentaId,
-                suspendido: dataUser.suspendido || false,
-              });
-
+              setUserData(prev => ({ ...prev, rol: rolFinal }));
               setCuentaId(userCuentaId);
               setCuenta(cuentaData);
 
@@ -161,15 +155,18 @@ export function AuthProvider({ children }) {
               }
 
               setAuthError(null);
-              setLoading(false); // ✅ Apagamos el loader cuando todo está listo
+              clearTimeout(failsafeTimeout); // ✅ ÉXITO TOTAL: Socket conectado y datos recibidos.
+              setLoading(false); 
             } else {
               setAuthError("No se encontró la información de la cuenta asociada.");
+              clearTimeout(failsafeTimeout);
               setLoading(false);
             }
           },
           (error) => {
             console.error("❌ Error de permisos en la cuenta:", error.message);
-            setAuthError("Error de seguridad: Tus permisos están desincronizados. Por favor, cierra sesión y reintenta.");
+            setAuthError("Error de seguridad: Tus permisos están desincronizados. Cierra sesión y reintenta.");
+            clearTimeout(failsafeTimeout);
             setLoading(false);
           }
         );
@@ -177,11 +174,13 @@ export function AuthProvider({ children }) {
       } catch (error) {
         console.error('❌ Error en AuthStateChanged:', error);
         setAuthError(error.message);
+        clearTimeout(failsafeTimeout);
         setLoading(false);
       }
     });
 
     return () => {
+      clearTimeout(failsafeTimeout); // Prevención de fugas de memoria al desmontar
       if (unsubscribeCuenta) unsubscribeCuenta();
       unsubscribeAuth();
     };
