@@ -2,7 +2,7 @@
   "expo": {
     "name": "Inventariaje",
     "slug": "inventariaje-app",
-    "version": "2.3.3",
+    "version": "2.4.0",
     "orientation": "portrait",
     "icon": "./assets/newlogo.png",
     "splash": {
@@ -15,7 +15,7 @@
     ],
     "android": {
       "package": "com.fherpecero.inventariajeapp",
-      "versionCode": 7,
+      "versionCode": 8,
       "icon": "./assets/newlogo.png"
     },
     "extra": {
@@ -27,7 +27,15 @@
       "@react-native-community/datetimepicker",
       "expo-status-bar",
       "expo-sharing",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      [
+      "expo-build-properties",
+      {
+          "android": {
+            "enableProguardInReleaseBuilds": true
+          }
+      }
+    ]
     ],
     "owner": "fherpecero",
     "ios": {

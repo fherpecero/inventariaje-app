@@ -281,12 +281,12 @@ export default function ExistenciasScreen({
 
   if (loading && productos.length === 0) {
     return (
-      <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+      <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
         <View style={GLOBAL_STYLES.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.turquesa} />
           <Text style={GLOBAL_STYLES.loaderText}>Cargando existencias...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 

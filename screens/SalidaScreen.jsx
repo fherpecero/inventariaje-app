@@ -280,6 +280,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     const salidaRef = collection(db, 'cuentas', cuentaIdTarget.toString(), 'salidas');
     const tieneSaldoPendiente = pagoSaldoPor === 'pendiente';
     const ahora = new Date();
+    const timestampCompleto = ahora.toISOString(); // Ej: "2026-08-05T14:30:00.000Z"
+      const fechaCortaISO = timestampCompleto.split('T')[0]; // Ej: "2026-08-05"
 
     // 🧠 MÉTRICAS PRE-CALCULADAS PARA ANALYTICS
     // 1. Volumen de items (para no iterar arrays en el dashboard)
@@ -449,7 +451,9 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
     try {
       const totales = calcularTotales();
-      const ahora = new Date();
+      const ahora = new Date(); 
+      const timestampCompleto = ahora.toISOString();
+      const fechaCortaISO = timestampCompleto.split('T')[0];
       
       // 🛡️ Cargamos el catálogo para tener los costos en memoria
       const productosLocales = getProductosActivos();
@@ -482,11 +486,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           piezasConDescuento: nuevasPiezasConDescuento, 
           codigo: item.codigo, 
           consumoBono: esConsumoBono,
-          updatedAt: ahora.toISOString(),
+          updatedAt: timestampCompleto,
         };
       }
 
-      await setDoc(inventarioRef, { productos: productosActualizados, updatedAt: ahora.toISOString() }, { merge: true });
+      await setDoc(inventarioRef, { productos: productosActualizados, updatedAt: timestampCompleto }, { merge: true });
 
       const salidaRef = collection(db, 'cuentas', cuentaId.toString(), 'salidas');
       const escanerJSON = await AsyncStorage.getItem('escanerActual');
@@ -509,17 +513,14 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           descuentoPorcentaje: parseFloat(descuentoPorcentaje) || 0,
           descuentoMonto: totales.montoDescuento / carrito.length,
           total: (item.precioVenta * item.cantidad) - (totales.montoDescuento / carrito.length),
-          
-          // 💰 AQUÍ "CONGELAMOS" EL COSTO PARA ANALYTICS
           costoUnitarioReal: costoUnitarioBase,
           costoTotalVenta: costoTotalLinea,
-
           cliente: cliente || 'Sin cliente',
           tipoPago: tipoPago,
           consumoBono: esConsumoBono,
           usuario: user.email,
-          fecha: ahora.toLocaleDateString('es-MX'),
-          timestamp: ahora.toISOString(),
+          fecha: fechaCortaISO,
+          timestamp: timestampCompleto,
           escanerId: escanerActualActualizado?.id || null,
           nombreEvento: escanerActualActualizado?.evento || null,
           escanerFecha: escanerActualActualizado?.fechaFormato || null,
@@ -578,7 +579,9 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
     try {
       const totales = calcularTotales();
-      const ahora = new Date();
+      const ahora = new Date(); // 👈 ¡Debe ser un Date puro, sin el .toISOString() aquí!
+      const timestampCompleto = ahora.toISOString();
+      const fechaCortaISO = timestampCompleto.split('T')[0];
 
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
       const docSnap = await getDoc(inventarioRef);
@@ -593,11 +596,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           cantidad: cantidadActual - item.cantidad,
           codigo: item.codigo,
           nombre: item.nombre,
-          updatedAt: ahora.toISOString(),
+          updatedAt: timestampCompleto,
         };
       }
 
-      await setDoc(inventarioRef, { productos: productosActualizados, updatedAt: ahora.toISOString() }, { merge: true });
+      await setDoc(inventarioRef, { productos: productosActualizados, updatedAt: timestampCompleto }, { merge: true });
 
       const escanerJSON = await AsyncStorage.getItem('escanerActual');
       let escanerActualActualizado = escanerJSON ? JSON.parse(escanerJSON) : null;
@@ -618,8 +621,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           cliente: creditoClienteNombre,
           tipoPago: 'crd',
           usuario: user.email,
-          fecha: ahora.toLocaleDateString('es-MX'),
-          timestamp: ahora.toISOString(),
+          fecha: fechaCortaISO,
+          timestamp: timestampCompleto,
           escanerId: escanerActualActualizado?.id || null,
           nombreEvento: escanerActualActualizado?.evento || null,
           escanerFecha: escanerActualActualizado?.fechaFormato || null,
@@ -630,18 +633,28 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       }
 
       const creditoRef = collection(db, 'cuentas', cuentaId.toString(), 'creditos');
+      
+      // 📅 Convertimos la fecha elegida en el modal a formato ISO (YYYY-MM-DD)
+      const fechaPtpISO = creditoFechaPTP instanceof Date 
+        ? creditoFechaPTP.toISOString().split('T')[0] 
+        : creditoFechaPTP; // Fallback por si acaso ya era un string
+
       const creditoDoc = {
         clienteNombre: creditoClienteNombre,
         monto: totales.total,
-        fechaPTP: creditoFechaPTP,
+        
+        // 🚀 AQUÍ APLICAMOS LA FECHA EN FORMATO ISO
+        fechaPTP: fechaPtpISO, 
+        
         notas: creditoNotas,
         estado: 'pendiente',
         ventasIds: ventasIds,
-        timestamp: ahora,
+        timestamp: timestampCompleto, // Aseguramos que también el timestamp sea ISO text, no un Date object
         creadorEmail: user.email,
         creadoPorUid: user.uid,
         creadoPorNombre: userData?.nombre || user.email,
       };
+      
       await addDoc(creditoRef, creditoDoc);
 
       if (escanerActualActualizado) {
@@ -1186,21 +1199,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
               onDateChange={(nuevaFecha) => setCreditoFechaPTP(nuevaFecha)}
               containerStyle={styles.formGroup}
             />
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={creditoFechaPTP}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onValueChange={(event, selectedDate) => {
-                  if (selectedDate) {
-                    setCreditoFechaPTP(selectedDate);
-                    setShowDatePicker(false); 
-                  }
-                }}
-              />
-            )}
-
+            
             <View style={styles.formGroup}>
               <Text style={styles.label}>Notas (opcional):</Text>
               <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} placeholder="Ej: Pagar después del 15" value={creditoNotas} onChangeText={setCreditoNotas} multiline={true} editable={!loading} />

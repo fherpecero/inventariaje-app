@@ -48,6 +48,9 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   const [costoTotalCalculado, setCostoTotalCalculado] = useState(0); 
   const [costoTotalFinal, setCostoTotalFinal] = useState(''); 
   const [porcentajeDescuento, setPorcentajeDescuento] = useState(0);
+  const ahora = new Date();
+      const timestampCompleto = ahora.toISOString(); // Ej: "2026-08-05T14:30:00.000Z"
+      const fechaCortaISO = timestampCompleto.split('T')[0]; 
 
   const isMountedRef = useRef(true);
 
@@ -101,6 +104,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           cantidad: stockActual,
           categoria: catalogo.categoria,
           bonoInfluencer: false,
+          timestamp: new Date()
         };
       });
 
@@ -237,23 +241,25 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       await runTransaction(db, async (transaction) => {
         const cuentaDoc = await transaction.get(cuentaRef);
         const nuevoFolio = (cuentaDoc.data()?.ultimoFolioEntrada || 0) + 1;
+        const folioString = `ENT-${nuevoFolio}`;
         
-        const nuevaEntradaRef = doc(db, `cuentas/${cuentaId}/entradas`, `ENT-${nuevoFolio}`);
-        const analyticsRef = doc(db, `cuentas/${cuentaId}/analytics`, `ENT-${nuevoFolio}`);
+        const nuevaEntradaRef = doc(db, `cuentas/${cuentaId}/entradas`, folioString);
+        const analyticsRef = doc(db, `cuentas/${cuentaId}/analytics`, folioString);
         
         const inventarioSnap = await transaction.get(inventarioRef);
         let productosActuales = inventarioSnap.exists() ? (inventarioSnap.data().productos || {}) : {};
 
         pedido.forEach(item => {
-          const cantidadActual = productosActuales[item.id]?.cantidad || 0;
-          const piezasDescuentoActuales = productosActuales[item.id]?.piezasConDescuento || 0;
-          const infoPrevia = productosActuales[item.id] || {}; 
+          const id = item.id;
+          const cantidadActual = productosActuales[id]?.cantidad || 0;
+          const piezasDescuentoActuales = productosActuales[id]?.piezasConDescuento || 0;
+          const infoPrevia = productosActuales[id] || {}; 
           
-          productosActuales[item.id] = {
+          productosActuales[id] = {
             ...infoPrevia,
-            cantidad: cantidadActual + item.cantidad,
+            cantidad: cantidadActual + Number(item.cantidad),
             piezasConDescuento: item.bonoInfluencer 
-                ? (piezasDescuentoActuales + item.cantidad) 
+                ? (piezasDescuentoActuales + Number(item.cantidad)) 
                 : piezasDescuentoActuales,
             codigo: item.codigo || 'S/N',
             nombre: item.nombre || 'Desconocido',
@@ -261,6 +267,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           };
         });
 
+        // 4. PREPARAR EL TICKET PARA ANALYTICS
         const pedidoLimpio = pedido.map(item => ({
           id: item.id || '',
           codigo: item.codigo || '',
@@ -275,12 +282,12 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           folio: nuevoFolio,
           fecha: new Date().toISOString(),
           productos: pedidoLimpio,
-          costoBase: costoTotalCalculado || 0,
-          costoPagado: parseFloat(costoTotalFinal) || costoTotalCalculado || 0,
+          costoBase: Number(costoTotalCalculado) || 0,
+          costoPagado: parseFloat(costoTotalFinal) || Number(costoTotalCalculado) || 0,
           descuentoAplicado: parseFloat(porcentajeDescuento) || 0,
-          ahorroMonetario: (costoTotalCalculado - (parseFloat(costoTotalFinal) || costoTotalCalculado)) || 0,
+          ahorroMonetario: (Number(costoTotalCalculado) - (parseFloat(costoTotalFinal) || Number(costoTotalCalculado))) || 0,
           creadoPorUid: user.uid || 'sistema',
-          creadoPorNombre: user.email,
+          creadoPorNombre: user.displayName || user.email || 'Usuario',
           registradoPor: user.uid || 'sistema',
         };
 
@@ -291,6 +298,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
         
         // El espejo siempre se guarda para nutrir la base de datos
         transaction.set(analyticsRef, { tipoMovimiento: 'ENTRADA_RESTOCK', ...ordenEntrada });
+        transaction.update(cuentaRef, { ultimoFolioEntrada: nuevoFolio });
         });
 
       setPedido([]);
@@ -544,7 +552,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                 Total pagado:
               </Text>
               <Text style={styles.resumenTextoSub}>
-                (Bono influencer, bono de lealtad, etc...)
+                (Descuentos adicionales, bono de lealtad, etc...)
               </Text>
               
               {/* AQUÍ ESTÁ EL INPUT QUE FALLABA */}

@@ -30,6 +30,9 @@ import ExistenciasScreen from './screens/ExistenciasScreen';
 import MembersScreen from './screens/MembersScreen';
 import ClientesScreen from './screens/ClientesScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
+import UpgradeScreen from './screens/UpgradeScreen';
+import HelpScreen from './screens/HelpScreen';
+import AlertasScreen from './screens/AlertasScreen';
 
 // Importar items de Diseño
 import HomeIcon from './assets/icons/IconHome.svg';
@@ -176,7 +179,21 @@ function AppContent() {
           onNavigate={setPage} 
           darkMode={darkMode} 
           themeColors={themeColors} 
+          onDarkModeChange={toggleDarkMode}
         />
+      )}
+      {page === 'upgrade' && (
+        <UpgradeScreen onNavigate={setPage} 
+        darkMode={darkMode} 
+        onDarkModeChange={toggleDarkMode}
+        themeColors={themeColors} />
+      )}
+      
+      {page === 'ayuda' && (
+        <HelpScreen onNavigate={setPage} 
+        darkMode={darkMode} 
+        onDarkModeChange={toggleDarkMode}
+        themeColors={themeColors} />
       )}
       {/* PANTALLAS PREMIUM */}
       {page === 'clientes' && (
@@ -197,7 +214,11 @@ function AppContent() {
       )}
       
       {page === 'alertas' && (
-        <AlertasPlaceholder onNavigate={setPage} themeColors={themeColors} />
+        <AlertasScreen
+        onNavigate={setPage} 
+        darkMode={darkMode}
+        themeColors={themeColors} 
+        />
       )}
       {page === 'inventario' && (
         <InventarioPlaceholder onNavigate={setPage} themeColors={themeColors} />

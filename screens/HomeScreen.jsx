@@ -20,41 +20,11 @@ import { AuthContext } from '../context/AuthContext';
 import ModalRegistroEscaner from '../components/ModalRegistroEscaner';
 import ModalExchange from '../components/ModalExchange';
 import ModalFeedback from '../components/ModalFeedback';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 // ICONS
 import MenuIcon from '../assets/icons/IconMenu.svg';
 
-
-LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
-
-// ==========================================
-// CONSTANTES Y THEME
-// ==========================================
-const COLORS = {
-  turquesa: '#24c5c5',
-  blanco: '#fff',
-  negro: '#000',
-  gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#f44336',
-  naranja: '#FF9800',
-  morado: '#7e2b8d',
-  grey: '#565656',
-};
-
-const FONT_SIZES = {
-  titulo: 40,
-  subtitulo: 20,
-  normal: 16,
-  pequeño: 14,
-};
-
-const SPACING = {
-  header_padding: 40,
-  content_padding: 15,
-  bottom_padding: 30,
-  btn_padding: 15,
-};
 
 export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   // ==========================================
@@ -86,9 +56,77 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   const [effectiveTier, setEffectiveTier] = useState('basic');
   const [trialInfo, setTrialInfo] = useState(null);
 
-  // ESTADOS Y EFECTO: Buzón de Intercambios
+  // Notificaciones
+  const [generalNotificationsModal, setGeneralNotificationsModal] = useState(false);
   const [peticionesBuzon, setPeticionesBuzon] = useState([]);
   const [modalBuzonVisible, setModalBuzonVisible] = useState(false);
+  const [conteoAlertasStock, setConteoAlertasStock] = useState(0);
+
+  const [avisosApp, setAvisosApp] = useState([]);
+
+    // ==========================================
+    // EFECTO: Escuchar Avisos Globales de la App
+    // ==========================================
+    useEffect(() => {
+      // Escuchamos una colección pública donde tú (el admin) pondrás los anuncios
+      const avisosRef = collection(db, 'avisos_globales');
+      
+      const q = query(avisosRef, where('activo', '==', true));
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const avisos = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        if (isMountedRef.current) setAvisosApp(avisos);
+      }, (error) => {
+        console.log("🔇 Error leyendo avisos globales:", error.code);
+      });
+
+      return () => unsubscribe();
+    }, []);
+
+  // ==========================================
+  // 🧮 CEREBRO DEL CENTRO DE NOTIFICACIONES
+  // ==========================================
+  
+  // 1. CRÉDITOS: Calculamos créditos que vencen mañana, hoy, o ya vencieron
+  const creditosPorVencer = creditosPendientes.filter(credito => {
+    if (!credito.fechaPTP) return false;
+    const fechaPromesa = credito.fechaPTP.seconds ? new Date(credito.fechaPTP.seconds * 1000) : new Date(credito.fechaPTP);
+    const hoy = new Date();
+    hoy.setHours(0,0,0,0);
+    fechaPromesa.setHours(0,0,0,0);
+    return ((fechaPromesa - hoy) / (1000 * 60 * 60 * 24)) <= 1; 
+  });
+  const conteoCreditosAlertas = creditosPorVencer.length;
+
+  // 2. TRIAL VERSION: Avisar cuando falten 5 días o menos
+  let alertaTrial = null;
+  if (trialInfo?.isActive) {
+    // 🛡️ Aseguramos que sea un número entero perfecto (ej. 5.01 se vuelve 5)
+    const diasFaltantes = Math.round(Number(trialInfo.daysRemaining));
+    
+    // Mejor UX: Prende la campana si faltan 5 días o menos y la mantiene hasta que pague
+    if (diasFaltantes <= 5 && diasFaltantes > 0) {
+      alertaTrial = {
+        dias: diasFaltantes,
+        mensaje: diasFaltantes === 1 
+          ? '¡Último día de Premium gratis! Actualiza ahora para no perder acceso.' 
+          : `Tu prueba Premium expira en ${diasFaltantes} días. Actualiza tu plan pronto.`
+      };
+    }
+  }
+
+  // 3. SUMA TOTAL (Para encender la campanita)
+  const totalNotificaciones = 
+    peticionesBuzon.length + 
+    (conteoAlertasStock || 0) + 
+    conteoCreditosAlertas + 
+    (alertaTrial ? 1 : 0) + 
+    avisosApp.length;
+
+  const hayNotificaciones = totalNotificaciones > 0;
 
   useEffect(() => {
     if (loadingAuth || !user || !cuentaId) return;
@@ -111,6 +149,38 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
 
     return () => unsubscribe();
   }, [cuentaId, user, loadingAuth]);
+
+  // Escuchar el inventario en tiempo real para calcular alertas activas
+  useEffect(() => {
+    if (!cuentaId) return;
+
+    const inventarioRef = doc(db, 'cuentas', String(cuentaId), 'inventarios', 'vital_health_principal');
+    
+    const unsubscribe = onSnapshot(inventarioRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const productosMap = docSnap.data().productos || {};
+        let contador = 0;
+
+        // Recorremos los productos del objeto
+        Object.values(productosMap).forEach(prod => {
+          const stockActual = Number(prod.cantidad) || 0;
+          const limiteMinimo = Number(prod.limiteStock) || 0;
+
+          // Si hay límite configurado (> 0) y el stock actual cayó por debajo o igual al límite:
+          if (limiteMinimo > 0 && stockActual <= limiteMinimo) {
+            contador++;
+          }
+        });
+
+        setConteoAlertasStock(contador);
+      } else {
+        setConteoAlertasStock(0);
+      }
+    }, (err) => console.log("Error leyendo alertas:", err));
+
+    return () => unsubscribe();
+  }, [cuentaId]);
+
 
   // ==========================================
   // EFECTOS DE CICLO DE VIDA
@@ -358,6 +428,25 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
     onNavigate(screen);
   };
 
+  const handleMenuNavigation = (accion, requierePremium) => {
+    // 1. Cerramos el menú siempre para una sensación ágil
+    setMenuVisible(false); 
+
+    // 2. Evaluamos si es un feature bloqueado
+    if (requierePremium && effectiveTier !== 'premium') {
+      // 🎣 ¡Carnada exitosa! Lo mandamos directo a comprar
+      onNavigate('upgrade'); 
+    } else {
+      // 3. Ejecutar acción (con un micro-retraso para que el menú termine de cerrarse)
+      setTimeout(() => {
+        if (accion === 'escaner') setModalEventoVisible(true);
+        else if (accion === 'feedback') setModalFeedbackVisible(true);
+        else onNavigate(accion);
+      }, 300);
+    }
+  };
+
+
   // ==========================================
   // RENDER PANTALLAS DE CARGA
   // ==========================================
@@ -390,18 +479,22 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             <TouchableOpacity
               style={[
                 styles.bellButton,
-                peticionesBuzon.length > 0 ? styles.bellButtonActive : styles.bellButtonInactive
+                hayNotificaciones ? styles.bellButtonActive : styles.bellButtonInactive
               ]}
-              onPress={() => setModalBuzonVisible(true)}
+              // Por ahora, lo mandamos a un selector o seguimos abriendo el modal de buzon
+              onPress={() => setGeneralNotificationsModal(true)} 
             >
               <Ionicons 
-                name={peticionesBuzon.length > 0 ? "notifications" : "notifications-outline"} 
+                name={hayNotificaciones ? "notifications" : "notifications-outline"} 
                 size={22} 
-                color={peticionesBuzon.length > 0 ? COLORS.blanco : COLORS.grey} 
+                color={hayNotificaciones ? COLORS.blanco : COLORS.grey} 
               />
-              {/* Badge (Puntito rojo) */}
-              {peticionesBuzon.length > 0 && (
-                <View style={styles.bellBadge} />
+              {/* Badge (Puntito rojo o bolita con número) */}
+              {hayNotificaciones && (
+                <View style={styles.bellBadge}>
+                  {/* Opcional: Si quieres mostrar el número total de alertas adentro del puntito 
+                  <Text style={{color: 'white', fontSize: 9, fontWeight: 'bold'}}>{totalNotificaciones}</Text>*/}
+                </View>
               )}
             </TouchableOpacity>
           
@@ -527,16 +620,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                       <Text style={[styles.eventoValue, { color: themeColors.text }]}>{eventoActivo.escaneos} px</Text>
                     </View>  
 
-                    {/* // == logica compleja, desarrollo despues: traer al card el total de ventas del evento */}
-                    {/* <View style={styles.eventoDetailRow}>
-                      <Text style={[styles.eventoLabel, { color: themeColors.textSecondary }]}>Ventas:</Text>
-                      <Text style={[styles.eventoValue, { color: themeColors.text }]}>${ventasProductos.toFixed(2)}</Text>
-                    </View>
-
-                    <View style={styles.eventoDetailRow}>
-                      <Text style={[styles.eventoLabel, { color: themeColors.textSecondary, fontWeight: 'bold' }]}>TOTAL EVENTO:</Text>
-                      <Text style={styles.eventoValueMoney}>${totalGlobal.toFixed(2)}</Text>
-                    </View> */}
                   </View>
                 );
               })()}
@@ -659,7 +742,11 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         )}
       </ScrollView>
 
-      {/* MODAL REGISTRO DE ESCÁNER */}
+      {/* ========================================== */}
+      {/* 🔔 MODALES Y OVERLAYS */}
+      {/* ========================================== */}
+
+      {/* REGISTRO DE ESCÁNER */}
       <ModalRegistroEscaner
         visible={modalEventoVisible}
         onClose={() => setModalEventoVisible(false)}
@@ -679,6 +766,131 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         miCuentaId={cuentaId}
         miEmail={user?.email}
       />
+
+      {/* ========================================== */}
+      {/* 🔔 CENTRO DE NOTIFICACIONES IN-APP UNIFICADO */}
+      {/* ========================================== */}
+      <Modal
+        visible={generalNotificationsModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setGeneralNotificationsModal(false)}
+      >
+        <TouchableOpacity 
+          style={GLOBAL_STYLES.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setGeneralNotificationsModal(false)}
+        >
+          <View style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg, marginTop: '20%', maxHeight: '80%' }]}>
+            <Text style={[GLOBAL_STYLES.textPrimary, { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' }]}>
+              Centro de Notificaciones
+            </Text>
+
+            {/* Envolvemos en ScrollView por si se juntan muchas notificaciones */}
+            <ScrollView showsVerticalScrollIndicator={false}>
+
+              {/* 📢 1. AVISOS DE LA APP (Novedades) */}
+              {avisosApp.map(aviso => (
+                <View key={aviso.id} style={[styles.notificationOptionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>📢</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold', color: '#1D4ED8' }]}>{aviso.titulo}</Text>
+                    <Text style={[GLOBAL_STYLES.textSecondary, { fontSize: 13 }]}>{aviso.mensaje}</Text>
+                  </View>
+                </View>
+              ))}
+
+              {/* ⏳ 2. VENCIMIENTO DEL TRIAL (Solo si faltan 7 días o menos) */}
+              {alertaTrial && (
+                <TouchableOpacity 
+                  style={[styles.notificationOptionBtn, { backgroundColor: '#FEF9C3', borderColor: '#FDE047' }]}
+                  onPress={() => {
+                    setGeneralNotificationsModal(false);
+                    onNavigate('upgrade');
+                  }}
+                >
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>⏳</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold', color: '#A16207' }]}>Atención con tu Plan</Text>
+                    <Text style={[GLOBAL_STYLES.textSecondary, { fontSize: 13, color: '#A16207' }]}>{alertaTrial.mensaje}</Text>
+                  </View>
+                  <Text style={{ fontSize: 18, color: '#A16207' }}>›</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* 🔁 3. INTERCAMBIOS PENDIENTES */}
+              {peticionesBuzon.length > 0 && (
+                <TouchableOpacity 
+                  style={[styles.notificationOptionBtn, { backgroundColor: '#E0F2FE' }]}
+                  onPress={() => {
+                    setGeneralNotificationsModal(false);
+                    setTimeout(() => setModalBuzonVisible(true), 150);
+                  }}
+                >
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>🔁</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>Intercambios Pendientes</Text>
+                    <Text style={GLOBAL_STYLES.textSecondary}>Tienes {peticionesBuzon.length} solicitudes de socios.</Text>
+                  </View>
+                  <View style={styles.badgeMini}><Text style={styles.badgeMiniText}>{peticionesBuzon.length}</Text></View>
+                </TouchableOpacity>
+              )}
+
+              {/* 📦 4. ALERTAS DE RESTOCK */}
+              {conteoAlertasStock > 0 && (
+                <TouchableOpacity 
+                  style={[styles.notificationOptionBtn, { backgroundColor: '#FEF2F2' }]}
+                  onPress={() => {
+                    setGeneralNotificationsModal(false);
+                    onNavigate('alertas'); 
+                  }}
+                >
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>📦</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>Alertas de Bajo Stock</Text>
+                    <Text style={GLOBAL_STYLES.textSecondary}>{conteoAlertasStock} productos requieren restock.</Text>
+                  </View>
+                  <View style={[styles.badgeMini, { backgroundColor: '#DC2626' }]}><Text style={styles.badgeMiniText}>{conteoAlertasStock}</Text></View>
+                </TouchableOpacity>
+              )}
+
+              {/* 💳 5. CRÉDITOS POR VENCER (Solo Premium) */}
+              {conteoCreditosAlertas > 0 && effectiveTier === 'premium' && (
+                <TouchableOpacity 
+                  style={[styles.notificationOptionBtn, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}
+                  onPress={() => {
+                    setGeneralNotificationsModal(false);
+                    onNavigate('clientes');
+                  }}
+                >
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>💳</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>Cobros por Vencer</Text>
+                    <Text style={GLOBAL_STYLES.textSecondary}>{conteoCreditosAlertas} crédito(s) vencen pronto o están vencidos.</Text>
+                  </View>
+                  <View style={[styles.badgeMini, { backgroundColor: '#D97706' }]}><Text style={styles.badgeMiniText}>{conteoCreditosAlertas}</Text></View>
+                </TouchableOpacity>
+              )}
+
+              {/* ESTADO VACÍO (Si el usuario abre la campana sin notificaciones) */}
+              {!hayNotificaciones && (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 40, marginBottom: 10 }}>✨</Text>
+                  <Text style={[GLOBAL_STYLES.textSecondary, { textAlign: 'center' }]}>Estás al día. No tienes notificaciones pendientes.</Text>
+                </View>
+              )}
+
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={[GLOBAL_STYLES.btnPrimary, { marginTop: 20 }]} 
+              onPress={() => setGeneralNotificationsModal(false)}
+            >
+              <Text style={GLOBAL_STYLES.btnTextPrimary}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* MODAL MENU LATERAL */}
       <Modal
@@ -734,41 +946,33 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>💻</Text>
                       <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Escáner</Text></View>
-                      <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
+                      <Text style={[styles.menuFeatureLockIcon]}>💎</Text>
                     </View>
 
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>📊</Text>
                       <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Analytics</Text></View>
-                      <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
+                      <Text style={[styles.menuFeatureLockIcon]}>💎</Text>
                     </View>
 
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>👥</Text>
                       <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Clientes</Text></View>
-                      <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
+                      <Text style={[styles.menuFeatureLockIcon]}>💎</Text>
                     </View>
 
                     <View style={[styles.menuFeatureItemLocked, { backgroundColor: themeColors.border }]}>
                       <Text style={styles.menuItemIcon}>💳</Text>
                       <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.textSecondary, opacity: 0.6 }]}>Créditos</Text></View>
-                      <Text style={[styles.menuFeatureLockIcon]}>🔒</Text>
+                      <Text style={[styles.menuFeatureLockIcon]}>💎</Text>
                     </View>
 
-                    <TouchableOpacity style={[styles.upgradeBtn, { backgroundColor: COLORS.morado }]} onPress={() => handleNavigation('planes')}>
+                    <TouchableOpacity style={[styles.upgradeBtn, { backgroundColor: COLORS.morado }]} onPress={() => handleNavigation('upgrade')}>
                       <Text style={styles.upgradeBtnText}>⬆️ Upgrade a Premium</Text>
                     </TouchableOpacity>
                   </>
                 )}
               </View>
-
-              <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
-
-              <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('logout')}>
-                <Text style={styles.menuItemIcon}>🚪</Text>
-                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Cerrar Sesión</Text>
-                <Text style={styles.menuItemArrow}>→</Text>
-              </TouchableOpacity>
 
               <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
 
@@ -788,6 +992,29 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 <Text style={[styles.menuItemText, { color: themeColors.text }]}>
                   Enviar Feedback
                 </Text>
+                <Text style={styles.menuItemArrow}>→</Text>
+              </TouchableOpacity>
+
+              {/* SEPARADOR NUEVO */}
+             {/* } <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} /> */}
+
+              {/* BOTÓN DE GUÍA DE USO NUEVO */}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => handleNavigation('ayuda')}
+              >
+                <Text style={styles.menuItemIcon}>📚</Text>
+                <Text style={[styles.menuItemText, { color: themeColors.text }]}>
+                  Guía de Uso
+                </Text>
+                <Text style={styles.menuItemArrow}>→</Text>
+              </TouchableOpacity>
+              
+              <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
+
+              <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('logout')}>
+                <Text style={styles.menuItemIcon}>🚪</Text>
+                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Cerrar Sesión</Text>
                 <Text style={styles.menuItemArrow}>→</Text>
               </TouchableOpacity>
               
@@ -1077,7 +1304,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: COLORS.morado,
+    backgroundColor: COLORS.verde,
     alignItems: 'center',
   },
   upgradeBtnText: {
@@ -1223,4 +1450,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
+  notificationOptionBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 15,
+  borderRadius: 12,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: '#E2E8F0',
+},
+badgeMini: {
+  backgroundColor: '#0284C7',
+  borderRadius: 12,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  minWidth: 24,
+  alignItems: 'center',
+},
+badgeMiniText: {
+  color: '#FFFFFF',
+  fontSize: 12,
+  fontWeight: 'bold',
+},
 });

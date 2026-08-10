@@ -1,5 +1,22 @@
 # Changelog - Inventariaje App
 
+### version: "2.4.0" - fecha: "2026-08-10",
+    titulo: "Notificaciones, Alertas y Experiencia Premium",
+    descripcion: "Una de las actualizaciones más grandes en UX. Integración de un Centro de Notificaciones In-App, control de stock automatizado y nuevas herramientas para usuarios PRO.",
+    cambios: [
+      "✨ NUEVO: Centro de Notificaciones In-App unificado en HomeScreen.",
+      "✨ NUEVO: Módulo de Alertas de Stock (Exclusivo Premium) para fijar mínimos por producto.",
+      "✨ NUEVO: Pantalla 'HelpScreen' rediseñada como centro de soporte y manuales interactivos.",
+      "✨ NUEVO: Pantalla 'UpgradeScreen' añadida para comparar beneficios del plan Básico vs Premium.",
+      "⚡ MEJORA: El menú lateral fue rediseñado usando una cuadrícula (Grid) y opacidad para funciones no disponibles.",
+      "⚡ MEJORA: Algoritmo de 'Búsqueda Flexible' en inventarios que escanea por Código, ID o Nombre para prevenir errores de lectura.",
+      "⚡ MEJORA: Sistema de avisos automatizado en HomeScreen para créditos vencidos o a punto de vencer.",
+      "⚡ MEJORA: Alerta inteligente en el Centro de Notificaciones cuando faltan 5, 3 y 1 día para expirar el Trial.",
+      "🛠️ FIX: Corrección de error de base de datos que generaba campos 'undefined' en inventario.",
+      "🛠️ FIX: Actualización de importaciones y variables huérfanas en el sistema de navegación."
+    ]
+
+
 ### [2.3.3] - 2026-08-03
 Hotfix & UI/UX Optimization
 - Refactorización Financiera en EntradaScreen.jsx

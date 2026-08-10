@@ -11,7 +11,6 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -146,16 +145,16 @@ export default function SettingsScreen({
 
   if (loading) {
     return (
-     <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg, justifyContent: 'center' }]}>
+     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg, justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color={COLORS.turquesa} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+    <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <ScreenHeader
-        title="⚙️ Configuranza"
+        title="Configuranza"
         onPress={() => onNavigate('home')}
         themeColors={themeColors}
       />
@@ -276,8 +275,8 @@ export default function SettingsScreen({
               />
             </View>
 
-            {/* Notificaciones Push */}
-            <View
+            {/* Notificaciones y Alertas (Rediseñado como botón de navegación) */}
+            <TouchableOpacity
               style={[
                 styles.settingItem,
                 {
@@ -285,25 +284,32 @@ export default function SettingsScreen({
                   borderColor: themeColors.border,
                 },
               ]}
+              onPress={() => {
+                if (effectiveTier === 'premium') {
+                  onNavigate('alertas');
+                } else {
+                  onNavigate('upgrade');
+                }
+              }}
+              activeOpacity={0.7}
             >
               <View style={styles.settingLeft}>
                 <Text style={styles.settingIcon}>📬</Text>
                 <View style={styles.settingText}>
                   <Text style={[styles.settingLabel, { color: themeColors.text }]}>
-                    Notificaciones Push
+                    Alertas de Inventario
                   </Text>
                   <Text style={[styles.settingDesc, { color: themeColors.textSecondary }]}>
-                    Alertas de inventario bajo
+                    Configurar límites y avisos
                   </Text>
                 </View>
               </View>
-              <Switch
-                value={notificaciones}
-                onValueChange={toggleNotificaciones}
-                trackColor={{ false: '#ddd', true: COLORS.turquesa }}
-                thumbColor={notificaciones ? COLORS.turquesa : '#f4f3f4'}
-              />
-              </View>
+              
+              {/* Flecha indicadora de navegación */}
+              <Text style={{ color: themeColors.textSecondary, fontSize: 20, fontWeight: '300' }}>
+                ›
+              </Text>
+            </TouchableOpacity>
             </View>
 
             {/* Idioma
@@ -376,7 +382,7 @@ export default function SettingsScreen({
                 Compilada: '03/08/2026',
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Uso Bono Influencer/Nuevos productos/ Analytics Optimizado / Minor bug fix
+                Última actualización: Descarga de reportes mejorada | Centro de Notificaciones & bajo stock | Centro de ayuda | Upgrade Screen
               </Text>
             </View>
           </View>
@@ -426,6 +432,13 @@ export default function SettingsScreen({
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     ✓ Descuento por producto (checkout)/Bono influencer (entradas)
                   </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Analytics: mejora de reportes y descarga CSV
+                  </Text>
+                   <Text style={[styles.item, { color: themeColors.text }]}>
+                    ✓ Alertas de Restock personalizables
+                  </Text>
+
                 </View>
               </View>
             </View>
@@ -447,21 +460,13 @@ export default function SettingsScreen({
                 ]}
               >
                 <View style={styles.itemsContainer}>
-                  
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    📈 Analytics: mejora de reportes y descarga CSV
-                  </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     🎨 Mejora de UX 
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     🍏 Desarrollo para iOS
                   </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🔔 Notificaciones avanzadas
-                  </Text>
                 </View>
-
                 <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
                   40% completado - v2.4.0
                 </Text>
@@ -489,9 +494,6 @@ export default function SettingsScreen({
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     💸 Gastos y Viaticos (costos por restock y eventos)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ⚠️ Alertas de Restock automáticas
                   </Text>
                   <Text style={[styles.item, { color: themeColors.text }]}>
                     💳 Integración de Pagos - Stripe/Mercado Pago
@@ -566,7 +568,7 @@ export default function SettingsScreen({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
     
   );
 }

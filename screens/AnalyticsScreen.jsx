@@ -27,6 +27,7 @@ import { getProductosActivos } from '../context/productCatalog';
 import { LineChart, PieChart } from 'react-native-chart-kit';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import ReportsHubModal from '../components/ReportsHubModal';
 
 // Obtenemos el ancho de la pantalla para hacer los gráficos responsivos
 const screenWidth = Dimensions.get('window').width;
@@ -39,29 +40,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
   const [loading, setLoading] = useState(true);
   const [movimientos, setMovimientos] = useState([]);
   const [diasFiltro, setDiasFiltro] = useState(30);
-
-  // 1. Estado único para el Modal Dinámico (sabe cuál reporte está abierto)
-  const [modalReporte, setModalReporte] = useState({
-    visible: false,
-    tipo: null, // 'ventas' | 'restock' | 'escaner' | 'cortesias' | 'bonos'
-  });
-
-  // 2. Estado de ordenamiento dinámico
-  const [sortConfig, setSortConfig] = useState({ key: 'fechaDate', direction: 'desc' });
-
-  // Función para abrir cualquier reporte por su identificador
-  const abrirReporte = (tipo) => {
-    setSortConfig({ key: 'fechaDate', direction: 'desc' }); // Reset al abrir
-    setModalReporte({ visible: true, tipo });
-  };
-
-  // Función para cambiar la dirección o la columna a ordenar
-  const handleSort = (key) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc',
-    }));
-  };
+  const [reportsHubVisible, setReportsHubVisible] = useState(false);
   
   // Cargamos el catálogo local una sola vez
   const productosLocales = getProductosActivos();
@@ -147,7 +126,8 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
         conteoProductos[key] = {
           id: key,
           nombre: p.nombre,
-          cantidad: 0
+          cantidad: 0,
+          costoBase: parseFloat(p.precioCostoStandard || p.costo || p.precioCosto || 0) // 👈 NUEVO
         };
       }
     });
@@ -233,18 +213,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
         const escMonto = parseFloat(mov.ventaTotal) || parseFloat(mov.totalCobrado) || parseFloat(mov.monto) || 0;
         totalEscaneres += escMonto;
 
-        // Costo de productos escaneados (para la ganancia)
-        let costoEsc = 0;
-        if (mov.productos && Array.isArray(mov.productos)) {
-          mov.productos.forEach(item => {
-            const idProd = item.codigo || item.producto || item.id;
-            const prod = productosLocales.find(p => p.codigo === idProd || p.id === idProd);
-            const costoUnitario = prod ? parseFloat(prod.precioCostoStandard || prod.costo || prod.precioCosto || 0) : 0;
-            costoEsc += (costoUnitario * (parseInt(item.cantidad) || 1));
-          });
-        }
-        gananciaRealAcumulada += (escMonto - costoEsc);
-
         if (mov.createdAt || mov.timestamp || mov.fechaISO) {
           const fechaEv = (mov.createdAt || mov.timestamp || mov.fechaISO).split('T')[0];
           ventasPorFecha[fechaEv] = (ventasPorFecha[fechaEv] || 0) + escMonto;
@@ -288,192 +256,8 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
     };
   }, [movimientos, productosLocales, themeColors]);
 
-  // 🧠 CEREBRO DEL DETALLE DE VENTAS TOTALES
-  const ventasDetalladas = useMemo(() => {
-    if (!movimientos || movimientos.length === 0) return [];
 
-    // 1. Filtrar transacciones de venta reales (excluye intercambios y cortesías al 100%)
-    let ventas = movimientos.filter(
-      (mov) =>
-        mov._origen === 'salida' &&
-        mov.tipo !== 'intercambio' &&
-        mov.descuentoPorcentaje !== 100
-    );
-
-    // 2. Mapear y normalizar campos
-    let dataFormateada = ventas.map((v) => {
-      const prodObj = productosLocales.find(
-        (p) => p.codigo === v.codigo || p.id === v.codigo
-      );
-      const productoNombre = prodObj?.nombre || v.producto || 'Producto Generico';
-
-      const fechaTimestamp = new Date(v.timestamp || v.fecha || v.createdAt).getTime();
-      const fechaFormateada = isNaN(fechaTimestamp)
-        ? 'N/A'
-        : new Date(fechaTimestamp).toLocaleDateString('es-MX', {
-            day: '2-digit',
-            month: '2-digit',
-            year: '2-digit',
-          });
-
-      return {
-        id: v.id || `${fechaTimestamp}-${v.codigo}`,
-        fechaDate: fechaTimestamp || 0,
-        fechaFormateada,
-        cliente: v.cliente || 'Sin Cliente',
-        productoNombre,
-        montoReal: Number(v.total || v.monto || 0),
-        esBono: v.consumoBono ? 'Sí' : 'No',
-        registradoPor: v.creadoPorNombre || v.usuario || 'N/A',
-        evento: v.escanerId ? 'Sí' : 'No',
-      };
-    });
-
-    // 3. Ordenamiento dinámico según sortConfig
-    dataFormateada.sort((a, b) => {
-      let aVal = a[sortConfig.key];
-      let bVal = b[sortConfig.key];
-
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
-
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return dataFormateada;
-  }, [movimientos, productosLocales, sortConfig]);
-
-  const CONFIGURACION_REPORTES = {
-    ventas: {
-      titulo: 'Detalle de Ventas Totales',
-      data: ventasDetalladas,
-      nombreArchivo: `Reporte_Ventas_${diasFiltro}dias.csv`,
-      columnas: [
-        { key: 'fechaDate', label: 'Fecha', width: 85, isDate: true },
-        { key: 'cliente', label: 'Cliente', width: 120 },
-        { key: 'productoNombre', label: 'Producto', width: 140 },
-        { key: 'montoReal', label: 'Monto', width: 95, isMoneda: true },
-        { key: 'esBono', label: 'Bono Inf.', width: 80, align: 'center' },
-        { key: 'registradoPor', label: 'Registrado Por', width: 120 },
-        { key: 'evento', label: 'Evento', width: 75, align: 'center' },
-      ],
-    },
-  };
-
-  const descargarReporteActivo = async () => {
-    const configActual = CONFIGURACION_REPORTES[modalReporte.tipo];
-    if (!configActual || !configActual.data || configActual.data.length === 0) {
-      Alert.alert('Reporte Vacío', 'No hay registros en este período para exportar.');
-      return;
-    }
-
-    try {
-      // Encabezados
-      const encabezados = configActual.columnas.map((c) => c.label).join(',') + '\n';
-
-      // Filas
-      const filas = configActual.data
-        .map((item) =>
-          configActual.columnas
-            .map((col) => {
-              let valor = item[col.key];
-              if (col.isMoneda) valor = `$${Number(valor).toFixed(2)}`;
-              if (col.isDate) valor = item.fechaFormateada;
-              // Limpiar comas para evitar romper el formato CSV
-              return `"${String(valor ?? '').replace(/"/g, '""')}"`;
-            })
-            .join(',')
-        )
-        .join('\n');
-
-      const csvContent = encabezados + filas;
-      const fileUri = `${FileSystem.documentDirectory}${configActual.nombreArchivo}`;
-
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      await Sharing.shareAsync(fileUri);
-    } catch (error) {
-      console.error('Error al exportar reporte:', error);
-      Alert.alert('Error', 'No se pudo generar el archivo de reporte.');
-    }
-  };
-
-  // 📄 GENERADOR DE REPORTE CSV GENERAL
-  const generarReporteCSV = async () => {
-    try {
-      if (movimientos.length === 0) {
-        Alert.alert("Sin datos", "No hay movimientos en este período para exportar.");
-        return;
-      }
-
-      // 1. Crear las cabeceras de las columnas
-      let csvString = "Fecha,Origen,Tipo de Movimiento,Ingresos,Gastos,Bonos Consumidos,Cortesias Regladas,Usuario\n";
-
-      // 2. Recorrer los movimientos y crear una fila por cada uno
-      movimientos.forEach(mov => {
-        const fecha = (mov.timestamp || mov.fecha || mov.createdAt || '').split('T')[0];
-        let origen = mov._origen.toUpperCase();
-        let tipo = 'OPERACION NORMAL';
-        let ingreso = 0;
-        let gasto = 0;
-        let bonos = 0;
-        let cortesias = 0;
-        let usuario = mov.creadoPorNombre || mov.usuario || 'N/A';
-
-        // Clasificación lógica
-        if (mov._origen === 'salida') {
-          if (mov.modoIntercambio || mov.tipo === 'intercambio') {
-            tipo = 'INTERCAMBIO';
-          } else {
-            tipo = 'VENTA';
-            ingreso = parseFloat(mov.total) || 0;
-            if (mov.consumoBono) bonos = parseFloat(mov.descuentoMonto) || 0;
-            if (mov.descuentoPorcentaje === 100 || mov.total === 0) {
-              tipo = 'CORTESIA / CONSUMO PROPIO';
-              cortesias = parseFloat(mov.subtotal) || 0;
-            }
-          }
-        } 
-        else if (mov._origen === 'entrada') {
-          tipo = 'GASTO RESTOCK';
-          gasto = parseFloat(mov.costoPagado) || parseFloat(mov.costoBase) || 0;
-        } 
-        else if (mov._origen === 'escaner') {
-          tipo = 'EVENTO ESCANER';
-          ingreso = parseFloat(mov.ventaTotal) || parseFloat(mov.totalCobrado) || parseFloat(mov.monto) || 0;
-        }
-
-        // Agregar la fila al texto principal
-        csvString += `${fecha},${origen},${tipo},${ingreso},${gasto},${bonos},${cortesias},${usuario}\n`;
-      });
-
-      // 3. Crear el archivo físicamente en la memoria caché del teléfono
-      const fileUri = FileSystem.documentDirectory + `Reporte_VitalHealth_${diasFiltro}dias.csv`;
-      await FileSystem.writeAsStringAsync(fileUri, csvString, { 
-        encoding: FileSystem.EncodingType.UTF8 
-      });
-
-      // 4. Invocar el menú nativo para compartir
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Exportar Reporte Contable',
-          UTI: 'public.comma-separated-values-text' 
-        });
-      } else {
-        Alert.alert("Error", "La función de compartir no está disponible en este dispositivo.");
-      }
-
-    } catch (error) {
-      console.error("❌ Error exportando CSV:", error);
-      Alert.alert("Error", "Hubo un problema al generar el reporte.");
-    }
-  };
-
-  // COMPONENTE DE BOTON DE FILTRO
+    // COMPONENTE DE BOTON DE FILTRO
   const FiltroBtn = ({ dias, label }) => (
     <TouchableOpacity 
       style={[
@@ -516,8 +300,8 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
         onPress={() => onNavigate('home')} 
         themeColors={themeColors} 
         rightAction={
-          <TouchableOpacity onPress={generarReporteCSV} style={styles.headerBtnRight}>
-            <Ionicons name="download-outline" size={24} color={themeColors.text} />
+          <TouchableOpacity onPress={() => setReportsHubVisible(true)} style={styles.headerBtnRight}>
+            <Ionicons name="document-text" size={24} color={themeColors.text} />
           </TouchableOpacity>
         }
       />
@@ -541,30 +325,26 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
           <View style={styles.cardsRow}>
             
             {/* CARD: VENTAS TOTALES */}
-            <TouchableOpacity 
+            <View 
               style={[styles.kpiCard, { backgroundColor: themeColors.cardBg }]}
-              onPress={() => abrirReporte('ventas')}
-              activeOpacity={0.7}
             >
               <Ionicons name="cash" size={24} color={COLORS.verde} style={styles.kpiIcon} />
               <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Ventas Totales</Text>
               <Text style={[styles.kpiMonto, { color: themeColors.text }]}>
                 ${(kpis.totalVentas || 0).toFixed(2)}
               </Text>
-            </TouchableOpacity>
+            </View>
             
             {/* CARD: GASTO RESTOCK */}
-            <TouchableOpacity 
+            <View
               style={[styles.kpiCard, { backgroundColor: themeColors.cardBg }]}
-              onPress={() => abrirReporte('restock')}
-              activeOpacity={0.7}
             >
               <Ionicons name="cart" size={24} color={COLORS.rojo} style={styles.kpiIcon} />
               <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Gasto Restock</Text>
               <Text style={[styles.kpiMonto, { color: themeColors.text }]}>
                 ${(kpis.totalGastos || 0).toFixed(2)}
               </Text>
-            </TouchableOpacity>
+            </View>
 
           </View>
 
@@ -594,7 +374,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
             <View style={styles.balanceRow}>
               {/* Columna Ganancia */}
               <View style={styles.balanceCol}>
-                <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Ganancia Real</Text>
+                <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Margen de Ganancia</Text>
                 <Text style={[styles.balanceMonto, { color: kpis.gananciaNeta >= 0 ? COLORS.verde : COLORS.naranja }]}>
                   ${(kpis.gananciaNeta || 0).toFixed(2)}
                 </Text>
@@ -605,7 +385,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
               
               {/* Columna Flujo */}
               <View style={styles.balanceCol}>
-                <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Flujo Efectivo</Text>
+                <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Flujo de Efectivo</Text>
                 <Text style={[styles.balanceMonto, { color: kpis.flujoEfectivo >= 0 ? COLORS.turquesa : COLORS.rojo }]}>
                   ${(kpis.flujoEfectivo || 0).toFixed(2)}
                 </Text>
@@ -702,117 +482,11 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
           <View style={styles.bottomPadding} />
         </ScrollView>
       )}
-
-      {/* ========================================== */}
-      {/* MODAL DINÁMICO ÚNICO DE REPORTES */}
-      {/* ========================================== */}
-      <Modal
-        visible={modalReporte.visible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalReporte({ visible: false, tipo: null })}
-      >
-        {modalReporte.tipo && CONFIGURACION_REPORTES[modalReporte.tipo] && (
-          <View style={GLOBAL_STYLES.modalOverlay}>
-            <View style={styles.modalContenedorTabla}>
-              
-              {/* ENCABEZADO DEL MODAL */}
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitulo}>
-                  {CONFIGURACION_REPORTES[modalReporte.tipo].titulo}
-                </Text>
-                <View style={styles.modalAcciones}>
-                  <TouchableOpacity
-                    onPress={descargarReporteActivo}
-                    style={styles.btnIcono}
-                  >
-                    <Ionicons name="download-outline" size={22} color={COLORS.turquesa} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setModalReporte({ visible: false, tipo: null })}
-                    style={styles.btnIcono}
-                  >
-                    <Ionicons name="close-circle" size={26} color={COLORS.rojo} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* TABLA CON SCROLL HORIZONTAL Y VERTICAL */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                <View>
-                  {/* CABECERA DE COLUMNAS CON ONPRESS PARA ORDENAR */}
-                  <View style={styles.tablaHeaderFila}>
-                    {CONFIGURACION_REPORTES[modalReporte.tipo].columnas.map((col) => {
-                      const estaOrdenando = sortConfig.key === col.key;
-                      const flecha = estaOrdenando
-                        ? sortConfig.direction === 'asc' ? ' ↑' : ' ↓'
-                        : '';
-
-                      return (
-                        <TouchableOpacity
-                          key={col.key}
-                          style={[styles.celdaHeader, { width: col.width }]}
-                          onPress={() => handleSort(col.key)}
-                        >
-                          <Text
-                            style={[
-                              styles.textoHeader,
-                              estaOrdenando && styles.textoHeaderActivo,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {col.label}{flecha}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {/* CUERPO DE DATOS */}
-                  <ScrollView showsVerticalScrollIndicator={true}>
-                    {CONFIGURACION_REPORTES[modalReporte.tipo].data.length === 0 ? (
-                      <View style={styles.vacioContenedor}>
-                        <Text style={styles.vacioTexto}>No hay registros en este período.</Text>
-                      </View>
-                    ) : (
-                      CONFIGURACION_REPORTES[modalReporte.tipo].data.map((item, idx) => (
-                        <View
-                          key={item.id || idx}
-                          style={[
-                            styles.tablaFila,
-                            idx % 2 === 1 && styles.tablaFilaPar,
-                          ]}
-                        >
-                          {CONFIGURACION_REPORTES[modalReporte.tipo].columnas.map((col) => {
-                            let valorTexto = item[col.key];
-                            if (col.isMoneda) valorTexto = `$${Number(valorTexto).toFixed(2)}`;
-                            if (col.isDate) valorTexto = item.fechaFormateada;
-
-                            return (
-                              <Text
-                                key={col.key}
-                                style={[
-                                  styles.celdaTexto,
-                                  { width: col.width, textAlign: col.align || 'left' },
-                                  col.isMoneda && styles.textoMoneda,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {valorTexto ?? 'N/A'}
-                              </Text>
-                            );
-                          })}
-                        </View>
-                      ))
-                    )}
-                  </ScrollView>
-                </View>
-              </ScrollView>
-
-            </View>
-          </View>
-        )}
-      </Modal>
+      <ReportsHubModal 
+        visible={reportsHubVisible} 
+        onClose={() => setReportsHubVisible(false)} 
+        themeColors={themeColors} 
+      />
 
     </View>
   );
