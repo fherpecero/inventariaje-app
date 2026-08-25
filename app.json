@@ -2,7 +2,7 @@
   "expo": {
     "name": "Inventariaje",
     "slug": "inventariaje-app",
-    "version": "2.4.0",
+    "version": "2.5.0",
     "orientation": "portrait",
     "icon": "./assets/newlogo.png",
     "splash": {
@@ -15,7 +15,7 @@
     ],
     "android": {
       "package": "com.fherpecero.inventariajeapp",
-      "versionCode": 8,
+      "versionCode": 9,
       "icon": "./assets/newlogo.png"
     },
     "extra": {

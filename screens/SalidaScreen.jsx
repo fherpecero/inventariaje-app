@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, Alert,
-  ActivityIndicator, ScrollView, FlatList, Modal, Image, Platform,
+  ActivityIndicator, ScrollView, FlatList, Modal, Image, Platform, LogBox
 } from 'react-native';
 import { 
   collection, 
@@ -20,8 +20,7 @@ import DatePickerField from '../components/DatePickerField';
 import SearchBar from '../components/SearchBar';
 import AutocompleteSearchSocios from '../components/AutocompleteSearchSocios';
 import DropdownProductoRecibir from '../components/DropdownProductoRecibir';
-import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, } from '../context/theme';
-import { LogBox, Switch } from 'react-native';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER } from '../context/theme';
 import { getProductosActivos } from '../context/productCatalog'; 
 
 LogBox.ignoreLogs([
@@ -223,7 +222,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     return totalDoy - totalRecibo;
   };
 
-
   const toggleModoIntercambio = () => {
     if (modoIntercambio) {
       setModoIntercambio(false);
@@ -233,7 +231,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       setModoIntercambio(true);
     }
   };
-
 
   // ==========================================
   // HELPERS DE INTERCAMBIO
@@ -270,9 +267,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     return productosActualizados;
   };
 
-  // ==========================================
-  // HELPER: Registrar intercambio en analytics (OPTIMIZADO PARA DASHBOARDS)
-  // ==========================================
   const registrarIntercambioAnalytics = async (cuentaIdTarget, socioId, socioNombre, 
     esManualSocio, productosEnviados, productosRecibidos, totalEnviado, totalRecibido, 
     diferenciaIntercambio, pagoSaldoPor, usuarioEmail
@@ -280,29 +274,25 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     const salidaRef = collection(db, 'cuentas', cuentaIdTarget.toString(), 'salidas');
     const tieneSaldoPendiente = pagoSaldoPor === 'pendiente';
     const ahora = new Date();
-    const timestampCompleto = ahora.toISOString(); // Ej: "2026-08-05T14:30:00.000Z"
-      const fechaCortaISO = timestampCompleto.split('T')[0]; // Ej: "2026-08-05"
+    const timestampCompleto = ahora.toISOString(); 
+    const fechaCortaISO = timestampCompleto.split('T')[0]; 
 
     // 🧠 MÉTRICAS PRE-CALCULADAS PARA ANALYTICS
-    // 1. Volumen de items (para no iterar arrays en el dashboard)
     const cantidadTotalEnviada = productosEnviados.reduce((sum, item) => sum + (item.cantidad || 0), 0);
     const cantidadTotalRecibida = productosRecibidos.reduce((sum, item) => sum + (item.cantidad || 0), 0);
 
-    // 2. Flujo de Caja Real (Separar ingresos de gastos facilita sumar la caja del día)
     let ingresoCaja = 0;
     let gastoCaja = 0;
 
     if (!tieneSaldoPendiente) {
       if (diferenciaIntercambio > 0) {
-        ingresoCaja = diferenciaIntercambio; // Me pagaron la diferencia
+        ingresoCaja = diferenciaIntercambio;
       } else if (diferenciaIntercambio < 0) {
-        gastoCaja = Math.abs(diferenciaIntercambio); // Yo pagué la diferencia
+        gastoCaja = Math.abs(diferenciaIntercambio);
       }
     }
 
-    // 3. Etiqueta de tiempo (Filtros rápidos de mes/año sin procesar fechas complejas)
     const mesAnio = `${ahora.getMonth() + 1}-${ahora.getFullYear()}`;
-
 
     const intercambioDoc = {
       tipo: 'intercambio',
@@ -312,12 +302,12 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       productosEnviados: productosEnviados,
       productosRecibidos: productosRecibidos,
 
-      // 📊 CAMPOS APLANADOS PARA ANALYTICS (NUEVO)
+      // 📊 CAMPOS APLANADOS PARA ANALYTICS 
       cantidadTotalEnviada: cantidadTotalEnviada,
       cantidadTotalRecibida: cantidadTotalRecibida,
       flujoIngreso: ingresoCaja,
       flujoGasto: gastoCaja,
-      mesAnioAnalytics: mesAnio, // Ej: "7-2026"
+      mesAnioAnalytics: mesAnio, 
       
       totalEnviado: totalEnviado,
       totalRecibido: totalRecibido,
@@ -346,14 +336,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       const totalDoy = carrito.reduce((sum, item) => sum + item.precioVenta * item.cantidad, 0);
       const totalRecibo = productoRecibir.reduce((sum, item) => sum + item.precioVentaStandard, 0);
 
-      // ====================================================
-      // FLUJO A: Socio MANUAL (No tiene la app, se guarda directo)
-      // ====================================================
       if (socioIntercambio.esManual) {
         await actualizarInventarioIntercambio(cuentaId, carrito, productoRecibir);
         await registrarIntercambioAnalytics(
           cuentaId,
-          null, // Sin ID
+          null, 
           socioIntercambio.cuentaNombre,
           true,
           carrito.map(item => ({ nombre: item.nombre, codigo: item.codigo, cantidad: item.cantidad, precioUnitario: item.precioVenta, subtotal: item.precioVenta * item.cantidad })),
@@ -363,29 +350,21 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         
         Alert.alert('✅ Éxito', 'Intercambio registrado y actualizado en inventario.');
       } 
-      // ====================================================
-      // FLUJO B: Socio CON APP (Se envía solicitud al buzón)
-      // ====================================================
       else {
         const peticionesRef = collection(db, 'intercambios_pendientes');
         
-        // Armamos el documento del Buzón Neutral
         const solicitudDoc = {
-          estado: 'pendiente', // 'pendiente', 'aceptado', 'rechazado'
+          estado: 'pendiente', 
           
-          // Quién envía (Yo)
           deCuentaId: cuentaId.toString(),
           deCuentaNombre: cuenta.nombre || user.email,
           
-          // Quién recibe (El Socio)
           paraCuentaId: socioIntercambio.cuentaId.toString(),
           paraCuentaNombre: socioIntercambio.cuentaNombre,
           
-          // Lo que ofrezco vs Lo que pido
           productosOfrecidos: carrito.map(item => ({ nombre: item.nombre, codigo: item.codigo, cantidad: item.cantidad, precioVenta: item.precioVenta })),
           productosSolicitados: productoRecibir.map(prod => ({ nombre: prod.nombre, codigo: prod.codigo, cantidad: 1, precioVenta: prod.precioVentaStandard })),
           
-          // Matemática y pagos
           totales: {
             totalOfrecido: totalDoy,
             totalSolicitado: totalRecibo,
@@ -393,7 +372,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           },
           pagoSaldoPor: pagoSaldoPor,
           
-          // Tracking
           creadoPor: user.email,
           timestamp: new Date().toISOString()
         };
@@ -406,7 +384,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         );
       }
 
-      // ✅ LIMPIEZA FINAL (Aplica para ambos flujos)
       if (isMountedRef.current) {
         setCarrito([]);
         setDescuentoPorcentaje('');
@@ -455,7 +432,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       const timestampCompleto = ahora.toISOString();
       const fechaCortaISO = timestampCompleto.split('T')[0];
       
-      // 🛡️ Cargamos el catálogo para tener los costos en memoria
       const productosLocales = getProductosActivos();
 
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
@@ -467,19 +443,15 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       for (let i = 0; i < carrito.length; i++) {
         const item = carrito[i];
         
-        // 1. Obtenemos los valores actuales (o 0 si no existen)
         const cantidadActual = productosActualizados[item.id]?.cantidad || 0;
         const piezasConDescuentoActual = productosActualizados[item.id]?.piezasConDescuento || 0;
 
-        // 2. Lógica de deducción del Bono Influencer
         let nuevasPiezasConDescuento = piezasConDescuentoActual;
         
         if (esConsumoBono) {
-          // Usamos Math.max para proteger contra inventarios negativos.
           nuevasPiezasConDescuento = Math.max(0, piezasConDescuentoActual - item.cantidad);
         }
 
-        // 3. Actualizamos el documento del producto
         productosActualizados[item.id] = {
           ...productosActualizados[item.id],
           cantidad: cantidadActual - item.cantidad,
@@ -499,7 +471,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       for (let i = 0; i < carrito.length; i++) {
         const item = carrito[i];
         
-        // 🛡️ BÚSQUEDA DEL COSTO EXACTO EN ESTE MILISEGUNDO
         const prodCatalogo = productosLocales.find(p => p.codigo === item.codigo || p.id === item.codigo);
         const costoUnitarioBase = prodCatalogo ? parseFloat(prodCatalogo.precioCostoStandard || prodCatalogo.costo || prodCatalogo.precioCosto || 0) : 0;
         const costoTotalLinea = costoUnitarioBase * item.cantidad;
@@ -527,7 +498,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           escanerMonto: escanerActualActualizado?.monto || null,
           escanerInvitados: escanerActualActualizado?.invitados || null,
 
-          // 🛡️ FIRMAS DE TRAZABILIDAD (FASE 3)
           creadoPorUid: user.uid,
           creadoPorNombre: userData?.nombre || user.email,
         };
@@ -579,9 +549,21 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
     try {
       const totales = calcularTotales();
-      const ahora = new Date(); // 👈 ¡Debe ser un Date puro, sin el .toISOString() aquí!
+      const ahora = new Date(); 
       const timestampCompleto = ahora.toISOString();
       const fechaCortaISO = timestampCompleto.split('T')[0];
+
+      let fechaPTPSegura = fechaCortaISO; 
+      try {
+        if (creditoFechaPTP) {
+          const parsedDate = new Date(creditoFechaPTP);
+          if (!isNaN(parsedDate.getTime())) {
+            fechaPTPSegura = parsedDate.toISOString().split('T')[0]; 
+          }
+        }
+      } catch(e) {
+        console.log("Error parseando fecha PTP, usando fallback");
+      }
 
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
       const docSnap = await getDoc(inventarioRef);
@@ -634,22 +616,14 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
       const creditoRef = collection(db, 'cuentas', cuentaId.toString(), 'creditos');
       
-      // 📅 Convertimos la fecha elegida en el modal a formato ISO (YYYY-MM-DD)
-      const fechaPtpISO = creditoFechaPTP instanceof Date 
-        ? creditoFechaPTP.toISOString().split('T')[0] 
-        : creditoFechaPTP; // Fallback por si acaso ya era un string
-
       const creditoDoc = {
         clienteNombre: creditoClienteNombre,
         monto: totales.total,
-        
-        // 🚀 AQUÍ APLICAMOS LA FECHA EN FORMATO ISO
-        fechaPTP: fechaPtpISO, 
-        
+        fechaPTP: fechaPTPSegura, 
         notas: creditoNotas,
         estado: 'pendiente',
         ventasIds: ventasIds,
-        timestamp: timestampCompleto, // Aseguramos que también el timestamp sea ISO text, no un Date object
+        timestamp: timestampCompleto, 
         creadorEmail: user.email,
         creadoPorUid: user.uid,
         creadoPorNombre: userData?.nombre || user.email,
@@ -668,6 +642,9 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       }
 
       if (isMountedRef.current) {
+        const [año, mes, dia] = fechaPTPSegura.split('-');
+        const fechaLegible = `${dia}/${mes}/${año}`;
+        
         Alert.alert(
           '✅ Crédito registrado',
           `Cliente: ${creditoClienteNombre}\nMonto: $${totales.total.toFixed(2)}\nVence: ${creditoFechaPTP.toLocaleDateString('es-MX')}`,
@@ -700,7 +677,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   // ==========================================
   const totales = calcularTotales();
   const diff = calcularDiferenciaIntercambio();
-  const esDeuda = diff > 0; // 🔥 FIX: Alineado a tu uso en el JSX inferior
+  const esDeuda = diff > 0; 
   const montoAbsoluto = Math.abs(diff).toFixed(2);
 
   const renderProductoGrid = ({ item }) => (
@@ -763,24 +740,28 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
-     
+      
       {/* 1. HEADER */}
-      <ScreenHeader 
+     <ScreenHeader 
         title="Ventas" 
         onPress={() => onNavigate('home')} 
         themeColors={themeColors} 
         rightAction={
-          <TouchableOpacity 
-            onPress={toggleModoIntercambio}
-            //disabled={effectiveTier !== 'premium'}
-            style={[
-              styles.btnIntercambio, 
-              modoIntercambio && styles.btnIntercambioActive, 
-              //effectiveTier !== 'premium' && styles.btnDisabled
-            ]}
-          >
-            <Ionicons name="git-compare" size={24} color={modoIntercambio ? "COLORS.turquesa" : "black"} />
-          </TouchableOpacity>
+          effectiveTier === 'special_k' ? (
+            <TouchableOpacity 
+              onPress={toggleModoIntercambio}
+              style={[
+                styles.btnIntercambio, 
+                modoIntercambio && styles.btnIntercambioActive
+              ]}
+            >
+              <Ionicons 
+                name="git-compare" 
+                size={24} 
+                color={modoIntercambio ? COLORS.turquesa : themeColors.text} 
+              />
+            </TouchableOpacity>
+          ) : null
         }
       />
 
@@ -851,7 +832,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={styles.label}>Productos a recibir:</Text>
                 
-                {/* Botón de "+" para agregar más productos (Solo se muestra si ya hay productos y no estamos buscando uno nuevo) */}
+                {/* Botón de "+" para agregar más productos */}
                 {(productoRecibir.length > 0 && !agregandoProductoExtra) && (
                   <TouchableOpacity 
                     style={styles.btnAgregarProducto}
@@ -868,7 +849,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   {productoRecibir.map((prod, idx) => (
                     <View key={idx} style={styles.productoRecibidoItem}>
                       <View>
-                        {/* Agregué el "1x" visualmente para que coincida con tu card de diferencias */}
                         <Text style={styles.productoRecibidoNombre}>1x {prod.nombre}</Text>
                         <Text style={styles.productoRecibidoPrecio}>${prod.precioVentaStandard}</Text>
                       </View>
@@ -885,9 +865,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                 <View style={{ marginTop: productoRecibir.length > 0 ? 10 : 0 }}>
                   <DropdownProductoRecibir 
                     onSelect={(prod) => {
-                      // Sumamos el nuevo producto al array existente (...productoRecibir)
                       setProductoRecibir([...productoRecibir, prod]);
-                      // Ocultamos el buscador de nuevo
                       setAgregandoProductoExtra(false);
                     }} 
                     value={null} 
@@ -1795,20 +1773,6 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10
   },
-  pagoSaldoContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#eee'
-  },
-  pagoSaldoLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 10,
-    textAlign: 'center',
-    color: COLORS.negro,
-    letterSpacing: 0.3
-  },
   checkboxRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1882,4 +1846,4 @@ const styles = StyleSheet.create({
   bonoToggleTextActive: {
     color: COLORS.blanco,
   },
-})
+});

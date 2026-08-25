@@ -17,7 +17,7 @@ const TIPOS_REPORTE = [
   { id: 'creditos', label: 'Estado de Créditos', icon: 'wallet', description: 'Detalle de todas las deudas, pagos parciales y fechas de vencimiento de tus clientes.' },
   { id: 'intercambios', label: 'Historial de Intercambios', icon: 'swap-horizontal', description: 'Registro de trueques con socios, mostrando los productos dados, recibidos y saldos a favor.' },
   { id: 'compras', label: 'Gasto en Restock', icon: 'cart', description: 'Reporte de todo el dinero invertido en reabastecer tu inventario (entradas).' },
-  { id: 'escaneres', label: 'Eventos de Escáner', icon: 'barcode', description: 'Desglose de cobros y número de invitados registrados en bazares y eventos rápidos.' },
+  { id: 'escaneres', label: 'Eventos de Escáner', icon: 'barcode', description: 'Desglose de cobros y número de invitados registrados en eventos.' },
 ];
 
 // ==========================================
@@ -57,6 +57,7 @@ export default function ReportsHubModal({ visible, onClose, themeColors }) {
   const { cuentaId } = useContext(AuthContext);
   const [reporteSeleccionado, setReporteSeleccionado] = useState(TIPOS_REPORTE[0]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Rango de fechas por defecto (Últimos 30 días)
   const hoy = new Date();
@@ -70,157 +71,156 @@ export default function ReportsHubModal({ visible, onClose, themeColors }) {
   const [datosReporte, setDatosReporte] = useState([]);
 
   // --- LÓGICA DE EXTRACCIÓN ---
-  const generarReporte = async () => {
-    if (!cuentaId) return;
-    setLoading(true);
-    setDatosReporte([]); 
+const generarReporte = async () => {
+  if (!cuentaId) return;
+  setLoading(true); // 👈 (Update 4: El activity indicator ya está activo aquí)
+  setDatosReporte([]); 
 
-    try {
-      // 🛡️ Filtro local seguro en milisegundos
-      const inicioMs = new Date(fechaInicio.setHours(0,0,0,0)).getTime();
-      const finMs = new Date(fechaFin.setHours(23,59,59,999)).getTime();
-      let data = [];
+  try {
+    // 🛡️ Filtro local seguro en milisegundos
+    const inicioMs = new Date(fechaInicio.setHours(0,0,0,0)).getTime();
+    const finMs = new Date(fechaFin.setHours(23,59,59,999)).getTime();
+    let data = [];
 
-      // 1. VENTAS Y PROFIT
-      if (reporteSeleccionado.id === 'ventas') {
-        const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'salidas'));
-        snap.forEach(doc => {
-          const d = doc.data();
-          const docMs = obtenerMilisegundos(d);
+    // 1. VENTAS Y PROFIT
+    if (reporteSeleccionado.id === 'ventas') {
+      const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'salidas'));
+      snap.forEach(doc => {
+        const d = doc.data();
+        const docMs = obtenerMilisegundos(d);
 
-          if (docMs >= inicioMs && docMs <= finMs && d.tipo !== 'intercambio' && d.descuentoPorcentaje !== 100 && !d.modoIntercambio) {
+        // 🚨 UPDATE 9: Eliminamos "d.descuentoPorcentaje !== 100" para que SÍ registre cortesías y bonos
+        if (docMs >= inicioMs && docMs <= finMs && d.tipo !== 'intercambio' && !d.modoIntercambio) {
 
-            let nombreProductoStr = 'N/A';
-            if (typeof d.producto === 'string') {
-              nombreProductoStr = d.producto; 
-            } else if (Array.isArray(d.productos)) {
-              nombreProductoStr = d.productos.map(p => p.nombre || p.producto).join(', '); 
-            }
-            
-            data.push({
-              id: doc.id,
-              fecha: formatearFechaDisplay(d), // 👈 Muestra la fecha real de la venta
-              cliente: d.cliente || 'Público General',
-              producto: nombreProductoStr,
-              precioVenta: parseFloat(d.precioUnitario || d.total || 0),
-              costo: parseFloat(d.costoUnitarioReal || d.costoTotalVenta || 0),
-              ganancia: parseFloat(d.total || 0) - parseFloat(d.costoTotalVenta || 0),
-              evento: d.nombreEvento || 'N/A'
-            });
+          let nombreProductoStr = 'N/A';
+          if (typeof d.producto === 'string') {
+            nombreProductoStr = d.producto; 
+          } else if (Array.isArray(d.productos)) {
+            nombreProductoStr = d.productos.map(p => p.nombre || p.producto).join(', '); 
           }
-        });
-      }
-
-      // 2. CRÉDITOS
-      else if (reporteSeleccionado.id === 'creditos') {
-        const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'creditos'));
-        snap.forEach(doc => {
-          const d = doc.data();
-          const docMs = obtenerMilisegundos(d);
-
-          if (docMs >= inicioMs && docMs <= finMs) {
-            data.push({
-              id: doc.id,
-              cliente: d.clienteNombre || d.cliente || 'N/A',
-              montoTotal: parseFloat(d.monto || 0),
-              fechaVenta: formatearFechaDisplay(d), // 👈 Fecha real de origen
-              fechaVencimiento: d.fechaPTP || 'N/A',
-              estado: d.estado || 'pendiente'
-            });
-          }
-        });
-      }
-
-      // 3. INTERCAMBIOS
-      else if (reporteSeleccionado.id === 'intercambios') {
-        const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'salidas'));
-        snap.forEach(doc => {
-          const d = doc.data();
-          const docMs = obtenerMilisegundos(d);
-
-          if (docMs >= inicioMs && docMs <= finMs && (d.tipo === 'intercambio' || d.modoIntercambio)) {
-
-            let doyStr = 'N/A';
-            let reciboStr = 'N/A';
-            
-            if (Array.isArray(d.productosEnviados)) doyStr = d.productosEnviados.map(p => p.nombre).join(', ');
-            else if (typeof d.producto === 'string') doyStr = d.producto;
-
-            if (Array.isArray(d.productosRecibidos)) reciboStr = d.productosRecibidos.map(p => p.nombre).join(', ');
-            else if (typeof d.productosRecibidos === 'string') reciboStr = d.productosRecibidos;
-
-            let saldoTexto = 'Tablas ($0)';
-            if (d.diferencia !== 0) {
-                saldoTexto = d.saldoAFavor 
-                  ? `A Favor ($${Math.abs(d.diferencia)})` 
-                  : `En Contra ($${Math.abs(d.diferencia)})`;
-            }
-
-            data.push({
-              id: doc.id,
-              socio: d.socioNombre || d.socioIntercambioNombre || d.cliente || 'N/A',
-              productosDoy: doyStr, 
-              productosRecibo: reciboStr, 
-              fecha: formatearFechaDisplay(d), // 👈 Fecha real del trueque
-              saldoFinal: saldoTexto,
-            });
-          }
-        });
-      }
-
-      // 4. COMPRAS (RESTOCK)
-      else if (reporteSeleccionado.id === 'compras') {
-        const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'entradas'));
-        snap.forEach(doc => {
-          const d = doc.data();
-          const docMs = obtenerMilisegundos(d);
-
-          if (docMs >= inicioMs && docMs <= finMs) {
-            
-            let productosCompra = 'N/A';
-            if (Array.isArray(d.productos)) productosCompra = d.productos.map(p => p.nombre).join(', ');
-
-            data.push({
-              id: doc.id,
-              fecha: formatearFechaDisplay(d), // 👈 Fecha real de compra
-              folio: d.folio || 'N/A',
-              productos: productosCompra,
-              costoPagado: parseFloat(d.costoPagado || d.costoBase || 0)
-            });
-          }
-        });
-      }
-
-      // 5. ESCÁNERES
-      else if (reporteSeleccionado.id === 'escaneres') {
-        const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'escaneres'));
-        snap.forEach(doc => {
-          const d = doc.data();
-          const docMs = obtenerMilisegundos(d);
-
-          if (docMs >= inicioMs && docMs <= finMs) {
-            data.push({
-              id: doc.id,
-              fecha: formatearFechaDisplay(d), // 👈 Fecha real del evento
-              evento: d.evento || 'N/A',
-              invitados: d.invitados || 0,
-              escaneosCobrados: parseFloat(d.monto || 0),
-              totalProductosVendidos: parseFloat(d.ventaTotal || 0)
-            });
-          }
-        });
-      }
-
-      setDatosReporte(data);
-      if (data.length === 0) Alert.alert('Sin Datos', 'No hay registros en estas fechas.');
-
-    } catch (error) {
-      console.error("Error generando reporte:", error);
-      Alert.alert('Error', 'No se pudo extraer la información.');
-    } finally {
-      setLoading(false);
+          
+          data.push({
+            id: doc.id,
+            _ms: docMs, // 👈 (Variable oculta para ordenar fechas al final)
+            fecha: formatearFechaDisplay(d),
+            cliente: d.cliente || 'Público General',
+            producto: nombreProductoStr,
+            precioVenta: parseFloat(d.precioUnitario || d.total || 0),
+            costo: parseFloat(d.costoUnitarioReal || d.costoTotalVenta || 0),
+            ganancia: parseFloat(d.total || 0) - parseFloat(d.costoTotalVenta || 0),
+            evento: d.nombreEvento || 'N/A',
+            // Opcional: Para que sea visualmente claro si fue regalado
+            etiqueta: d.descuentoPorcentaje === 100 ? 'Cortesía' : (d.descuentoPorcentaje > 0 ? 'Con Descuento' : 'Venta Normal')
+          });
+        }
+      });
     }
-  };
+
+    // 2. CRÉDITOS (🚨 UPDATE 3: Blindado contra undefined)
+    else if (reporteSeleccionado.id === 'creditos') {
+      const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'creditos'));
+      snap.forEach(doc => {
+        const d = doc.data();
+        const docMs = obtenerMilisegundos(d);
+
+        if (docMs >= inicioMs && docMs <= finMs) {
+          data.push({
+            id: doc.id,
+            _ms: docMs,
+            fecha: formatearFechaDisplay(d),
+            cliente: d.clienteNombre || d.cliente || 'Sin Nombre', // Fallback anti-crash
+            montoTotal: parseFloat(d.monto || 0),
+            estado: d.estado || 'pendiente'
+          });
+        }
+      });
+    }
+
+    // 3. INTERCAMBIOS (🚨 MEJORA 7: Tabla de diferencial)
+    else if (reporteSeleccionado.id === 'intercambios') {
+      const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'salidas'));
+      snap.forEach(doc => {
+        const d = doc.data();
+        const docMs = obtenerMilisegundos(d);
+
+        // Aseguramos que solo tome intercambios reales
+        if (docMs >= inicioMs && docMs <= finMs && (d.tipo === 'intercambio' || d.modoIntercambio)) {
+          data.push({
+            id: doc.id,
+            _ms: docMs,
+            fecha: formatearFechaDisplay(d),
+            socio: d.socioNombre || d.socio || 'Desconocido',
+            productosDamos: Array.isArray(d.productosEnviados) ? d.productosEnviados.map(p => p.nombre).join(' + ') : 'N/A',
+            productosRecibimos: Array.isArray(d.productosRecibidos) ? d.productosRecibidos.map(p => p.nombre).join(' + ') : 'N/A',
+            diferencialEfectivo: parseFloat(d.diferenciaIntercambio || d.diferencia || 0),
+            saldoPendiente: parseFloat(d.montoPendiente || 0)
+          });
+        }
+      });
+    }
+
+    // 4. COMPRAS / RESTOCK (🚨 MEJORA 8: Precio Unitario y Descuento detallados)
+    else if (reporteSeleccionado.id === 'compras') {
+      const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'entradas'));
+      snap.forEach(doc => {
+        const d = doc.data();
+        const docMs = obtenerMilisegundos(d);
+
+        if (docMs >= inicioMs && docMs <= finMs) {
+          if (Array.isArray(d.productos)) {
+            d.productos.forEach((item, index) => {
+              data.push({
+                id: `${doc.id}_${index}`, // Evita IDs duplicados en filas
+                _ms: docMs,
+                fecha: formatearFechaDisplay(d),
+                producto: item.nombre || 'N/A',
+                cantidad: parseInt(item.cantidad || 1),
+                precioUnitarioBase: parseFloat(item.precioCosto || 0),
+                precioPagadoUnitario: parseFloat(item.costoUnitarioAplicado || item.precioCosto || 0),
+                totalPagado: parseFloat(item.costoUnitarioAplicado || item.precioCosto || 0) * parseInt(item.cantidad || 1)
+              });
+            });
+          }
+        }
+      });
+    }
+
+    // 5. ESCÁNERES
+    else if (reporteSeleccionado.id === 'escaneres') {
+      const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'escaneres'));
+      snap.forEach(doc => {
+        const d = doc.data();
+        const docMs = obtenerMilisegundos(d);
+
+        if (docMs >= inicioMs && docMs <= finMs) {
+          data.push({
+            id: doc.id,
+            _ms: docMs,
+            fecha: formatearFechaDisplay(d),
+            evento: d.evento || d.nombreEvento || 'N/A',
+            invitados: parseInt(d.personas || d.invitados || 0),
+            montoCobrado: parseFloat(d.montoCobrado || d.ventaTotal || 0)
+          });
+        }
+      });
+    }
+
+    // 🚨 UPDATE 2: Ordenamiento Maestro (Más recientes primero)
+    // Usamos el campo oculto `_ms` para ordenar matemáticamente perfecto y no por texto.
+    data.sort((a, b) => b._ms - a._ms);
+
+    // Limpiamos el campo oculto `_ms` antes de renderizar la tabla/CSV para que no aparezca
+    const dataFinal = data.map(({ _ms, ...resto }) => resto);
+
+    setDatosReporte(dataFinal);
+
+  } catch (error) {
+    console.error("Error al extraer datos:", error);
+    Alert.alert('Error', 'Hubo un problema procesando la información del reporte.');
+  } finally {
+    setLoading(false); // 👈 (Update 4: Apagamos el loader al terminar)
+  }
+};
 
   // --- EXPORTAR A CSV ---
   const exportarCSV = async () => {
@@ -257,7 +257,7 @@ export default function ReportsHubModal({ visible, onClose, themeColors }) {
           <Text style={styles.previewTitle}>Vista Previa ({datosReporte.length} registros)</Text>
           <TouchableOpacity onPress={exportarCSV} style={styles.exportBtn}>
             <Ionicons name="download-outline" size={20} color={COLORS.blanco} />
-            <Text style={styles.exportBtnText}>Descargar CSV</Text>
+            <Text style={styles.exportBtnText}>Guardar en Drive</Text>
           </TouchableOpacity>
         </View>
 

@@ -15,18 +15,18 @@ import {
 import { 
   collection,
   getDoc, 
+  getDocFromCache,
   doc, 
-  addDoc,
-  updateDoc,
   query,
   where,
-  onSnapshot
-} from 'firebase/firestore'; // 🛡️ Quitamos getDocs, añadimos onSnapshot
+  onSnapshot,
+  writeBatch // 🚀 1. Importamos writeBatch y getDocFromCache
+} from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 
 // Importas GLOBAL_STYLES
-import { COLORS, FONT_SIZES, SPACING, ScreenHeader, Header, GLOBAL_STYLES } from '../context/theme';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
   const { cuentaId, user } = useContext(AuthContext);
@@ -62,33 +62,28 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
     if (!cuentaId) return;
     
     setLoading(true);
-    console.log('💳 Conectando créditos en tiempo real...');
     
     const creditosRef = collection(db, 'cuentas', cuentaId.toString(), 'creditos');
     const q = query(creditosRef, where('estado', '==', 'pendiente'));
     
-    // 🛡️ REFACTOR: onSnapshot reemplaza a cargarCreditosActivos()
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let creditos = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       
-      // Ordenar por fechaPTP (próximos vencimientos primero)
       creditos.sort((a, b) => {
         const fechaA = a.fechaPTP?.seconds || 0;
         const fechaB = b.fechaPTP?.seconds || 0;
         return fechaA - fechaB;
       });
-
-      // 🛡️ REFACTOR: Eliminamos el Promise.all() que hacía lecturas inútiles a Firebase
       
       if (isMountedRef.current) {
         setCreditosActivos(creditos);
         setLoading(false);
       }
     }, (error) => {
-      console.error('❌ Error en snapshot de créditos:', error.message);
+      console.log('✈️ Silenciador Offline (Créditos):', error.message);
       if (isMountedRef.current) setLoading(false);
     });
 
@@ -100,15 +95,14 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
   // ==========================================
   const abrirModalEdicion = async (credito) => {
     setCreditoEditando(credito);
-    // 🛡️ UX REFACTOR: Dejamos el input en blanco para que escriban el abono
     setMontoActualizado(''); 
     setNotasActualizadas(credito.notas || '');
-    await cargarProductosDelCredito(credito.ventasIds);
-    setModalEditVisible(true);
+    setModalEditVisible(true); // 🚀 UX: Abrimos el modal instantáneamente
+    await cargarProductosDelCredito(credito.ventasIds); // Cargamos en segundo plano
   };
 
   // ==========================================
-  // FUNCIÓN: Cargar productos del crédito (Solo se ejecuta al abrir el modal)
+  // FUNCIÓN: Cargar productos OFFLINE-FIRST
   // ==========================================
   const cargarProductosDelCredito = async (ventasIds) => {
     if (!ventasIds || ventasIds.length === 0) {
@@ -119,10 +113,22 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
     try {
       const salidaRef = collection(db, 'cuentas', cuentaId.toString(), 'salidas');
       const productos = [];
+      
       for (const ventaId of ventasIds) {
         try {
-          const ventaDoc = doc(salidaRef, ventaId);
-          const ventaSnap = await getDoc(ventaDoc);
+          const ventaDocRef = doc(salidaRef, ventaId);
+          let ventaSnap;
+          
+          // 🛡️ OFFLINE-FIRST: Intenta red por 2 segundos. Si falla/tarda, lee del caché del teléfono.
+          try {
+            ventaSnap = await Promise.race([
+              getDoc(ventaDocRef),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+            ]);
+          } catch (e) {
+            ventaSnap = await getDocFromCache(ventaDocRef);
+          }
+
           if (ventaSnap.exists()) {
             const data = ventaSnap.data();
             productos.push({
@@ -131,17 +137,17 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
             });
           }
         } catch (err) {
-          console.error('Error cargando venta:', ventaId);
+          console.log('✈️ Error cargando producto de crédito offline:', ventaId);
         }
       }
-      setProductosDelCredito(productos);
+      if (isMountedRef.current) setProductosDelCredito(productos);
     } catch (error) {
       console.error('Error cargando productos:', error);
     }
   };
 
   // ==========================================
-  // FUNCIÓN: Actualizar crédito (adelanto o liquidación)
+  // FUNCIÓN: Actualizar crédito BATCH (Offline)
   // ==========================================
   const actualizarCredito = async () => {
     if (!montoActualizado || isNaN(montoActualizado) || parseFloat(montoActualizado) <= 0) {
@@ -163,31 +169,37 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
 
     setLoadingModal(true);
     try {
-      const creditoRef = doc(db, 'cuentas', cuentaId.toString(), 'creditos', creditoEditando.id);
       const ahora = new Date();
+      const timestampCompleto = ahora.toISOString();
 
-      const actualizacion = {
+      // 🚀 1. INICIAMOS EL "BUZÓN" (writeBatch)
+      const batch = writeBatch(db);
+
+      // 📦 2. PREPARAMOS ACTUALIZACIÓN DEL CRÉDITO
+      const creditoRef = doc(db, 'cuentas', cuentaId.toString(), 'creditos', creditoEditando.id);
+      batch.update(creditoRef, {
         monto: nuevoSaldoPendiente,
         estado: nuevoEstado,
         notas: notasActualizadas,
-        updatedAt: ahora.toISOString(),
-      };
+        updatedAt: timestampCompleto,
+      });
 
-      await updateDoc(creditoRef, actualizacion);
-
-      // ============================================
-      // NUEVO: CREAR TICKET DE INGRESO A CAJA
-      // ============================================
+      // 🧾 3. PREPARAMOS TICKET DE ENTRADA A CAJA
       const salidaRef = collection(db, 'cuentas', cuentaId.toString(), 'salidas');
-      await addDoc(salidaRef, {
+      const nuevaSalidaRef = doc(salidaRef); // Genera un ID automático
+      batch.set(nuevaSalidaRef, {
         tipo: 'abono_credito',
-        tipoPago: 'efectivo', // Lo registramos como entrada de efectivo
+        tipoPago: 'efectivo',
         producto: `Abono de crédito: ${creditoEditando.clienteNombre}`,
         cantidad: 1,
         total: adelantoRecibido,
-        timestamp: ahora.toISOString(),
-        usuario: user?.email || 'App'
+        timestamp: timestampCompleto,
+        usuario: user?.email || 'App',
+        creadoPorUid: user?.uid // 🔑 Firma vital para Analytics
       });
+
+      // 🚀 4. EJECUTAMOS BATCH. (Si no hay internet, guarda local y responde instantáneo).
+      await batch.commit();
 
       const mensaje = esLiquidacionTotal
         ? `✅ Crédito liquidado\nCliente: ${creditoEditando.clienteNombre}`
@@ -198,7 +210,6 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
           text: 'OK',
           onPress: () => {
             setModalEditVisible(false);
-            // 🛡️ REFACTOR: Ya no llamamos cargarCreditosActivos(), onSnapshot lo hace solo
           },
         },
       ]);
@@ -209,26 +220,38 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
       setLoadingModal(false);
     }
   };
+
+  const formatFechaPTPLocal = (fechaPTP) => {
+    if (!fechaPTP) return 'N/A';
+    if (typeof fechaPTP === 'object' && typeof fechaPTP.seconds === 'number') {
+      return new Date(fechaPTP.seconds * 1000).toLocaleDateString('es-MX');
+    }
+    if (typeof fechaPTP === 'string') {
+      const [año, mes, dia] = fechaPTP.split('-');
+      if (año && mes && dia) return `${dia}/${mes}/${año}`;
+    }
+    return 'N/A';
+  };
   
   // ==========================================
   // RENDERERS
   // ==========================================
   const renderCreditoItem = ({ item }) => (
-    <View>
-      <TouchableOpacity
-        style={styles.tableRow}
-        onPress={() => abrirModalEdicion(item)}
-      >
+    <TouchableOpacity
+      onPress={() => abrirModalEdicion(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.tableRow}>
         <Text style={[styles.cellCliente, { color: themeColors.text }]}>
           {item.clienteNombre}
         </Text>
         <Text style={[styles.cellFecha, { color: themeColors.textSecondary }]}>
-          {new Date(item.fechaPTP.seconds * 1000).toLocaleDateString('es-MX')}
+          {formatFechaPTPLocal(item.fechaPTP)}
         </Text>
         <Text style={styles.cellMonto}>
           ${item.monto.toFixed(2)}
         </Text>
-      </TouchableOpacity>
+      </View>
 
       {item.ventasIds && item.ventasIds.length > 0 && (
         <View style={styles.productosSubrow}>
@@ -239,7 +262,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
       )}
 
       <View style={[styles.separator, { backgroundColor: darkMode ? '#333' : '#e8e8e8' }]} />
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -295,15 +318,27 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
         animationType="slide"
         onRequestClose={() => setModalEditVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={GLOBAL_STYLES.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={{ width: '100%', alignItems: 'center' }}
-              // IMPORTANTE: En Android a veces el teclado se come un margen.
-              // keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0} 
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity 
+            style={GLOBAL_STYLES.modalOverlay} 
+            activeOpacity={1} 
+            onPress={() => {
+              Keyboard.dismiss();
+              setModalEditVisible(false);
+            }}
+          >
+            <TouchableOpacity 
+              activeOpacity={1} 
+              onPress={() => Keyboard.dismiss()} 
+              style={[
+                GLOBAL_STYLES.modalContent, 
+                { backgroundColor: themeColors.bg, maxHeight: '80%', width: '90%' } 
+              ]}
             >
-              <View style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg }]}>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 {creditoEditando && (
                   <>
                     <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text }]}>
@@ -320,7 +355,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
                         </Text>
                       </View>
                       <Text style={[styles.fechaModal, { color: themeColors.textSecondary }]}>
-                        Vence:{'\n'}{new Date(creditoEditando.fechaPTP.seconds * 1000).toLocaleDateString('es-MX')}
+                        Vence:{'\n'}{formatFechaPTPLocal(creditoEditando.fechaPTP)}
                       </Text>
                     </View>
 
@@ -397,10 +432,10 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
                     </View>
                   </>
                 )}
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -410,15 +445,6 @@ const styles = StyleSheet.create({
   content: { 
     flex: 1, 
     padding: SPACING.content_padding 
-  },
-  centerContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  loadingText: { 
-    marginTop: 10, 
-    fontSize: FONT_SIZES.normal 
   },
   section: { 
     marginBottom: 30 
@@ -493,6 +519,15 @@ const styles = StyleSheet.create({
     height: 1.5, 
     marginVertical: 12 
   },
+  headerInfo: {
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start', 
+    marginBottom: 15, 
+    paddingBottom: 15, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#e0e0e0'
+  },
   clienteModalName: { 
     fontSize: FONT_SIZES.normal, 
     fontWeight: '700', 
@@ -524,22 +559,7 @@ const styles = StyleSheet.create({
   formGroup: { 
     marginBottom: 15 
   },
-  label: { 
-    fontSize: FONT_SIZES.normal, 
-    fontWeight: '600', 
-    marginBottom: 4 
-  },
-  input: { 
-    borderWidth: 1, 
-    borderRadius: 8, 
-    padding: 12, 
-    fontSize: FONT_SIZES.normal 
-  },
   inputArea: { 
-    borderWidth: 1, 
-    borderRadius: 8, 
-    padding: 12, 
-    fontSize: FONT_SIZES.normal, 
     minHeight: 60, 
     textAlignVertical: 'top' 
   },

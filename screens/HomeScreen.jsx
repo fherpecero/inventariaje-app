@@ -25,7 +25,6 @@ import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../con
 // ICONS
 import MenuIcon from '../assets/icons/IconMenu.svg';
 
-
 export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   // ==========================================
   // ESTADOS Y CONTEXTOS
@@ -64,27 +63,27 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
 
   const [avisosApp, setAvisosApp] = useState([]);
 
-    // ==========================================
-    // EFECTO: Escuchar Avisos Globales de la App
-    // ==========================================
-    useEffect(() => {
-      // Escuchamos una colección pública donde tú (el admin) pondrás los anuncios
-      const avisosRef = collection(db, 'avisos_globales');
-      
-      const q = query(avisosRef, where('activo', '==', true));
+  // ==========================================
+  // EFECTO: Escuchar Avisos Globales de la App
+  // ==========================================
+  useEffect(() => {
+    // Escuchamos una colección pública donde tú (el admin) pondrás los anuncios
+    const avisosRef = collection(db, 'avisos_globales');
+    
+    const q = query(avisosRef, where('activo', '==', true));
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const avisos = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        if (isMountedRef.current) setAvisosApp(avisos);
-      }, (error) => {
-        console.log("🔇 Error leyendo avisos globales:", error.code);
-      });
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const avisos = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      if (isMountedRef.current) setAvisosApp(avisos);
+    }, (error) => {
+      console.log("🔇 Error leyendo avisos globales:", error.code);
+    });
 
-      return () => unsubscribe();
-    }, []);
+    return () => unsubscribe();
+  }, []);
 
   // ==========================================
   // 🧮 CEREBRO DEL CENTRO DE NOTIFICACIONES
@@ -459,6 +458,21 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
     );
   }
 
+  const hasPremiumPowers = effectiveTier === 'premium' || effectiveTier === 'special_k';
+
+  // 🚀 FIX 1: Función para blindar las fechas "Invalid Date"
+  const formatFechaPTPLocal = (fechaPTP) => {
+    if (!fechaPTP) return 'N/A';
+    if (typeof fechaPTP === 'object' && typeof fechaPTP.seconds === 'number') {
+      return new Date(fechaPTP.seconds * 1000).toLocaleDateString('es-MX');
+    }
+    if (typeof fechaPTP === 'string') {
+      const [año, mes, dia] = fechaPTP.split('-');
+      if (año && mes && dia) return `${dia}/${mes}/${año}`;
+    }
+    return 'N/A';
+  };
+
   // ==========================================
   // RENDER PRINCIPAL
   // ==========================================
@@ -617,7 +631,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
 
                     <View style={styles.eventoDetailRow}>
                       <Text style={[styles.eventoLabel, { color: themeColors.textSecondary }]}>Escaneos:</Text>
-                      <Text style={[styles.eventoValue, { color: themeColors.text }]}>{eventoActivo.escaneos} px</Text>
+                      <Text style={[styles.eventoValue, { color: themeColors.text }]}>{eventoActivo.escaneos} x</Text>
                     </View>  
 
                   </View>
@@ -656,7 +670,13 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                                 cantidad: eventoActivo.escaneos || 0,
                                 total: ingresoEscaneos,
                                 timestamp: ahora.toISOString(),
-                                usuario: user?.email || 'App'
+                                usuario: user?.email || 'App',
+                                // 🚀 FIX 2: Añadimos las métricas que necesita el reporte CSV
+                                creadoPorUid: user.uid,
+                                escanerId: eventoActivo.id,
+                                nombreEvento: eventoActivo.evento,
+                                escanerInvitados: eventoActivo.personas || 0,
+                                escanerMonto: eventoActivo.montoCobrado || 0,
                               });
                             }
 
@@ -726,7 +746,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                       <View style={styles.creditoInfo}>
                         <Text style={[styles.creditoNombre, { color: themeColors.text }]}>{credito.clienteNombre}</Text>
                         <Text style={[styles.creditoFecha, { color: themeColors.textSecondary }]}>
-                          Promesa de pago: {new Date(credito.fechaPTP.seconds * 1000).toLocaleDateString('es-MX')}
+                          {/* 🚀 FIX 1 APLICADO: formatFechaPTPLocal en lugar de new Date().toLocaleDateString() */}
+                          Promesa de pago: {formatFechaPTPLocal(credito.fechaPTP)}
                         </Text>
                       </View>
                       <Text style={styles.creditoMonto}>${credito.monto.toFixed(2)}</Text>

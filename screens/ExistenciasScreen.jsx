@@ -14,11 +14,12 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { imagenes } from '../productosData';
-import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import SearchBar from '../components/SearchBar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getProductosActivos } from '../context/productCatalog';
 
 
 // ✅ 1. Importamos la Fuente de la Verdad y los componentes globales
@@ -60,7 +61,6 @@ export default function ExistenciasScreen({
 
   useEffect(() => {
     if (user && cuenta) {
-      cargarProductos();
       verificarPropietario();
     }
   }, [user, cuenta]);
@@ -82,57 +82,55 @@ export default function ExistenciasScreen({
     }
   };
 
-  const cargarProductos = async () => {
-    if (!isMountedRef.current) return;
+  // ==========================================
+  // 🚀 CARGA LOCAL-FIRST (Tiempo real + Offline + 0ms Latencia)
+  // ==========================================
+  useEffect(() => {
+    // Si no hay cuenta, no hacemos nada
+    if (!user || !cuenta || !cuentaId) return;
 
-    try {
-      if (isMountedRef.current) setLoading(true);
+    if (isMountedRef.current) setLoading(true);
 
-      const catalogoRef = collection(db, 'catalogoGlobal');
-      const catalogoSnap = await getDocs(catalogoRef);
+    const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
 
-      const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-      const docSnap = await getDoc(docRef);
+    // 📡 onSnapshot lee el disco duro del celular AL INSTANTE. 
+    // Dibuja la pantalla en 0ms y sincroniza cambios de otros socios por detrás.
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
       const productosData = docSnap.data()?.productos || {};
+      
+      // 🧠 Cruzamos cantidades de Firebase con Nombres/Fotos de tu RAM local (Costo $0)
+      const catalogoLocal = getProductosActivos(); 
 
-      const inventarioMap = {};
-      Object.keys(productosData).forEach((codigo) => {
-        inventarioMap[codigo] = {
-          cantidad: productosData[codigo].cantidad || 0,
-          notas: productosData[codigo].notas || '',
-          piezasConDescuento: productosData[codigo].piezasConDescuento || 0, 
-        };
-      });
-
-      const productosCombinados = catalogoSnap.docs.map((document) => {
-        const catalogo = document.data();
-        const datos = inventarioMap[document.id] || { cantidad: 0, notas: '', piezasConDescuento: 0 };
+      const productosCombinados = catalogoLocal.map((catalogo) => {
+        // Buscamos si el producto tiene stock en Firebase, si no, le ponemos 0
+        const datosFirebase = productosData[catalogo.codigo] || { cantidad: 0, notas: '', piezasConDescuento: 0 };
 
         return {
-          id: document.id,
+          id: catalogo.id || catalogo.codigo,
           nombre: catalogo.nombre,
           codigo: catalogo.codigo,
-          cantidad: datos.cantidad,
-          notas: datos.notas,
-          piezasConDescuento: datos.piezasConDescuento,
+          cantidad: datosFirebase.cantidad || 0,
+          notas: datosFirebase.notas || '',
+          piezasConDescuento: datosFirebase.piezasConDescuento || 0,
           precioCosto: catalogo.precioCostoStandard || 0,
           precioVenta: catalogo.precioVentaStandard || 0,
+          imagen: catalogo.imagen || null
         };
       });
 
       if (isMountedRef.current) {
         setProductos(productosCombinados);
-        setProductosFiltrados(productosCombinados); 
-      }
-    } catch (error) {
-      console.error('❌ Error cargando existencias:', error);
-      Alert.alert('Error', 'No existen las existencias');
-    } finally {
-      if (isMountedRef.current) {
+        setProductosFiltrados(productosCombinados);
         setLoading(false);
       }
-    }
-  };
+    }, (error) => {
+      console.log('✈️ Silenciador Offline / Permisos:', error.message);
+      if (isMountedRef.current) setLoading(false);
+    });
+
+    // 🧹 Limpiamos el túnel al cambiar de pantalla para ahorrar batería y evitar errores
+    return () => unsubscribe();
+  }, [user, cuenta, cuentaId]);
 
   // ✅ SOLUCIÓN DE RE-ORDENAMIENTO EN CASCADA
   // Tomamos los resultados del SearchBar y AHORA aplicamos los filtros/orden

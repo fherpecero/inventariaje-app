@@ -360,6 +360,8 @@ export function AuthProvider({ children }) {
       setCuentaId(null);
       setAuthError(null);
       await AsyncStorage.removeItem('cuentaId');
+      await AsyncStorage.removeItem('escanerActual');
+      await AsyncStorage.removeItem('userTier');
       console.log('✅ Sesión cerrada correctamente');
     } catch (error) {
       console.error('❌ Error en logout:', error);

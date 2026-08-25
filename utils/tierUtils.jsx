@@ -24,7 +24,7 @@ export const fetchAndCacheTier = async (cuentaId) => {
     }
 
     const tierValue = cuentaDocSnap.data().tier || 'basic';
-    const validTiers = ['basic', 'premium'];
+    const validTiers = ['basic', 'premium', 'special_k']; // Lista de tiers válidos
     const tier = validTiers.includes(tierValue) ? tierValue : 'basic';
 
     await AsyncStorage.setItem('userTier', tier);
@@ -59,23 +59,22 @@ export const hasAccessToFeature = async (featureName) => {
   const tier = await getTierFromCache();
 
   const featureMatrix = {
-    'entrada': ['basic', 'premium'],
-    'entradas': ['basic', 'premium'],
-    'salida': ['basic', 'premium'],
-    'salidas': ['basic', 'premium'],
-    'existencias': ['basic', 'premium'],
-    'bajo-stock': ['basic', 'premium'],
-    'bajo_stock': ['basic', 'premium'],
-    
-    // Features PREMIUM
-    'scanner': ['premium'],
-    'escaner': ['premium'],
-    'eventos': ['premium'],
-    'analytics': ['premium'],
-    'clientes': ['premium'],
-    'creditos': ['premium'],
-    'alertas': ['premium'],  
-    'scannerEvents': ['premium'], 
+    // Features BASIC (todos tienen acceso)
+    'entrada': ['basic', 'premium', 'special_k'],
+    'salida': ['basic', 'premium', 'special_k'],
+    'existencias': ['basic', 'premium', 'special_k'],
+    'bajo-stock': ['basic', 'premium', 'special_k'],
+    // 🔓 NUEVO: Escáner ahora es Básico
+    'scanner': ['basic', 'premium', 'special_k'],
+    'escaner': ['basic', 'premium', 'special_k'],
+    'eventos': ['basic', 'premium', 'special_k'],
+    'scannerEvents': ['basic', 'premium', 'special_k'],
+
+    // Features PREMIUM + SPECIAL_K (Bloqueados para basic)
+    'analytics': ['premium', 'special_k'],
+    'clientes': ['premium', 'special_k'],
+    'creditos': ['premium', 'special_k'],
+    'alertas': ['premium', 'special_k'],  
   };
 
   const allowedTiers = featureMatrix[featureName] || [];
@@ -134,8 +133,8 @@ export const getTierInfo = async () => {
  * 🛡️ BLINDADA: Calcula el tier efectivo interpretando Fechas y Timestamps
  */
 export const calculateEffectiveTier = (tier, premiumTrialActive, trialStartDate) => {
-  // 1. Si la cuenta ya fue pagada como 'premium', es inamovible
-  if (tier === 'premium') return 'premium';
+  // 1. Si la cuenta ya fue pagada como 'premium' o es el tier oculto, es inamovible
+  if (tier === 'premium' || tier === 'special_k') return tier;
 
   // 2. Si no hay trial activo o fecha, cae a basic
   if (!premiumTrialActive || !trialStartDate) return 'basic';

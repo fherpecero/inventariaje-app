@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  TouchableOpacity, 
+  TextInput, 
+  Alert, 
+  ActivityIndicator 
+} from 'react-native';
+// 🚀 Cambiamos updateDoc por writeBatch
+import { doc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { COLORS, GLOBAL_STYLES, ScreenHeader } from '../context/theme';
 
@@ -15,6 +25,9 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
+  // ==========================================
+  // 🚀 LECTURA LOCAL-FIRST (0ms Latencia)
+  // ==========================================
   useEffect(() => {
     if (!cuentaId) return;
 
@@ -28,15 +41,16 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
       }
       setLoading(false);
     }, (error) => {
-      console.error("❌ Error de Firestore:", error);
+      console.log("✈️ Silenciador Offline / Permisos:", error.message);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [cuentaId]);
 
-
-  // 💾 Guardar usando ESTRICTAMENTE el Nombre del Producto
+  // ==========================================
+  // 🚀 ESCRITURA OFFLINE-FIRST (Guarda sin internet)
+  // ==========================================
   const actualizarLimite = async (productoNombre, nuevoLimiteText) => {
     const limiteNumerico = Number(nuevoLimiteText);
     if (isNaN(limiteNumerico) || limiteNumerico < 0) {
@@ -48,10 +62,15 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
     try {
       const inventarioRef = doc(db, 'cuentas', String(cuentaId), 'inventarios', 'vital_health_principal');
       
-      // 🛡️ Actualización Atómica: Literalmente guarda en productos["DFENCE KIDS"].limiteStock
-      await updateDoc(inventarioRef, {
+      // 📦 Abrimos el Buzón. Esto escribe directo en tu celular al instante.
+      const batch = writeBatch(db);
+      
+      batch.update(inventarioRef, {
         [`productos.${productoNombre}.limiteStock`]: limiteNumerico
       });
+
+      // Se ejecuta de inmediato. Si no hay red, Firebase lo sube en silencio después.
+      await batch.commit();
 
     } catch (error) {
       console.error("Error guardando límite:", error);
@@ -61,7 +80,9 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
     }
   };
 
-  // 🧮 Procesador Limpio (Sin códigos de barras)
+  // ==========================================
+  // 🧮 PROCESAMIENTO EN MEMORIA
+  // ==========================================
   const getProductosProcesados = () => {
     let alertas = [];
     let configuracion = [];
@@ -69,9 +90,7 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
     const catalogoComoLista = Object.values(PRODUCT_CATALOG || {});
 
     catalogoComoLista.forEach(prod => {
-      const nombreReal = prod.nombre; // Ej: 'DFENCE KIDS'
-      
-      // Buscamos en Firebase el stock usando el nombre
+      const nombreReal = prod.nombre; 
       const dataInv = inventario[nombreReal] || {};
       
       const stockActual = Number(dataInv.cantidad) || 0;
@@ -98,8 +117,11 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
 
   const { alertas, configuracion } = getProductosProcesados();
 
+  // ==========================================
+  // RENDERIZADORES
+  // ==========================================
   const renderAlertaItem = ({ item }) => (
-    <View style={[styles.card, { borderColor: COLORS.rojo, borderWidth: 1, backgroundColor: '#FEF2F2' }]}>
+    <View style={[styles.card, styles.cardAlerta]}>
       <View style={styles.cardInfo}>
         <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>{item.nombre}</Text>
         <Text style={GLOBAL_STYLES.textSecondary}>Límite establecido: {item.limiteStock} pzas</Text>
@@ -125,8 +147,8 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
           defaultValue={String(item.limiteStock)}
           onEndEditing={(e) => {
             const val = e.nativeEvent.text;
-            if(val !== String(item.limiteStock)) {
-              actualizarLimite(item.nombre, val); // 👈 Manda el nombre
+            if (val !== String(item.limiteStock)) {
+              actualizarLimite(item.nombre, val); 
             }
           }}
           placeholder="0"
@@ -137,9 +159,9 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
 
   if (loading) {
     return (
-      <View style={[GLOBAL_STYLES.safeArea, { flex: 1, backgroundColor: themeColors?.bg || '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[GLOBAL_STYLES.safeArea, styles.centerContainer, { backgroundColor: themeColors?.bg || '#FFFFFF' }]}>
         <ActivityIndicator size="large" color={COLORS?.turquesa || '#0000ff'} />
-        <Text style={{ marginTop: 12, color: themeColors?.textSecondary }}>Cargando inventario...</Text>
+        <Text style={styles.loadingText}>Cargando inventario...</Text>
       </View>
     );
   }
@@ -174,34 +196,34 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
 
       {guardando && <ActivityIndicator size="small" color={COLORS.turquesa} style={{ marginVertical: 5 }} />}
 
-      <View style={{ flex: 1, paddingHorizontal: 16 }}>
+      <View style={styles.listContainer}>
         {activeTab === 'alertas' ? (
           <FlatList
             data={alertas}
-            keyExtractor={item => item.nombre} // 👈 Usa el nombre
+            keyExtractor={item => item.nombre}
             renderItem={renderAlertaItem}
             ListEmptyComponent={
               <View style={GLOBAL_STYLES.emptyStateContainer}>
-                <Text style={{ fontSize: 40, marginBottom: 10 }}>✅</Text>
+                <Text style={styles.emptyIcon}>✅</Text>
                 <Text style={GLOBAL_STYLES.emptyText}>¡Todo excelente!</Text>
-                <Text style={[GLOBAL_STYLES.textSecondary, { textAlign: 'center' }]}>
+                <Text style={[GLOBAL_STYLES.textSecondary, styles.emptySubtext]}>
                   Ningún producto ha bajado de su límite mínimo configurado.
                 </Text>
               </View>
             }
-            contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
+            contentContainerStyle={styles.flatListContent}
           />
         ) : (
           <FlatList
             data={configuracion}
-            keyExtractor={item => item.nombre} // 👈 Usa el nombre
+            keyExtractor={item => item.nombre}
             renderItem={renderConfigItem}
             ListHeaderComponent={
-              <Text style={[GLOBAL_STYLES.textSecondary, { marginBottom: 15, textAlign: 'center' }]}>
+              <Text style={[GLOBAL_STYLES.textSecondary, styles.configHeader]}>
                 Define a las cuántas piezas quieres que la app te avise para hacer restock. (0 = Sin alerta)
               </Text>
             }
-            contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
+            contentContainerStyle={styles.flatListContent}
           />
         )}
       </View>
@@ -210,19 +232,28 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
 }
 
 const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#64748B',
+  },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 10,
     backgroundColor: '#F1F5F9',
     borderRadius: 12,
-    padding: 4
+    padding: 4,
   },
   tab: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 8
+    borderRadius: 8,
   },
   activeTab: {
     backgroundColor: '#FFFFFF',
@@ -230,15 +261,34 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2
+    elevation: 2,
   },
   tabText: {
     fontSize: 14,
     color: '#64748B',
-    fontWeight: '600'
+    fontWeight: '600',
   },
   activeTabText: {
-    color: '#0F172A'
+    color: '#0F172A',
+  },
+  listContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  flatListContent: {
+    paddingBottom: 40,
+    paddingTop: 10,
+  },
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 10,
+  },
+  emptySubtext: {
+    textAlign: 'center',
+  },
+  configHeader: {
+    marginBottom: 15,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -252,10 +302,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
-    elevation: 1
+    elevation: 1,
+  },
+  cardAlerta: {
+    borderColor: COLORS.rojo,
+    borderWidth: 1,
+    backgroundColor: '#FEF2F2',
   },
   cardInfo: {
-    flex: 1
+    flex: 1,
   },
   stockBadgeDanger: {
     backgroundColor: '#FEF2F2',
@@ -263,21 +318,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FCA5A5'
+    borderColor: '#FCA5A5',
   },
   stockBadgeTextDanger: {
     color: '#DC2626',
     fontWeight: '700',
-    fontSize: 14
+    fontSize: 14,
   },
   inputContainer: {
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   inputLabel: {
     fontSize: 10,
     color: '#64748B',
-    marginBottom: 4
+    marginBottom: 4,
   },
   numericInput: {
     backgroundColor: '#F8FAFC',
@@ -289,6 +344,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A'
-  }
+    color: '#0F172A',
+  },
 });

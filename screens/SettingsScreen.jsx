@@ -376,23 +376,56 @@ export default function SettingsScreen({
               ]}
             >
               <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.3.3
+                📱 Versión Actual: v2.5.0
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: '03/08/2026',
+                Compilada: '24/08/2026',
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Descarga de reportes mejorada | Centro de Notificaciones & bajo stock | Centro de ayuda | Upgrade Screen
+                Última actualización: Analytics optimizado | Actualizacion masiva de UI | Refactorizacion offline | Bug Fixes. 
               </Text>
             </View>
           </View>
 
 
-          
-
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* 4. ESTADO DE FUNCIONALIDADES */}
           {/* ═══════════════════════════════════════════════════════════════ */}
+
+
+            {/* 🔨 EN DESARROLLO */}
+            <View style={styles.featureGroup}>
+              <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>
+                🔨 En Desarrollo
+              </Text>
+
+              <View
+                style={[
+                  styles.featureBox,
+                  styles.featureDeveloping,
+                  {
+                    backgroundColor: themeColors.bgSecondary,
+                    borderColor: '#FF9800',
+                  },
+                ]}
+              >
+                <View style={styles.itemsContainer}>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    🎨 Mejora de UX 
+                  </Text>
+                  <Text style={[styles.item, { color: themeColors.text }]}>
+                    🍏 Desarrollo para iOS
+                  </Text>
+                </View>
+                <Text style={[styles.item, { color: themeColors.text }]}>
+                    🇺🇸 Idiomas
+                  </Text>
+                <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
+                  30% completado - v2.6.0
+                </Text>
+              </View>
+            </View>
+
           <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📋 Estado de Funcionalidades</Text>
 
@@ -443,35 +476,6 @@ export default function SettingsScreen({
               </View>
             </View>
 
-            {/* 🔨 EN DESARROLLO */}
-            <View style={styles.featureGroup}>
-              <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>
-                🔨 En Desarrollo
-              </Text>
-
-              <View
-                style={[
-                  styles.featureBox,
-                  styles.featureDeveloping,
-                  {
-                    backgroundColor: themeColors.bgSecondary,
-                    borderColor: '#FF9800',
-                  },
-                ]}
-              >
-                <View style={styles.itemsContainer}>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🎨 Mejora de UX 
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🍏 Desarrollo para iOS
-                  </Text>
-                </View>
-                <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
-                  40% completado - v2.4.0
-                </Text>
-              </View>
-            </View>
 
             {/* 🎯 PRÓXIMAS
             <View style={styles.featureGroup}>

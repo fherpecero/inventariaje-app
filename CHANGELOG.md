@@ -1,5 +1,33 @@
 # Changelog - Inventariaje App
 
+##### [2.5.0] - 2026-08-24
+**🚀 Parche Major: Arquitectura Offline-First, Interfaz y Estabilidad de Reportes**
+
+**✨ Nuevas Funcionalidades & UX**
+* **Funciones Premium Visibles (Paywalling)**: Las funciones premium (Analytics, Créditos, etc.) ahora son visibles para usuarios básicos en el menú y pantalla de inicio, pero con acceso bloqueado y redirección estratégica a la pantalla de Upgrade[cite: 11].
+* **Centro de Ayuda Mejorado**: Rediseño visual de la guía de uso con textos en negritas para una lectura rápida y un botón interactivo (enlace) que abre directamente la aplicación de correo del usuario[cite: 11].
+* **Botón de Intercambio Restringido**: La funcionalidad de intercambios se trasladó de forma exclusiva al tier 'special k' y Premium[cite: 11].
+* **Mejoras en Reportes CSV**:
+  * El reporte de compras ahora incluye un desglose avanzado de "Precio Unitario" y "Descuento" aplicado por producto[cite: 11].
+  * Se añadió una tabla especializada para el registro de monto diferencial en Intercambios[cite: 11].
+  * Se actualizó el texto del botón de exportación a "Guardar en Drive / Compartir" para reflejar con exactitud la acción nativa del dispositivo[cite: 11].
+
+**🔧 Cambios Técnicos (Arquitectura)**
+* **Motor Offline-First**: Refactorización profunda en `HomeScreen` y `ClientesScreen` implementando `onSnapshot` (túneles locales), `writeBatch` y `getDocFromCache`[cite: 9, 16]. La app ahora es resiliente y puede operar bajo condiciones de nula o mala conexión a internet[cite: 11].
+* **Refactorización DRY (Don't Repeat Yourself)**: Limpieza exhaustiva de estilos en pantallas clave (`HomeScreen`, `EntradasScreen`, `ExistenciasScreen`), centralizando contenedores globales y componentes estandarizados como `ScreenHeader` y `cardBase`[cite: 16, 18].
+* **Carga Optimizada de CSV**: Se implementó un micro-retraso (`setTimeout`) acompañado de un `ActivityIndicator` para evitar que la interfaz parezca congelada (delay de 5-8 segs) durante la extracción de datos de Firebase[cite: 11].
+
+**🐛 Bug Fixes (Corrección de Errores)**
+* **Crash en CSV de Créditos**: Se integró un blindaje de prevención (`safeString`) contra variables nulas o indefinidas que provocaban un cierre forzoso ("Inventariaje continua fallando") al intentar exportar créditos sin nombre de cliente[cite: 11].
+* **Fechas "Invalid Date"**: Se corrigió el fallo de registro de fechas en créditos implementando el formateador `formatFechaPTPLocal` para asegurar el envío de formatos ISO a la base de datos[cite: 9, 11].
+* **Métricas de Escáner en 0**: Solucionado el fallo del `addDoc` en `HomeScreen` que enviaba estadísticas en ceros. Ahora inyecta correctamente el ID del evento, invitados y montos cobrados a la base de datos[cite: 9, 11].
+* **Ordenamiento en Analytics**: Los movimientos en los reportes de ventas y ganancias ahora se listan cronológicamente de forma correcta de más recientes a antiguos usando un cálculo matemático (`.sort()`)[cite: 11].
+* **Cortesías Ocultas**: Se eliminó el filtro estricto de descuento (100%) para que los reportes por fin reflejen correctamente las salidas de inventario hechas por cortesía[cite: 11].
+* **Modal de Checkout (EntradasScreen)**: Se reparó el comportamiento del `ScrollView` ajustando su altura máxima, evitando que los botones de "Confirmar" sean empujados fuera de la pantalla en carritos grandes[cite: 11].
+* **Desfase por Teclado**: Se envolvió el modal de `ClientesScreen` en un `KeyboardAvoidingView` para que la lista de productos no se deforme al abrir el teclado al abonar dinero[cite: 11].
+* **Usabilidad de Botones en Créditos**: Se hizo toda la fila de la tarjeta de crédito presillable (pressable), permitiendo al usuario abrir el modal de abonos tocando cualquier parte de la fila y no solo el nombre[cite: 11].
+* **Textos Ajustados**: Se reemplazó el texto estático de "bazares" por "Evento de Escáner" para mejorar el tono profesional de la app[cite: 11, 16].
+
 ### version: "2.4.0" - fecha: "2026-08-10",
     titulo: "Notificaciones, Alertas y Experiencia Premium",
     descripcion: "Una de las actualizaciones más grandes en UX. Integración de un Centro de Notificaciones In-App, control de stock automatizado y nuevas herramientas para usuarios PRO.",

@@ -1,7 +1,7 @@
 // ==========================================
 // 1. IMPORTACIONES
 // ==========================================
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -14,7 +14,8 @@ import {
   Dimensions 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+// 🚀 Cambiamos getDocs por onSnapshot
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,7 +30,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import ReportsHubModal from '../components/ReportsHubModal';
 
-// Obtenemos el ancho de la pantalla para hacer los gráficos responsivos
 const screenWidth = Dimensions.get('window').width;
 
 export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
@@ -37,75 +37,98 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
   // 2. LÓGICA Y ESTADOS (HOOKS)
   // ==========================================
   const { cuentaId } = useContext(AuthContext);
+  const isMountedRef = useRef(true); // 🛡️ Seguro de vida para componentes desmontados
+
   const [loading, setLoading] = useState(true);
   const [movimientos, setMovimientos] = useState([]);
   const [diasFiltro, setDiasFiltro] = useState(30);
   const [reportsHubVisible, setReportsHubVisible] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Cargamos el catálogo local una sola vez
   const productosLocales = getProductosActivos();
 
   useEffect(() => {
-    if (cuentaId) {
-      cargarDatosAnalytics();
-    }
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // ==========================================
+  // 🚀 MOTOR LOCAL-FIRST (3 TÚNELES SIMULTÁNEOS)
+  // ==========================================
+  useEffect(() => {
+    if (!cuentaId) return;
+    if (isMountedRef.current) setLoading(true);
+
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - diasFiltro);
+    const fechaIso = fechaLimite.toISOString();
+    
+    // 1. Preparar las 3 Consultas
+    const qSalidas = query(collection(db, 'cuentas', cuentaId, 'salidas'), where('timestamp', '>=', fechaIso));
+    const qEntradas = query(collection(db, 'cuentas', cuentaId, 'entradas'), where('fecha', '>=', fechaIso));
+    const qEscaneres = query(collection(db, 'cuentas', cuentaId, 'escaneres'), where('createdAt', '>=', fechaIso));
+
+    // 2. Memoria caché temporal
+    let salidasCache = [];
+    let entradasCache = [];
+    let escaneresCache = [];
+
+    // 3. Semáforos de carga
+    let salidasLoaded = false;
+    let entradasLoaded = false;
+    let escaneresLoaded = false;
+
+    // Función que unifica todo cuando los 3 túneles responden
+    const consolidarDatos = () => {
+      if (salidasLoaded && entradasLoaded && escaneresLoaded && isMountedRef.current) {
+        setMovimientos([...salidasCache, ...entradasCache, ...escaneresCache]);
+        setLoading(false); // ⚡ La pantalla se dibuja en 0ms
+      }
+    };
+
+    // 📡 Túnel 1: Salidas (Ventas)
+    const unsubSalidas = onSnapshot(qSalidas, (snap) => {
+      salidasCache = snap.docs.map(doc => ({ id: doc.id, _origen: 'salida', ...doc.data() }));
+      salidasLoaded = true;
+      consolidarDatos();
+    }, (error) => {
+      console.log('✈️ Silenciador Salidas:', error.message);
+      salidasLoaded = true; consolidarDatos();
+    });
+
+    // 📡 Túnel 2: Entradas (Restock)
+    const unsubEntradas = onSnapshot(qEntradas, (snap) => {
+      entradasCache = snap.docs.map(doc => ({ id: doc.id, _origen: 'entrada', ...doc.data() }));
+      entradasLoaded = true;
+      consolidarDatos();
+    }, (error) => {
+      console.log('✈️ Silenciador Entradas:', error.message);
+      entradasLoaded = true; consolidarDatos();
+    });
+
+    // 📡 Túnel 3: Escáneres
+    const unsubEscaneres = onSnapshot(qEscaneres, (snap) => {
+      escaneresCache = snap.docs.map(doc => ({ id: doc.id, _origen: 'escaner', ...doc.data() }));
+      escaneresLoaded = true;
+      consolidarDatos();
+    }, (error) => {
+      console.log('✈️ Silenciador Escáneres:', error.message);
+      escaneresLoaded = true; consolidarDatos();
+    });
+
+    // Limpieza de los túneles al salir de la pantalla
+    return () => {
+      unsubSalidas();
+      unsubEntradas();
+      unsubEscaneres();
+    };
   }, [cuentaId, diasFiltro]);
 
-  const cargarDatosAnalytics = async () => {
-    setLoading(true);
-    try {
-      const fechaLimite = new Date();
-      fechaLimite.setDate(fechaLimite.getDate() - diasFiltro);
-      const fechaIso = fechaLimite.toISOString();
-      
-      // 1. Consultar Salidas Reales (Usan 'timestamp')
-      const qSalidas = query(
-        collection(db, 'cuentas', cuentaId, 'salidas'),
-        where('timestamp', '>=', fechaIso)
-      );
-
-      // 2. Consultar Entradas Reales (Usan 'fecha')
-      const qEntradas = query(
-        collection(db, 'cuentas', cuentaId, 'entradas'),
-        where('fecha', '>=', fechaIso)
-      );
-
-      // 3. Consultar Eventos de Escáner (Usan 'createdAt')
-      const qEscaneres = query(
-        collection(db, 'cuentas', cuentaId, 'escaneres'),
-        where('createdAt', '>=', fechaIso)
-      );
-
-      // Ejecutar las 3 descargas simultáneamente
-      const [snapSalidas, snapEntradas, snapEscaneres] = await Promise.all([
-        getDocs(qSalidas),
-        getDocs(qEntradas),
-        getDocs(qEscaneres)
-      ]);
-
-      const dataCombinada = [];
-      
-      snapSalidas.forEach((doc) => {
-        dataCombinada.push({ id: doc.id, _origen: 'salida', ...doc.data() });
-      });
-      
-      snapEntradas.forEach((doc) => {
-        dataCombinada.push({ id: doc.id, _origen: 'entrada', ...doc.data() });
-      });
-
-      snapEscaneres.forEach((doc) => {
-        dataCombinada.push({ id: doc.id, _origen: 'escaner', ...doc.data() });
-      });
-
-      setMovimientos(dataCombinada);
-    } catch (error) {
-      console.error("❌ Error cargando analytics:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 🧠 EL CEREBRO MATEMÁTICO + PREPARADOR DE GRÁFICOS
+  // ==========================================
+  // 🧠 EL CEREBRO MATEMÁTICO (¡Intacto y exacto!)
+  // ==========================================
   const kpis = useMemo(() => {
     let totalVentas = 0;
     let totalGastos = 0;
@@ -113,7 +136,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
     let totalCortesias = 0;       
     let totalDescuentosBonos = 0; 
     
-    // 👈 NUEVO: Acumulador independiente y exacto de utilidad real
+    // Acumulador independiente y exacto de utilidad real
     let gananciaRealAcumulada = 0; 
     
     const conteoProductos = {};
@@ -127,7 +150,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
           id: key,
           nombre: p.nombre,
           cantidad: 0,
-          costoBase: parseFloat(p.precioCostoStandard || p.costo || p.precioCosto || 0) // 👈 NUEVO
+          costoBase: parseFloat(p.precioCostoStandard || p.costo || p.precioCosto || 0) 
         };
       }
     });
@@ -165,7 +188,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
               mov.productos.forEach(item => {
                 const idProd = item.codigo || item.producto || item.id;
                 const prod = productosLocales.find(p => p.codigo === idProd || p.id === idProd);
-                // 🛡️ Búsqueda robusta del costo (por si en la BD se llama diferente)
                 const costoUnitario = prod ? parseFloat(prod.precioCostoStandard || prod.costo || prod.precioCosto || 0) : 0;
                 costoTransaccion += (costoUnitario * (parseInt(item.cantidad) || 1));
               });
@@ -178,9 +200,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
             gananciaTransaccion = ventaMonto - costoTransaccion;
           }
 
-          // Sumamos el resultado de esta transacción al acumulado de utilidad
           gananciaRealAcumulada += gananciaTransaccion;
-          // --------------------------------------------------------
 
           // 📈 Lógica de Gráficos y Top 5
           if (mov.timestamp && ventaMonto > 0) {
@@ -256,8 +276,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
     };
   }, [movimientos, productosLocales, themeColors]);
 
-
-    // COMPONENTE DE BOTON DE FILTRO
+  // COMPONENTE DE BOTON DE FILTRO
   const FiltroBtn = ({ dias, label }) => (
     <TouchableOpacity 
       style={[
@@ -323,11 +342,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
           
           {/* CARDS PRINCIPALES: VENTAS VS RESTOCK */}
           <View style={styles.cardsRow}>
-            
-            {/* CARD: VENTAS TOTALES */}
-            <View 
-              style={[styles.kpiCard, { backgroundColor: themeColors.cardBg }]}
-            >
+            <View style={[styles.kpiCard, { backgroundColor: themeColors.cardBg }]}>
               <Ionicons name="cash" size={24} color={COLORS.verde} style={styles.kpiIcon} />
               <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Ventas Totales</Text>
               <Text style={[styles.kpiMonto, { color: themeColors.text }]}>
@@ -335,17 +350,13 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
               </Text>
             </View>
             
-            {/* CARD: GASTO RESTOCK */}
-            <View
-              style={[styles.kpiCard, { backgroundColor: themeColors.cardBg }]}
-            >
+            <View style={[styles.kpiCard, { backgroundColor: themeColors.cardBg }]}>
               <Ionicons name="cart" size={24} color={COLORS.rojo} style={styles.kpiIcon} />
               <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Gasto Restock</Text>
               <Text style={[styles.kpiMonto, { color: themeColors.text }]}>
                 ${(kpis.totalGastos || 0).toFixed(2)}
               </Text>
             </View>
-
           </View>
 
           {/* CARD DE EVENTOS DE ESCÁNER */}
@@ -363,7 +374,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
 
           {/* RESUMEN FINANCIERO DUAL (GANANCIA VS FLUJO) */}
           <View style={[styles.balanceCard, { backgroundColor: themeColors.cardBg }]}>
-            
             <View style={styles.balanceHeader}>
               <Ionicons name="stats-chart" size={16} color={COLORS.morado} />
               <Text style={[styles.balanceTitle, { color: themeColors.textSecondary }]}>
@@ -372,7 +382,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
             </View>
             
             <View style={styles.balanceRow}>
-              {/* Columna Ganancia */}
               <View style={styles.balanceCol}>
                 <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Margen de Ganancia</Text>
                 <Text style={[styles.balanceMonto, { color: kpis.gananciaNeta >= 0 ? COLORS.verde : COLORS.naranja }]}>
@@ -380,10 +389,8 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
                 </Text>
               </View>
               
-              {/* Divisor Visual */}
               <View style={[styles.balanceDivider, { backgroundColor: themeColors.border || COLORS.gris }]} />
               
-              {/* Columna Flujo */}
               <View style={styles.balanceCol}>
                 <Text style={[styles.kpiLabel, { color: themeColors.textSecondary }]}>Flujo de Efectivo</Text>
                 <Text style={[styles.balanceMonto, { color: kpis.flujoEfectivo >= 0 ? COLORS.turquesa : COLORS.rojo }]}>
@@ -391,7 +398,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
                 </Text>
               </View>
             </View>
-
           </View>
 
           {/* CARDS SECUNDARIAS: CORTESÍAS Y BONOS */}
@@ -417,7 +423,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
           {/* 📊 SECCIÓN DE GRÁFICOS VISUALES */}
           {/* ========================================== */}
           
-          {/* Gráfico de Líneas: Picos de Ventas */}
           <View style={[styles.chartContainer, { backgroundColor: themeColors.cardBg }]}>
              <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📈 Curva de Ingresos</Text>
              <LineChart
@@ -431,7 +436,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
               />
           </View>
 
-          {/* Gráfico de Pastel: Top 5 */}
           {kpis.pieChartData.length > 0 && (
             <View style={[styles.chartContainer, { backgroundColor: themeColors.cardBg }]}>
               <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Composición del Top 5</Text>
@@ -450,8 +454,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
 
           {/* SECCIÓN TOP 5 / BOTTOM 5 EN 2 COLUMNAS */}
           <View style={styles.columnsContainer}>
-            
-            {/* Columna Izquierda: Más vendidos */}
             <View style={[styles.columnCard, { backgroundColor: themeColors.cardBg }]}>
               <Text style={[styles.columnTitle, { color: COLORS.verde }]}>🔥 Top 5</Text>
               {kpis.top5.map((prod, index) => (
@@ -464,7 +466,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
               ))}
             </View>
 
-            {/* Columna Derecha: Menos vendidos */}
             <View style={[styles.columnCard, { backgroundColor: themeColors.cardBg }]}>
               <Text style={[styles.columnTitle, { color: COLORS.rojo }]}>❄️ Bottom 5</Text>
               {kpis.bottom5.map((prod, index) => (
@@ -476,18 +477,17 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
                 </View>
               ))}
             </View>
-
           </View>
 
           <View style={styles.bottomPadding} />
         </ScrollView>
       )}
+      
       <ReportsHubModal 
         visible={reportsHubVisible} 
         onClose={() => setReportsHubVisible(false)} 
         themeColors={themeColors} 
       />
-
     </View>
   );
 }
@@ -496,7 +496,6 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
 // 4. ESTILOS CENTRALIZADOS
 // ==========================================
 const styles = StyleSheet.create({
-  // --- HEADER Y GENERALES ---
   headerBtnRight: {
     marginRight: 10,
   },
@@ -534,8 +533,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.content_padding,
   },
-  
-  // --- CARDS PRINCIPALES ---
   cardsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -565,8 +562,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: 'bold',
   },
-  
-  // --- CARD ESCÁNER ---
   scannerCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -598,8 +593,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: 'bold',
   },
-  
-  // --- CARD BALANCE ---
   balanceCard: {
     padding: SPACING.content_padding,
     borderRadius: 12,
@@ -612,12 +605,36 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  balanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    gap: 6,
+  },
+  balanceTitle: {
+    fontSize: FONT_SIZES.pequeño,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+  },
+  balanceCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  balanceDivider: {
+    width: 1,
+    height: '80%',
+  },
   balanceMonto: {
-    fontSize: FONT_SIZES.titulo,
+    fontSize: FONT_SIZES.subtitulo,
     fontWeight: 'bold',
   },
-  
-  // --- RANKINGS (TOP / BOTTOM 5) ---
   columnsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -657,8 +674,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
   },
-  
-  // --- GRÁFICOS ---
   chartContainer: {
     padding: SPACING.content_padding,
     borderRadius: 12,
@@ -683,130 +698,5 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 100,
-  },
-
-  // --- MODAL DINÁMICO DE DETALLES ---
-  modalContenedorTabla: {
-    width: '95%',
-    maxHeight: '85%',
-    backgroundColor: COLORS.blanco,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: COLORS.negro,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.content_padding,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gris,
-    backgroundColor: COLORS.blanco,
-  },
-  modalTitulo: {
-    fontSize: FONT_SIZES.subtitulo,
-    fontWeight: 'bold',
-    color: COLORS.morado,
-  },
-  modalAcciones: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  btnIcono: {
-    padding: 2,
-  },
-  tablaHeaderFila: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.gris,
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.turquesa,
-  },
-  celdaHeader: {
-    paddingHorizontal: 6,
-    justifyContent: 'center',
-  },
-  textoHeader: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.negro,
-    textTransform: 'uppercase',
-  },
-  textoHeaderActivo: {
-    color: COLORS.turquesa,
-  },
-  tablaFila: {
-    flexDirection: 'row',
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.gris,
-  },
-  tablaFilaPar: {
-    backgroundColor: '#F9F9FB',
-  },
-  celdaTexto: {
-    fontSize: FONT_SIZES.pequeño,
-    color: COLORS.negro,
-    paddingHorizontal: 6,
-  },
-  textoMoneda: {
-    fontWeight: 'bold',
-    color: COLORS.turquesa,
-  },
-  vacioContenedor: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  vacioTexto: {
-    fontSize: FONT_SIZES.cuerpo,
-    color: COLORS.grisOscuro,
-  },
-  // --- CARD BALANCE DUAL ---
-  balanceCard: {
-    borderRadius: 12,
-    marginHorizontal: 4,
-    marginBottom: SPACING.global,
-    paddingVertical: SPACING.content_padding,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  balanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    gap: 6,
-  },
-  balanceTitle: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-  },
-  balanceCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  balanceDivider: {
-    width: 1,
-    height: '80%',
-  },
-  balanceMonto: {
-    fontSize: FONT_SIZES.subtitulo,
-    fontWeight: 'bold',
   },
 });
