@@ -7,14 +7,13 @@ import {
   Image,
   TouchableOpacity,
   Modal,
-  Pressable,
   ActivityIndicator,
   Alert,
   TextInput, 
   ScrollView,
+  Keyboard
 } from 'react-native';
 import { imagenes } from '../productosData';
-// 🚀 1. Quitamos getDocs/getDoc y metemos onSnapshot e increment
 import { collection, doc, writeBatch, onSnapshot, increment } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
@@ -22,7 +21,6 @@ import Toast from '../components/Toast';
 import SearchBar from '../components/SearchBar';
 import { Ionicons } from '@expo/vector-icons';
 import { getProductosActivos } from '../context/productCatalog';
-
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
@@ -48,31 +46,42 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   
   const isMountedRef = useRef(true);
 
-  // =====================================================================
-  // 2. EFECTOS Y MOTOR LOCAL-FIRST (0ms Latencia)
-  // =====================================================================
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
   }, []);
 
+  // =====================================================================
+  // 2. MOTOR LOCAL-FIRST (CON DEEP MATCHING PARA DATOS ANTIGUOS)
+  // =====================================================================
   useEffect(() => {
     if (!user || !cuenta || !cuentaId) return;
-
     if (isMountedRef.current) setLoading(true);
 
     const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
 
-    // 📡 onSnapshot lee el caché local al instante y dibuja en 0ms
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       const productosData = docSnap.data()?.productos || {};
-      
-      // 🧠 Cruzamos la memoria local (Nombres/Fotos) con las cantidades de Firebase
       const catalogoLocal = getProductosActivos(); 
+      
+      // 🧠 FIX CRÍTICO: Convertimos el mapa a Array para leer el interior de los objetos antiguos
+      const firebaseArray = Object.values(productosData);
 
       const productosCombinados = catalogoLocal.map((catalogo) => {
-        const stockActual = productosData[catalogo.codigo]?.cantidad || 0;
+        // 1. Búsqueda rápida: Intentamos por llave directa (Sistema Nuevo)
+        let datosFirebase = productosData[catalogo.id] || productosData[catalogo.codigo];
+        
+        // 2. Búsqueda Profunda: Si no lo encuentra, buscamos adentro de los objetos (Sistema Antiguo)
+        if (!datosFirebase) {
+          datosFirebase = firebaseArray.find(item => 
+            item.codigo === catalogo.codigo || 
+            item.nombre === catalogo.nombre
+          );
+        }
+
+        // 3. Fallback final si de verdad no existe en Firebase
+        datosFirebase = datosFirebase || { cantidad: 0, piezasConDescuento: 0, notas: '' };
 
         return {
           id: catalogo.id || catalogo.codigo,
@@ -81,21 +90,25 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           descripcion: catalogo.descripcion || '',
           precioCosto: catalogo.precioCostoStandard || 0,
           precioVenta: catalogo.precioVentaStandard || 0,
-          cantidad: stockActual,
+          cantidad: parseInt(datosFirebase.cantidad) || 0,
+          piezasConDescuento: parseInt(datosFirebase.piezasConDescuento) || 0,
+          notas: datosFirebase.notas || '',
           categoria: catalogo.categoria || '',
           bonoInfluencer: false,
           timestamp: new Date()
         };
       });
 
+      // Forzamos el ordenamiento alfabético
+      productosCombinados.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
       if (isMountedRef.current) {
         setProductos(productosCombinados);
-        // ⚠️ Si el usuario no está buscando nada, actualizamos la lista filtrada también
         setProductosFiltrados(prev => prev.length === 0 ? productosCombinados : prev); 
         setLoading(false);
       }
     }, (error) => {
-      console.log('✈️ Silenciador Offline (Entradas):', error.message);
+      console.log('✈️ Silenciador Offline:', error.message);
       if (isMountedRef.current) setLoading(false);
     });
 
@@ -103,19 +116,11 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   }, [user, cuenta, cuentaId]);
 
   // =====================================================================
-  // 3. FUNCIONES DE BÚSQUEDA
+  // 3. FUNCIONES DE BÚSQUEDA Y CARRITO
   // =====================================================================
-  const handleSearch = useCallback((filtrados) => {
-    setProductosFiltrados(filtrados);
-  }, []);
+  const handleSearch = useCallback((filtrados) => setProductosFiltrados(filtrados), []);
+  const productosParaSearch = useMemo(() => productos, [productos]);
 
-  const productosParaSearch = useMemo(() => {
-    return productos;
-  }, [productos]);
-
-  // =====================================================================
-  // 4. FUNCIONES DE INTERFAZ (MODAL Y CARRITO)
-  // =====================================================================
   const openModal = (producto) => {
     setSelectedProduct({ ...producto, bonoInfluencer: false });
     setCantidad(1);
@@ -128,17 +133,10 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   const aumentarCantidad = () => setCantidad(prev => prev + 1);
-  const disminuirCantidad = () => {
-    if (cantidad > 1) setCantidad(prev => prev - 1);
-  };
+  const disminuirCantidad = () => { if (cantidad > 1) setCantidad(prev => prev - 1); };
+  const toggleBonoInfluencer = () => setSelectedProduct(prev => ({ ...prev, bonoInfluencer: !prev.bonoInfluencer }));
 
-  const toggleBonoInfluencer = () => {
-    setSelectedProduct(prev => ({ ...prev, bonoInfluencer: !prev.bonoInfluencer }));
-  };
-
-  const mostrarToast = (mensaje, tipo = 'success') => {
-    setToastConfig({ visible: true, message: mensaje, type: tipo });
-  };
+  const mostrarToast = (mensaje, tipo = 'success') => setToastConfig({ visible: true, message: mensaje, type: tipo });
 
   const confirmarEntrada = () => {
     if (!selectedProduct || cantidad < 1) {
@@ -146,9 +144,8 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       return;
     }
 
+      // 🧠 REGLA DE NEGOCIO FINANCIERA
     const esBono = !!selectedProduct.bonoInfluencer;
-    
-    // 🧠 REGLA DE NEGOCIO FINANCIERA
     const costoCalculado = esBono 
       ? (selectedProduct.precioVenta * 0.10) 
       : (selectedProduct.precioVenta * 0.50);
@@ -177,9 +174,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
 
   const prepararResumenPedido = () => {
     let totalBase = 0;
-    pedido.forEach(item => {
-      totalBase += (item.costoUnitarioAplicado * item.cantidad);
-    });
+    pedido.forEach(item => { totalBase += (item.costoUnitarioAplicado * item.cantidad); });
     
     setCostoTotalCalculado(totalBase);
     setCostoTotalFinal(totalBase.toString()); 
@@ -189,12 +184,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
 
   const handleCostoFinalChange = (text) => {
     setCostoTotalFinal(text);
-
-    if (text === '') {
-      setPorcentajeDescuento(0);
-      return;
-    }
-
+    if (text === '') return setPorcentajeDescuento(0);
     const pagadoReal = parseFloat(text);
 
     if (!isNaN(pagadoReal) && costoTotalCalculado > 0 && pagadoReal < costoTotalCalculado) {
@@ -206,7 +196,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   // =====================================================================
-  // 5. TRANSACCIÓN BASE DE DATOS (100% OFFLINE-FIRST)
+  // 4. TRANSACCIÓN BASE DE DATOS (DOT NOTATION + ESQUEMA EXACTO)
   // =====================================================================
   const registrarEntradaInventario = async () => {
     if (pedido.length === 0) return;
@@ -215,78 +205,77 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     try {
       const ahora = new Date();
       const timestampCompleto = ahora.toISOString();
-      const folioUnico = ordenProveedor.trim() ? `OC-${ordenProveedor.trim()}` : `ENT-${ahora.getTime()}`;
+      const folioLimpio = ordenProveedor.trim().replace(/[^a-zA-Z0-9-]/g, '');
+      const folioUnico = folioLimpio ? `OC-${folioLimpio}` : `ENT-${ahora.getTime()}`;
 
-      // 🚀 1. Abrimos el "Buzón" de Firebase (Soporta Offline nativo)
       const batch = writeBatch(db);
-
-      // 📦 2. Preparamos la actualización del inventario SIN LEERLO (Usamos increment)
+      
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-      const inventarioUpdates = { updatedAt: timestampCompleto };
+      const entradaRef = doc(db, 'cuentas', cuentaId.toString(), 'entradas', folioUnico);
+      const analyticsRef = doc(db, 'cuentas', cuentaId.toString(), 'analytics', folioUnico);
 
-      let pedidoLimpio = [];
+      // 1. Reconstruir el pedido (Respetando tu lógica original)
+      const pedidoLimpio = pedido.map(item => ({
+        ...item,
+        bonoInfluencer: !!item.bonoInfluencer
+      }));
 
-      pedido.forEach(item => {
-        // 🔥 MAGIA MATEMÁTICA: increment() suma sin importar cuánto había antes. Cero internet requerido.
-        inventarioUpdates[`productos.${item.codigo}.cantidad`] = increment(item.cantidad);
-        inventarioUpdates[`productos.${item.codigo}.codigo`] = item.codigo;
-        inventarioUpdates[`productos.${item.codigo}.nombre`] = item.nombre;
-        inventarioUpdates[`productos.${item.codigo}.updatedAt`] = timestampCompleto;
-
-        // Limpiar datos para el ticket histórico
-        pedidoLimpio.push({
-          id: item.codigo,
-          codigo: item.codigo,
-          nombre: item.nombre,
-          cantidad: item.cantidad,
-          precioUnitario: Number(item.precioCosto || 0),
-          subtotal: Number(item.precioCosto || 0) * item.cantidad
-        });
-      });
-
-      // 🧾 3. Crear el Ticket de Entrada (Analytics)
+      // 2. ESQUEMA 100% IDÉNTICO (Inmune al bloqueo de Reglas de Seguridad)
       const ordenEntrada = {
         folio: folioUnico,
-        ordenProveedor: ordenProveedor.trim() || 'Manual/Sin ID',
-        fecha: timestampCompleto.split('T')[0],
-        timestamp: timestampCompleto,
-        tipo: 'restock',
+        fecha: timestampCompleto, 
+        timestamp: timestampCompleto, 
         productos: pedidoLimpio,
-        costoTotal: Number(costoTotalFinal || 0),
-        ahorroMonetario: Number((costoTotalCalculado || 0) - (Number(costoTotalFinal) || 0)),
-        descuentoAplicado: Number(porcentajeDescuento || 0),
-        creadoPorUid: user.uid,
-        creadoPorNombre: userData?.nombre || user.email
+        costoBase: Number(costoTotalCalculado) || 0,
+        costoPagado: parseFloat(costoTotalFinal) || Number(costoTotalCalculado) || 0,
+        descuentoAplicado: parseFloat(porcentajeDescuento) || 0,
+        ahorroMonetario: Number(costoTotalCalculado) - (parseFloat(costoTotalFinal) || Number(costoTotalCalculado)) || 0,
+        creadoPorUid: user?.uid || 'sistema',
+        creadoPorNombre: userData?.nombre || user?.email || 'Usuario',
+        registradoPor: user?.uid || 'sistema' 
       };
 
-      const entradaRef = doc(db, 'cuentas', cuentaId.toString(), 'entradas', folioUnico);
-
-      // 📦 4. Asignar tareas al Batch
       batch.set(entradaRef, ordenEntrada);
+      batch.set(analyticsRef, { tipoMovimiento: 'ENTRADA_RESTOCK', ...ordenEntrada });
+      
+      // 3. LA LLAVE MAESTRA: DOT NOTATION EN BATCH.UPDATE
+      // Garantiza que increment() se ejecute en el servidor y no falle en silencio
+      const inventarioUpdates = {
+        updatedAt: timestampCompleto
+      };
+
+      pedido.forEach(item => {
+        const key = item.id || item.codigo;
+        // Modificamos quirúrgicamente solo los campos necesarios, protegiendo notas previas
+        inventarioUpdates[`productos.${key}.cantidad`] = increment(Number(item.cantidad) || 1);
+        inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
+        inventarioUpdates[`productos.${key}.nombre`] = item.nombre || 'Producto Desconocido';
+        inventarioUpdates[`productos.${key}.updatedAt`] = timestampCompleto;
+      });
+
+      // Ejecutamos UPDATE en lugar de SET para procesar la notación de puntos
       batch.update(inventarioRef, inventarioUpdates);
 
-      // 🚀 5. Ejecutar. Si no hay internet, se guarda en el teléfono y responde "Éxito" instantáneamente.
+      // EJECUTAR BATCH
       await batch.commit();
 
-      // 🧹 Limpieza de UI (No llamamos cargarProductos porque onSnapshot lo actualiza solo)
       setPedido([]);
       setOrdenProveedor(''); 
       setCostoTotalFinal('');
       setPorcentajeDescuento(0);
-      setModalResumenVisible(false); // 🔥 FIX: Cerrar modal correcto
-
-      Alert.alert('✅ ¡Guardado!', 'El inventario se ha actualizado correctamente.');
+      setModalResumenVisible(false);
+      mostrarToast('Restock registrado correctamente', 'success');
 
     } catch (error) {
       console.error('❌ Error guardando restock:', error);
-      Alert.alert('Error', 'No se pudo guardar la entrada: ' + error.message);
+      Alert.alert('Error de Permisos', 'Fallo al guardar. Detalles: ' + error.message);
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
   };
 
   // =====================================================================
-  // 6. RENDERIZADO
+  // 5. RENDERIZADO
   // =====================================================================
   const renderProducto = ({ item }) => {
     const imagen = imagenes[item.codigo] || null;
@@ -321,16 +310,8 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     );
   };
 
-  if (loading && productos.length === 0) {
-    return (
-      <View style={[GLOBAL_STYLES.safeArea, { backgroundColor: themeColors.bg, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.turquesa} />
-      </View>
-    );
-  }
-
   return (
-    <View style={[GLOBAL_STYLES.safeArea, { backgroundColor: themeColors.bg, flex: 1 }]}>
+    <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <Toast 
         visible={toastConfig.visible}
         message={toastConfig.message}
@@ -339,18 +320,13 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
         onHide={() => setToastConfig({ visible: false })}
       />
       
-      {/* HEADER */}
       <ScreenHeader 
         title="Agregar Inventario" 
         onPress={() => onNavigate('home')} 
         themeColors={themeColors} 
         rightAction={
           pedido.length > 0 ? (
-            <TouchableOpacity 
-              onPress={prepararResumenPedido} 
-              style={styles.cartIconWrapper}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
+            <TouchableOpacity onPress={prepararResumenPedido} style={styles.cartIconWrapper} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="cart-outline" size={28} color={themeColors.text} />
               <View style={styles.badgeContainer}>
                 <Text style={styles.badgeText}>
@@ -363,13 +339,21 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           )
         }
       />
+      {/* RENDERIZADO CONDICIONAL INTERNO */}
+      {loading && productos.length === 0 ? (
+        
+        <View style={GLOBAL_STYLES.loaderContainer}>
+          <ActivityIndicator size="large" color={COLORS.turquesa} />
+        </View>
 
+      ) : (
+
+        <>
       <SearchBar 
         data={productosParaSearch} 
         onSearch={handleSearch}
         searchKeys={['nombre', 'codigo']}
       />      
-
       <FlatList
         data={productosFiltrados.length > 0 ? productosFiltrados : productos}
         renderItem={renderProducto}
@@ -379,11 +363,13 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
         scrollEnabled={true}
         contentContainerStyle={styles.gridContent}
       />
-
+      </>
+      )}
+      
       {/* MODAL DE SELECCIÓN DE PRODUCTO */}
       <Modal visible={modalVisible} transparent={true} animationType="none" onRequestClose={closeModal}>
-        <Pressable style={GLOBAL_STYLES.modalOverlay} onPress={closeModal}>
-          <Pressable style={[GLOBAL_STYLES.modalContent, styles.modalContentNoPadding, { backgroundColor: themeColors.bg }]} onPress={(e) => e.stopPropagation()}>
+        <TouchableOpacity style={GLOBAL_STYLES.modalOverlay} activeOpacity={1} onPress={closeModal}>
+          <TouchableOpacity activeOpacity={1} style={[GLOBAL_STYLES.modalContent, styles.modalContentNoPadding, { backgroundColor: themeColors.bg }]} onPress={Keyboard.dismiss}>
             {selectedProduct && (
               <>
                 <View style={styles.modalImageContainer}>
@@ -397,7 +383,6 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                 </View>
 
                 <View style={styles.modalInnerBody}>
-                  
                   <View style={styles.modalHeaderColumns}>
                     <View style={styles.modalLeftColumn}>
                       <Text style={[GLOBAL_STYLES.modalTitle, styles.modalProductNameText, { color: themeColors.text }]} numberOfLines={2}>
@@ -409,11 +394,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                     </View>
 
                     <View style={styles.modalRightColumn}>
-                      <TouchableOpacity 
-                        style={styles.bonoCheckboxBtn}
-                        onPress={toggleBonoInfluencer}
-                        activeOpacity={0.7}
-                      >
+                      <TouchableOpacity style={styles.bonoCheckboxBtn} onPress={toggleBonoInfluencer} activeOpacity={0.7}>
                         <Ionicons 
                           name={selectedProduct.bonoInfluencer ? "checkmark-circle" : "ellipse-outline"} 
                           size={30} 
@@ -428,19 +409,10 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
 
                   <View style={[styles.cantidadSection, { backgroundColor: darkMode ? '#333' : COLORS.gris }]}>
                     <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Cantidad a agregar:</Text>
-
                     <View style={styles.cantidadControls}>
-                      <TouchableOpacity style={styles.cantidadBtn} onPress={disminuirCantidad}>
-                        <Text style={styles.cantidadBtnText}>−</Text>
-                      </TouchableOpacity>
-
-                      <View style={styles.cantidadDisplay}>
-                        <Text style={styles.cantidadValue}>{cantidad}</Text>
-                      </View>
-
-                      <TouchableOpacity style={styles.cantidadBtn} onPress={aumentarCantidad}>
-                        <Text style={styles.cantidadBtnText}>+</Text>
-                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.cantidadBtn} onPress={disminuirCantidad}><Text style={styles.cantidadBtnText}>−</Text></TouchableOpacity>
+                      <View style={styles.cantidadDisplay}><Text style={styles.cantidadValue}>{cantidad}</Text></View>
+                      <TouchableOpacity style={styles.cantidadBtn} onPress={aumentarCantidad}><Text style={styles.cantidadBtnText}>+</Text></TouchableOpacity>
                     </View>
                   </View>
 
@@ -448,7 +420,6 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                     <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={closeModal}>
                       <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf]} onPress={confirmarEntrada}>
                       <Text style={GLOBAL_STYLES.btnText}>✅ Aceptar</Text>
                     </TouchableOpacity>
@@ -456,14 +427,19 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                 </View>
               </>
             )}
-          </Pressable>
-        </Pressable>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL DE RESUMEN FINANCIERO */}
       <Modal visible={modalResumenVisible} animationType="slide" transparent={true} onRequestClose={() => setModalResumenVisible(false)}>
-        <Pressable style={GLOBAL_STYLES.modalOverlay} onPress={() => setModalResumenVisible(false)}>
-          <Pressable style={[GLOBAL_STYLES.modalContent, styles.modalResumenWidth, { backgroundColor: themeColors.bg }]} onPress={(e) => e.stopPropagation()}>
+        <TouchableOpacity style={GLOBAL_STYLES.modalOverlay} activeOpacity={1} onPress={() => setModalResumenVisible(false)}>
+          
+          {/* 🚨 FIX SCROLL: Eliminamos TouchableOpacity y usamos View. onStartShouldSetResponder evita que el toque cierre el modal, pero permite scrollear */}
+          <View 
+            style={[GLOBAL_STYLES.modalContent, styles.modalResumenWidth, { backgroundColor: themeColors.bg }]} 
+            onStartShouldSetResponder={() => true}
+          >
             <Text style={[GLOBAL_STYLES.modalTitle, styles.modalResumenTitle, { color: themeColors.text }]}>
               Resumen de Restock
             </Text>
@@ -472,6 +448,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
               <ScrollView 
                 nestedScrollEnabled={true} 
                 showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled" 
                 contentContainerStyle={styles.resumenScrollContent}
               >
                 {pedido.map((item, idx) => {
@@ -479,10 +456,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                   const cantidadNum = Number(item.cantidad) || 0;
 
                   return (
-                    <View 
-                      key={idx} 
-                      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}
-                    >
+                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 }}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.resumenItemText, { color: themeColors.text }]}>
                           {cantidadNum}x {item.nombre} {item.bonoInfluencer ? '⭐' : ''}
@@ -513,16 +487,9 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
             </View>
 
             <View style={[styles.resumenFinancieroBox, { backgroundColor: darkMode ? '#333' : COLORS.gris }]}>
-              <Text style={[styles.resumenTextoBase, { color: themeColors.text }]}>
-                Total sin descuentos: ${costoTotalCalculado.toFixed(2)}
-              </Text>
-              
-              <Text style={[styles.resumenTextoTitulo, { color: themeColors.text }]}>
-                Total pagado:
-              </Text>
-              <Text style={styles.resumenTextoSub}>
-                (Descuentos adicionales, bono, etc...)
-              </Text>
+              <Text style={[styles.resumenTextoBase, { color: themeColors.text }]}>Total sin descuentos: ${costoTotalCalculado.toFixed(2)}</Text>
+              <Text style={[styles.resumenTextoTitulo, { color: themeColors.text }]}>Total pagado:</Text>
+              <Text style={styles.resumenTextoSub}>(Bono de lealtad, descuentos adicionales, etc...)</Text>
               
               <TextInput
                 style={[GLOBAL_STYLES.inputBase, styles.resumenInput, { backgroundColor: darkMode ? '#222' : '#FFF', color: themeColors.text }]}
@@ -535,12 +502,8 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
 
               {parseFloat(porcentajeDescuento) > 0 && (
                 <View style={styles.resumenDescuentoBox}>
-                  <Text style={styles.resumenDescuentoPorcentaje}>
-                    Descuento Aplicado: {porcentajeDescuento}%
-                  </Text>
-                  <Text style={styles.resumenDescuentoMonto}>
-                    Margen adicional: ${(costoTotalCalculado - parseFloat(costoTotalFinal)).toFixed(2)}
-                  </Text>
+                  <Text style={styles.resumenDescuentoPorcentaje}>Descuento Aplicado: {porcentajeDescuento}%</Text>
+                  <Text style={styles.resumenDescuentoMonto}>Margen adicional: ${(costoTotalCalculado - parseFloat(costoTotalFinal)).toFixed(2)}</Text>
                 </View>
               )}
             </View>
@@ -549,13 +512,12 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
               <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={() => setModalResumenVisible(false)}>
                 <Text style={GLOBAL_STYLES.btnText}>Volver</Text>
               </TouchableOpacity>
-              
               <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} onPress={registrarEntradaInventario} disabled={loading}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={GLOBAL_STYLES.btnText}>Confirmar</Text>}
               </TouchableOpacity>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -600,6 +562,7 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     width: '100%',
+    backgroundColor: 'transparent'
   },
   productName: {
     fontSize: 12,
@@ -624,10 +587,6 @@ const styles = StyleSheet.create({
   },
   addBtnText: {
     fontSize: 16,
-  },
-  modalContentNoPadding: {
-    padding: 0,
-    overflow: 'hidden',
   },
   modalImageContainer: {
     width: '100%',
@@ -749,7 +708,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   resumenListContainer: {
-    height: 160, 
+    maxHeight: 200, // 🚨 FIX SCROLL: Cambiado de height estricto a maxHeight dinámico
     marginBottom: 15,
     borderRadius: 8,
     borderWidth: 1,

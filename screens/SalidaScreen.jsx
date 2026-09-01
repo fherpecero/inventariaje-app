@@ -84,10 +84,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   useEffect(() => { 
     if (cuenta) cargarEscanerActual();
   }, [cuenta]);
-
-  useEffect(() => {
-    if (user && cuenta) cargarProductos();
-  }, [user, cuenta]);
   
   // ==========================================
   // LÓGICA DE DATOS
@@ -106,48 +102,54 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     }
   };
 
-  const cargarProductos = async () => {
-    if (!isMountedRef.current) return;
-    
+  // ==========================================
+  // 🚀 MOTOR LOCAL-FIRST (100% BASADO EN NOMBRE)
+  // ==========================================
+  useEffect(() => {
+    if (!user || !cuenta || !cuentaId) return;
     if (isMountedRef.current) setLoadingProducts(true);
-    try {
-      const catalogoRef = collection(db, 'catalogoGlobal');
-      const catalogoSnap = await getDocs(catalogoRef);
 
-      const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-      const docSnap = await getDoc(docRef);
-      const productos = docSnap.data()?.productos || {};
+    const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
 
-      const inventarioMap = {};
-      Object.keys(productos).forEach((codigo) => {
-        inventarioMap[codigo] = productos[codigo].cantidad || 0;
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      const productosData = docSnap.data()?.productos || {};
+      const catalogoLocal = getProductosActivos();
+      const firebaseArray = Object.values(productosData);
+
+      const productosCombinados = catalogoLocal.map((catalogo) => {
+        // Única búsqueda, basada puramente en el nombre
+        let datosFirebase = productosData[catalogo.nombre];
+        
+        if (!datosFirebase) {
+          datosFirebase = firebaseArray.find(item => item.nombre === catalogo.nombre) || {};
+        }
+
+        return {
+          id: catalogo.nombre, // 🔑 El ID ahora es el nombre
+          nombre: catalogo.nombre,
+          // 🔥 ADIÓS CÓDIGO
+          descripcion: catalogo.descripcion || '',
+          precioCosto: catalogo.precioCostoStandard || 0,
+          precioVenta: catalogo.precioVentaStandard || 0,
+          cantidad: parseInt(datosFirebase.cantidad) || 0,
+          categoria: catalogo.categoria || '',
+        };
       });
 
-      const productosCombinados = catalogoSnap.docs
-        .map((doc) => {
-          const catalogo = doc.data();
-          return {
-            id: doc.id,
-            nombre: catalogo.nombre,
-            codigo: catalogo.codigo,
-            descripcion: catalogo.descripcion,
-            precioCosto: catalogo.precioCostoStandard || 0,
-            precioVenta: catalogo.precioVentaStandard || 0,
-            cantidad: inventarioMap[doc.id] || 0, 
-            categoria: catalogo.categoria,
-          };
-        })
-        .filter((p) => p && p.nombre && p.codigo);
+      productosCombinados.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-      if (!isMountedRef.current) return;
-      setAllProducts(productosCombinados);
-      setProductosFiltrados(productosCombinados);
-    } catch (error) {
-      if (isMountedRef.current) Alert.alert('Error', 'No se pudieron cargar los productos: ' + error.message);
-    } finally {
+      if (isMountedRef.current) {
+        setAllProducts(productosCombinados);
+        setProductosFiltrados(prev => prev.length === 0 ? productosCombinados : productosCombinados);
+        setLoadingProducts(false);
+      }
+    }, (error) => {
+      console.log('✈️ Silenciador Offline (Salidas):', error.message);
       if (isMountedRef.current) setLoadingProducts(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [user, cuenta, cuentaId]);
 
   // ==========================================
   // LOGICA DEL CARRITO Y MODALES
@@ -477,7 +479,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
         const ventaDoc = {
           producto: item.nombre,
-          codigo: item.codigo,
           cantidad: item.cantidad,
           precioUnitario: item.precioVenta,
           subtotal: item.precioVenta * item.cantidad,
@@ -593,7 +594,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         const item = carrito[i];
         const ventaDoc = {
           producto: item.nombre,
-          codigo: item.codigo,
           cantidad: item.cantidad,
           precioUnitario: item.precioVenta,
           subtotal: item.precioVenta * item.cantidad,
@@ -784,7 +784,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       <SearchBar 
         data={allProducts} 
         onSearch={setProductosFiltrados}
-        searchKeys={['nombre', 'codigo']}
+        searchKeys={['nombre']}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

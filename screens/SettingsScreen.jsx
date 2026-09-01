@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
@@ -92,6 +93,30 @@ export default function SettingsScreen({
     }
   };
 
+  // 💳 REDIRECCIÓN A GOOGLE PLAY (Suscripciones) - ya que tenga la app publica y revenue cat lo hago
+  // const handleManageSubscription = async () => {
+  // Ajusta tu package name según tu app.json
+//   const PACKAGE_NAME = 'com.tuempresa.inventariaje';
+  
+//   // URL directa a suscripciones de Google Play
+//   const playStoreLink = `https://play.google.com/store/account/subscriptions?package=${PACKAGE_NAME}`;
+//   const playStoreGeneral = 'https://play.google.com/store/account/subscriptions';
+
+//   try {
+//     const supported = await Linking.canOpenURL(playStoreLink);
+//     if (supported) {
+//       await Linking.openURL(playStoreLink);
+//     } else {
+//       await Linking.openURL(playStoreGeneral);
+//     }
+//   } catch (error) {
+//     Alert.alert(
+//       'Aviso',
+//       'No se pudo abrir Google Play automáticamente. Ve a Google Play Store > Pagos y suscripciones.'
+//     );
+//   }
+// };
+
   const toggleNotificaciones = async () => {
     const newValue = !notificaciones;
     setNotificaciones(newValue);
@@ -153,65 +178,83 @@ export default function SettingsScreen({
 
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
-      <ScreenHeader
-        title="Configuranza"
-        onPress={() => onNavigate('home')}
-        themeColors={themeColors}
-      />
+  <ScreenHeader
+    title="Configuranza"
+    onPress={() => onNavigate('home')}
+    themeColors={themeColors}
+  />
 
-        {/* CONTENT */}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 1. PERFIL DE USUARIO */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              👤 Mi Cuenta
+  {/* CONTENT */}
+  <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    
+    {/* ═══════════════════════════════════════════════════════════════ */}
+    {/* 1. PERFIL DE USUARIO */}
+    {/* ═══════════════════════════════════════════════════════════════ */}
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+        👤 Mi Cuenta
+      </Text>
+
+      {/* TARJETA 3 COLUMNAS: Tocar abre el modal de edición */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={abrirModalEdicion}
+        style={[styles.card3Col, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
+      >
+        {/* COLUMNA 1: AVATAR */}
+        <View style={styles.colAvatar}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.userAvatarText}>
+              {userData?.nombre ? userData.nombre.charAt(0).toUpperCase() : 'U'}
             </Text>
+          </View>
+        </View>
 
-            <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={abrirModalEdicion}
-            style={[styles.card3Col, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
+        {/* COLUMNA 2: DETALLES DE USUARIO */}
+        <View style={styles.colInfo}>
+          <Text style={[styles.userName, { color: themeColors.text }]} numberOfLines={1}>
+            {userData?.nombre || 'Usuario'}
+          </Text>
+          <Text style={[styles.userEmail, { color: themeColors.textSecondary }]} numberOfLines={1}>
+            {userData?.email || 'Sin correo'}
+          </Text>
+          
+          {/* 🛡️ ROL */}
+          <Text style={{ fontSize: FONT_SIZES.pequeño, fontWeight: '700', color: userData?.rol === 'admin' ? COLORS.morado : COLORS.turquesa }}>
+            {userData?.rol === 'admin' ? '👑 Admin' : '👥 User'}
+          </Text>
+        </View>
+
+        {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
+        <View style={styles.colCuenta}>
+          <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
+            ID: {cuentaId || '---'}
+          </Text>
+          <Text style={styles.tierEmoji}>
+            {effectiveTier === 'premium' ? '💎' : '🪩'}
+          </Text>
+          <Text style={[styles.tierLabel, { color: effectiveTier === 'premium' ? COLORS.turquesa : COLORS.textSecondary }]}>
+            {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* 💳 BOTÓN DE PAUSAR / ADMINISTRAR SUSCRIPCIÓN (Solo visible para Admin) */}
+      {userData?.rol === 'admin' && (
+        <View style={styles.subscriptionContainer}>
+          <TouchableOpacity 
+            style={styles.btnManageSub}
+            activeOpacity={0.8}
+            onPress={handleManageSubscription}
           >
-            {/* COLUMNA 1: AVATAR */}
-            <View style={styles.colAvatar}>
-              <View style={styles.userAvatar}>
-                <Text style={styles.userAvatarText}>
-                  {userData?.nombre ? userData.nombre.charAt(0).toUpperCase() : 'U'}
-                </Text>
-              </View>
-            </View>
-
-            {/* COLUMNA 2: DETALLES DE USUARIO */}
-            <View style={styles.colInfo}>
-              <Text style={[styles.userName, { color: themeColors.text }]} numberOfLines={1}>
-                {userData?.nombre || 'Usuario'}
-              </Text>
-              <Text style={[styles.userEmail, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                {userData?.email || 'Sin correo'}
-              </Text>
-              
-              {/* 🛡️ TEXTO NORMAL PARA EL ROL (Sin Badge) */}
-              <Text style={{ fontSize: FONT_SIZES.pequeño, fontWeight: '700', color: userData?.rol === 'admin' ? COLORS.morado : COLORS.turquesa }}>
-                {userData?.rol === 'admin' ? '👑 Admin' : '👥 User'}
-              </Text>
-            </View>
-
-            {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
-            <View style={styles.colCuenta}>
-              <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
-                ID: {cuentaId || '---'}
-              </Text>
-              <Text style={styles.tierEmoji}>
-                {effectiveTier === 'premium' ? '💎' : '🪩'}
-              </Text>
-              <Text style={[styles.tierLabel, { color: effectiveTier === 'premium' ? COLORS.turquesa : COLORS.textSecondary }]}>
-                {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
-              </Text>
-            </View>
-            </TouchableOpacity>
+            <Ionicons name="logo-google-playstore" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.btnManageSubText}>Administrar Suscripción</Text>
+          </TouchableOpacity>
+          <Text style={[styles.subHint, { color: themeColors.textSecondary }]}>
+            Pausa o cancela tu suscripción en Google Play. Mantendrás el acceso al plan Basic.
+          </Text>
+        </View>
+      )}
 
 
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -376,13 +419,13 @@ export default function SettingsScreen({
               ]}
             >
               <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.5.0
+                📱 Versión Actual: v2.5.1
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: '24/08/2026',
+                Compilada: '01/09/2026',
               </Text>
               <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Analytics optimizado | Actualizacion masiva de UI | Refactorizacion offline | Bug Fixes. 
+                Última actualización: Bug fix Analytics/Productos en 0/Creditos/Offline mode/ UX improvement
               </Text>
             </View>
           </View>
@@ -816,6 +859,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FF9800',
     marginTop: 8,
+  },
+  subscriptionContainer: {
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  btnManageSub: {
+    backgroundColor: COLORS.turquesa,
+    flexDirection: 'row',
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  btnManageSubText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: FONT_SIZES.pequeño || 13,
+  },
+  subHint: {
+    fontSize: 11,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   /* INFORMACIÓN */
   versionInfo: { borderRadius: 12, padding: 16, borderWidth: 1, marginBottom: 10 },

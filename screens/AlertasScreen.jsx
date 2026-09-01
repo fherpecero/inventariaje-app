@@ -14,7 +14,7 @@ import { doc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { COLORS, GLOBAL_STYLES, ScreenHeader } from '../context/theme';
 
-import { PRODUCT_CATALOG } from '../context/productCatalog';
+import { getProductosActivos } from '../context/productCatalog';
 import { AuthContext } from '../context/AuthContext';
 
 export default function AlertasScreen({ onNavigate, themeColors }) {
@@ -69,7 +69,6 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
         [`productos.${productoNombre}.limiteStock`]: limiteNumerico
       });
 
-      // Se ejecuta de inmediato. Si no hay red, Firebase lo sube en silencio después.
       await batch.commit();
 
     } catch (error) {
@@ -87,23 +86,33 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
     let alertas = [];
     let configuracion = [];
 
-    const catalogoComoLista = Object.values(PRODUCT_CATALOG || {});
+    const catalogoLocal = getProductosActivos();
+    const firebaseArray = Object.values(inventario);
 
-    catalogoComoLista.forEach(prod => {
-      const nombreReal = prod.nombre; 
-      const dataInv = inventario[nombreReal] || {};
+    catalogoLocal.forEach(prod => {
+      // 1. Buscamos por la nueva llave principal (nombre)
+      let dataInv = inventario[prod.nombre];
+      
+      // 2. Fallback de compatibilidad profunda si antes se guardó con ID/Código
+      if (!dataInv) {
+        dataInv = inventario[prod.id] || inventario[prod.codigo] || 
+                  firebaseArray.find(item => item.nombre === prod.nombre || item.codigo === prod.codigo) || {};
+      }
       
       const stockActual = Number(dataInv.cantidad) || 0;
+      const piezasBono = Number(dataInv.piezasConDescuento) || 0;
       const limite = Number(dataInv.limiteStock) || 0; 
 
       const item = {
         ...prod,
         stockActual,
+        piezasBono,
         limiteStock: limite,
       };
 
       configuracion.push(item);
 
+      // 🚨 La alerta responde al stock físico total
       if (limite > 0 && stockActual <= limite) {
         alertas.push(item);
       }
@@ -299,6 +308,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#000',
+    fontSize: 10, // aqui le puse el font size a ver si es este 
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -339,10 +349,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    width: 60,
-    height: 40,
+    width: 50,
+    height: 36,
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#0F172A',
   },

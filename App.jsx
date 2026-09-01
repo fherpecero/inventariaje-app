@@ -231,6 +231,14 @@ function AppContent() {
           modoSoloSinStock={true}
         />
       )}
+      {page === 'bajo-stock' && (
+        <ExistenciasScreen
+          onNavigate={setPage}
+          darkMode={darkMode}
+          themeColors={themeColors}
+          modoBajoStock={true}
+        />
+      )}
       {page === 'logout' && (
         <LogoutScreen onNavigate={setPage} onLogout={logout} themeColors={themeColors} />
       )}

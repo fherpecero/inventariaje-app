@@ -29,7 +29,8 @@ export default function ExistenciasScreen({
     onNavigate, 
     darkMode, 
     themeColors, 
-    modoSoloSinStock = false 
+    modoSoloSinStock = false,
+    modoBajoStock = false 
 }) {
   // =====================================================================
   // 1. ESTADOS Y CONTEXTO
@@ -94,24 +95,29 @@ export default function ExistenciasScreen({
     const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
 
     // 📡 onSnapshot lee el disco duro del celular AL INSTANTE. 
-    // Dibuja la pantalla en 0ms y sincroniza cambios de otros socios por detrás.
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       const productosData = docSnap.data()?.productos || {};
       
-      // 🧠 Cruzamos cantidades de Firebase con Nombres/Fotos de tu RAM local (Costo $0)
+      // 🧠 Cruzamos cantidades de Firebase con Nombres/Fotos de tu RAM local
       const catalogoLocal = getProductosActivos(); 
+      
+      // 🔥 FIX CRÍTICO: Convertimos el mapa a Array para leer el interior de los objetos antiguos
+      const firebaseArray = Object.values(productosData);
 
       const productosCombinados = catalogoLocal.map((catalogo) => {
-        // Buscamos si el producto tiene stock en Firebase, si no, le ponemos 0
-        const datosFirebase = productosData[catalogo.codigo] || { cantidad: 0, notas: '', piezasConDescuento: 0 };
+        let datosFirebase = productosData[catalogo.nombre];
+        if (!datosFirebase) {
+          datosFirebase = firebaseArray.find(item => item.nombre === catalogo.nombre);
+        }
+        datosFirebase = datosFirebase || { cantidad: 0, limiteStock: 0, notas: '', piezasConDescuento: 0 };
 
         return {
-          id: catalogo.id || catalogo.codigo,
+          id: catalogo.id, 
           nombre: catalogo.nombre,
-          codigo: catalogo.codigo,
-          cantidad: datosFirebase.cantidad || 0,
+          limiteStock: parseInt(datosFirebase.limiteStock) || 0,
+          cantidad: parseInt(datosFirebase.cantidad) || 0,
           notas: datosFirebase.notas || '',
-          piezasConDescuento: datosFirebase.piezasConDescuento || 0,
+          piezasConDescuento: parseInt(datosFirebase.piezasConDescuento) || 0,
           precioCosto: catalogo.precioCostoStandard || 0,
           precioVenta: catalogo.precioVentaStandard || 0,
           imagen: catalogo.imagen || null
@@ -139,15 +145,22 @@ export default function ExistenciasScreen({
 
     // 1. Filtro Sin Stock
     if (modoSoloSinStock) {
-      resultado = resultado.filter(p => p.cantidad === 0);
+      resultado = resultado.filter(p => p.cantidad <= 0);
     }
 
-    // 2. Filtro Descuentos (Bono Influencer)
+    // 2. Filtro Bajo Stock (La nueva respuesta)
+    if (modoBajoStock) {
+      resultado = resultado.filter(p => 
+        p.limiteStock > 0 && p.cantidad > 0 && p.cantidad <= p.limiteStock
+      );
+    }
+
+    // 3. Filtro Descuentos
     if (filtroDescuentos) {
       resultado = resultado.filter(p => p.piezasConDescuento > 0);
     }
 
-    // 3. Ordenamiento reactivo
+    // 4. Ordenamiento reactivo
     if (ordenamiento === 'nombre') {
       resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     } else if (ordenamiento === 'cantidad-asc') {
@@ -205,13 +218,12 @@ export default function ExistenciasScreen({
           text: 'OK',
           onPress: () => {
             closeModalNotas();
-            if (isMountedRef.current) cargarProductos();
           },
         },
       ]);
     } catch (error) {
       console.error('❌ Error guardando notas:', error);
-      Alert.alert('Error', 'No se pudieron anotar las notas');
+      Alert.alert('Error', 'No se pudieron guardar las notas');
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { 
   View, 
-  Text, 
+  Text,
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
@@ -127,7 +127,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
   }, [cuentaId, diasFiltro]);
 
   // ==========================================
-  // 🧠 EL CEREBRO MATEMÁTICO (¡Intacto y exacto!)
+  // 🧠 EL CEREBRO MATEMÁTICO (Optimizado y Exacto)
   // ==========================================
   const kpis = useMemo(() => {
     let totalVentas = 0;
@@ -135,14 +135,23 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
     let totalEscaneres = 0;
     let totalCortesias = 0;       
     let totalDescuentosBonos = 0; 
-    
-    // Acumulador independiente y exacto de utilidad real
     let gananciaRealAcumulada = 0; 
     
     const conteoProductos = {};
     const ventasPorFecha = {}; 
 
-    // 1. Inicializar mapa
+    // 1. INICIALIZAR LÍNEA DE TIEMPO PERFECTA (Evita días fantasma)
+    const hoy = new Date();
+    const rangoFechas = [];
+    for (let i = diasFiltro - 1; i >= 0; i--) {
+      const d = new Date(hoy);
+      d.setDate(d.getDate() - i);
+      const fechaStr = d.toISOString().split('T')[0];
+      rangoFechas.push(fechaStr);
+      ventasPorFecha[fechaStr] = 0; // Garantiza que los días sin ventas caigan a $0
+    }
+
+    // 2. INICIALIZAR MAPA DE PRODUCTOS
     productosLocales.forEach(p => {
       const key = p.id || p.codigo;
       if (key) {
@@ -155,63 +164,69 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
       }
     });
 
+    // 3. PROCESAMIENTO DE MOVIMIENTOS
     movimientos.forEach(mov => {
-      // ==========================================
-      // A) SALIDAS (Ventas, Bonos, Cortesías)
-      // ==========================================
+      let fechaCorta = null;
+      if (mov.timestamp || mov.createdAt || mov.fechaISO) {
+        fechaCorta = (mov.timestamp || mov.createdAt || mov.fechaISO).split('T')[0];
+      }
+
+      // --- A) SALIDAS ---
       if (mov._origen === 'salida') {
         const esIntercambio = mov.modoIntercambio === true || mov.tipo === 'intercambio';
 
         if (!esIntercambio) {
           const ventaMonto = parseFloat(mov.total) || 0;
-          const subtotalMonto = parseFloat(mov.subtotal) || ventaMonto; // El valor público
+          const subtotalMonto = parseFloat(mov.subtotal) || ventaMonto;
           totalVentas += ventaMonto;
 
-          // --- 📊 CÁLCULO DE GANANCIA REAL (REGLAS DE NEGOCIO) ---
           let gananciaTransaccion = 0;
+          const esCortesia = mov.descuentoPorcentaje === 100 || ventaMonto === 0;
 
           if (mov.consumoBono === true) {
-            // 🎁 REGLA 1: Bono Influencer = 10% del Valor Público
             gananciaTransaccion = subtotalMonto * 0.10;
             totalDescuentosBonos += (parseFloat(mov.descuentoMonto) || 0);
           } 
-          else if (mov.descuentoPorcentaje === 100 || ventaMonto === 0) {
-            // 🎁 REGLA 2: Cortesía 100% = $0 de ganancia (No da pérdida negativa visual)
+          else if (esCortesia) {
             gananciaTransaccion = 0;
             totalCortesias += subtotalMonto;
-          } 
+          }
           else {
-            // 🛒 REGLA 3: Venta Normal = Monto Cobrado - Costo Real
-            let costoTransaccion = 0;
-            
-            if (mov.productos && Array.isArray(mov.productos)) {
-              mov.productos.forEach(item => {
-                const idProd = item.codigo || item.producto || item.id;
-                const prod = productosLocales.find(p => p.codigo === idProd || p.id === idProd);
-                const costoUnitario = prod ? parseFloat(prod.precioCostoStandard || prod.costo || prod.precioCosto || 0) : 0;
-                costoTransaccion += (costoUnitario * (parseInt(item.cantidad) || 1));
+            let costoTransaccion = parseFloat(mov.costoTotalVenta) || parseFloat(mov.costoTotalTicket) || 0;
+              
+            if (costoTransaccion === 0) {
+                const itemsArray = (mov.productos && Array.isArray(mov.productos)) ? mov.productos : (mov.codigo ? [mov] : []);
+
+                itemsArray.forEach(item => {
+                  const idProd = item.codigo || item.producto || item.id;
+                  const prod = productosLocales.find(p => p.codigo === idProd || p.id === idProd);
+                  let costoUnitario = prod ? parseFloat(prod.precioCostoStandard || prod.costo || prod.precioCosto || 0) : 0;
+
+                  // Salvavidas de costo (50% rule)
+                  if (costoUnitario === 0 && (!mov.descuentoPorcentaje || mov.descuentoPorcentaje === 0)) {
+                    costoUnitario = parseFloat(item.precioUnitario || item.precioVenta || prod?.precioVentaStandard || 0) * 0.5;
+                  }
+                  costoTransaccion += (costoUnitario * (parseInt(item.cantidad) || 1));
               });
-            } else if (mov.codigo) {
-               const prod = productosLocales.find(p => p.codigo === mov.codigo || p.id === mov.codigo);
-               const costoUnitario = prod ? parseFloat(prod.precioCostoStandard || prod.costo || prod.precioCosto || 0) : 0;
-               costoTransaccion += (costoUnitario * (parseInt(mov.cantidad) || 1));
             }
-            
+
+            if (costoTransaccion === 0 && (!mov.descuentoPorcentaje || mov.descuentoPorcentaje === 0)) {
+                costoTransaccion = subtotalMonto * 0.5;
+            }
             gananciaTransaccion = ventaMonto - costoTransaccion;
           }
 
           gananciaRealAcumulada += gananciaTransaccion;
 
-          // 📈 Lógica de Gráficos y Top 5
-          if (mov.timestamp && ventaMonto > 0) {
-            const fechaCorta = mov.timestamp.split('T')[0]; 
-            ventasPorFecha[fechaCorta] = (ventasPorFecha[fechaCorta] || 0) + ventaMonto;
+          if (fechaCorta && ventasPorFecha[fechaCorta] !== undefined) {
+            ventasPorFecha[fechaCorta] += ventaMonto;
           }
 
-          if (mov.codigo && conteoProductos[mov.codigo]) {
-            conteoProductos[mov.codigo].cantidad += (parseInt(mov.cantidad) || 1);
-          } else if (mov.productos && Array.isArray(mov.productos)) {
-            mov.productos.forEach(item => {
+          // 🛒 CONTEO DE PRODUCTOS (Ignorando Cortesías al 100%)
+          // Solo sumamos al ranking si NO es un regalo
+          if (!esCortesia) {
+            const itemsArray = (mov.productos && Array.isArray(mov.productos)) ? mov.productos : (mov.codigo ? [mov] : []);
+            itemsArray.forEach(item => {
               const idProd = item.codigo || item.producto || item.id;
               if (idProd && conteoProductos[idProd]) {
                 conteoProductos[idProd].cantidad += (parseInt(item.cantidad) || 1);
@@ -219,42 +234,52 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
             });
           }
         }
-      } 
-      // ==========================================
-      // B) ENTRADAS (Gasto Restock)
-      // ==========================================
+      }
+      
+      // --- B) ENTRADAS ---
       else if (mov._origen === 'entrada') {
         totalGastos += (parseFloat(mov.costoPagado) || parseFloat(mov.costoBase) || 0);
       }
-      // ==========================================
-      // C) ESCÁNERES
-      // ==========================================
+      // --- C) ESCÁNERES ---
       else if (mov._origen === 'escaner') {
         const escMonto = parseFloat(mov.ventaTotal) || parseFloat(mov.totalCobrado) || parseFloat(mov.monto) || 0;
         totalEscaneres += escMonto;
 
-        if (mov.createdAt || mov.timestamp || mov.fechaISO) {
-          const fechaEv = (mov.createdAt || mov.timestamp || mov.fechaISO).split('T')[0];
-          ventasPorFecha[fechaEv] = (ventasPorFecha[fechaEv] || 0) + escMonto;
+        if (fechaCorta && ventasPorFecha[fechaCorta] !== undefined) {
+          ventasPorFecha[fechaCorta] += escMonto;
         }
       }
     });
 
-    // 2. 🧮 LOS DOS INDICADORES ESTRELLA
-    const flujoEfectivo = totalVentas - totalGastos + totalEscaneres; 
-    const gananciaNeta = gananciaRealAcumulada; 
+    // 4. PRECISIÓN FINANCIERA (Preservando decimales reales en lugar de destruir con Math.round)
+    const round2 = (num) => Math.round(num * 100) / 100;
+    
+    totalVentas = round2(totalVentas);
+    totalGastos = round2(totalGastos);
+    totalEscaneres = round2(totalEscaneres);
+    totalCortesias = round2(totalCortesias);
+    totalDescuentosBonos = round2(totalDescuentosBonos);
+    const gananciaNeta = round2(gananciaRealAcumulada);
+    const flujoEfectivo = round2(totalVentas - totalGastos + totalEscaneres); 
 
-    // 3. Preparación de Gráficos y Rankings
+    // 5. RANKINGS
     const rankingArray = Object.values(conteoProductos);
     const top5 = [...rankingArray].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5);
     const bottom5 = [...rankingArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5);
 
-    const fechasOrdenadas = Object.keys(ventasPorFecha).sort();
-    const ultimosDias = fechasOrdenadas.slice(-7); 
+    // 6. GENERACIÓN DINÁMICA Y RESPONSIVA DEL GRÁFICO (Resuelve el problema de saturación visual)
+    const rawLabels = rangoFechas.map(f => f.substring(5, 10)); // Formato MM-DD
     
+    // Algoritmo para no saturar el eje X según el filtro de días
+    const getResponsiveLabels = () => {
+      if (diasFiltro <= 7) return rawLabels;
+      if (diasFiltro === 30) return rawLabels.map((l, i) => (i % 5 === 0 || i === rawLabels.length - 1) ? l : '');
+      return rawLabels.map((l, i) => (i % 15 === 0 || i === rawLabels.length - 1) ? l : '');
+    };
+
     const lineChartData = {
-      labels: ultimosDias.length > 0 ? ultimosDias.map(f => f.substring(5, 10)) : ['Sin datos'], 
-      datasets: [{ data: ultimosDias.length > 0 ? ultimosDias.map(f => ventasPorFecha[f]) : [0] }]
+      labels: getResponsiveLabels(),
+      datasets: [{ data: rangoFechas.map(f => round2(ventasPorFecha[f])) }]
     };
 
     const paletaPastel = [COLORS.turquesa, COLORS.morado || '#7e2b8d', COLORS.naranja, COLORS.verde, COLORS.rojito || '#f97272'];
@@ -274,7 +299,7 @@ export default function AnalyticsScreen({ onNavigate, darkMode, themeColors }) {
       totalCortesias, totalDescuentosBonos, top5, bottom5,
       lineChartData, pieChartData
     };
-  }, [movimientos, productosLocales, themeColors]);
+  }, [movimientos, productosLocales, themeColors, diasFiltro]);
 
   // COMPONENTE DE BOTON DE FILTRO
   const FiltroBtn = ({ dias, label }) => (

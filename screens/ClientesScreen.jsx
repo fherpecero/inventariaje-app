@@ -20,7 +20,8 @@ import {
   query,
   where,
   onSnapshot,
-  writeBatch // 🚀 1. Importamos writeBatch y getDocFromCache
+  writeBatch,
+  arrayUnion
 } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
@@ -73,9 +74,13 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
       }));
       
       creditos.sort((a, b) => {
-        const fechaA = a.fechaPTP?.seconds || 0;
-        const fechaB = b.fechaPTP?.seconds || 0;
-        return fechaA - fechaB;
+        // 1. Extraemos los strings. Si un crédito viejo no tiene fecha, lo mandamos al final (9999-12-31)
+        const fechaStringA = a.fechaPTP || '9999-12-31';
+        const fechaStringB = b.fechaPTP || '9999-12-31';
+        
+        // 2. Convertimos a milisegundos matemáticos y restamos
+        // El resultado negativo empuja las fechas más antiguas (o vencidas) hacia arriba
+        return new Date(fechaStringA).getTime() - new Date(fechaStringB).getTime();
       });
       
       if (isMountedRef.current) {
@@ -182,6 +187,11 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
         estado: nuevoEstado,
         notas: notasActualizadas,
         updatedAt: timestampCompleto,
+        historialPagos: arrayUnion({
+          monto: adelantoRecibido,
+          fecha: timestampCompleto,
+          registradoPor: user?.email || 'App'
+        })
       });
 
       // 🧾 3. PREPARAMOS TICKET DE ENTRADA A CAJA

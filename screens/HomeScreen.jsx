@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -20,10 +21,15 @@ import { AuthContext } from '../context/AuthContext';
 import ModalRegistroEscaner from '../components/ModalRegistroEscaner';
 import ModalExchange from '../components/ModalExchange';
 import ModalFeedback from '../components/ModalFeedback';
+import { getProductosActivos } from '../context/productCatalog';
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 // ICONS
 import MenuIcon from '../assets/icons/IconMenu.svg';
+
+// IMGS
+import ImgExistencia from '../assets/img/img_existencia.png';
+import ImgVenta from '../assets/img/img_venta.png';
 
 export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   // ==========================================
@@ -230,56 +236,87 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   }, [user, cuenta, cuentaId]);
 
   // ==========================================
-  // EFECTO 2: Cargar Estadísticas
+  // 🚀 MOTOR 1: INVENTARIO EN TIEMPO REAL (0ms)
   // ==========================================
   useEffect(() => {
-    if (loadingAuth) return;
     if (!user || !cuentaId) return;
 
-    const cargarEstadisticas = async () => {
+    const docRef = doc(db, 'cuentas', String(cuentaId), 'inventarios', 'vital_health_principal');
+
+    // Usamos onSnapshot para que el Home se actualice instantáneamente sin recargar
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      const productosData = docSnap.data()?.productos || {};
+      
+      // 🔥 LA ÚNICA FUENTE DE IDENTIDAD: Tu catálogo local (Costo 0 Firebase)
+      const catalogoLocal = getProductosActivos();
+      const firebaseArray = Object.values(productosData);
+
+      let totalEnExistencia = 0;
+      let productosSinStock = 0;
+      let bajoStock = 0;
+
+      // Iteramos estrictamente sobre TU catálogo oficial
+      catalogoLocal.forEach((catalogo) => {
+        // Prioridad 1: Búsqueda por Nombre (La nueva regla)
+        let datosFirebase = productosData[catalogo.nombre];
+        
+        // Prioridad 2: Fallback por compatibilidad
+        if (!datosFirebase) {
+          datosFirebase = productosData[catalogo.id] || productosData[catalogo.codigo] || 
+                          firebaseArray.find(item => item.nombre === catalogo.nombre || item.codigo === catalogo.codigo);
+        }
+
+        const cantidadReal = datosFirebase ? (parseInt(datosFirebase.cantidad) || 0) : 0;
+        const limiteConfigurado = datosFirebase ? (parseInt(datosFirebase.limiteStock) || 0) : 0;
+
+        if (cantidadReal > 0) totalEnExistencia += cantidadReal;
+        if (cantidadReal <= 0) productosSinStock += 1;
+        if (limiteConfigurado > 0 && cantidadReal > 0 && cantidadReal <= limiteConfigurado) {
+          bajoStock += 1;
+        }
+      });
+
+      // Actualizamos estado conservando las ventas intactas
+      if (isMountedRef.current) {
+        setStats(prev => ({
+          ...prev,
+          totalEnExistencia,
+          productosSinStock,
+          bajoStock
+        }));
+      }
+    }, (error) => {
+      console.log('Silenciador Home Inventario:', error.message);
+    });
+
+    return () => unsubscribe();
+  }, [user, cuentaId]);
+
+
+  // ==========================================
+  // 📊 MOTOR 2: VENTAS DEL MES (INTACTO Y PROTEGIDO)
+  // ==========================================
+  useEffect(() => {
+    if (loadingAuth || !user || !cuentaId) return;
+
+    const cargarVentas = async () => {
       if (!isMountedRef.current) return;
       
       try {
         setLoadingStats(true);
-        
-        // 1. INVENTARIO
-        const docRef = doc(db, 'cuentas', String(cuentaId), 'inventarios', 'vital_health_principal');
-        const docSnap = await getDoc(docRef);
-        const productos = docSnap.data()?.productos || {};
-        
-        const catalogoRef = collection(db, 'catalogoGlobal');
-        const catalogoSnap = await getDocs(catalogoRef);
 
-        const inventarioMap = {};
-        Object.keys(productos).forEach((codigo) => {
-          inventarioMap[codigo] = productos[codigo].cantidad || 0;
-        });
-
-        let totalEnExistencia = 0;
-        let productosSinStock = 0;
-
-        catalogoSnap.forEach((doc) => {
-          const cantidad = inventarioMap[doc.id] || 0;
-          totalEnExistencia += cantidad;
-          if (cantidad === 0) productosSinStock += 1;
-        });
-
-        // 2. VENTAS DEL MES
         const ahora = new Date();
         const primerDiaDelMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
         const ultimoDiaDelMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
 
         const salidasRef = collection(db, 'cuentas', String(cuentaId), 'salidas');
         
-        // 🛡️ LÓGICA INTELIGENTE DE ROLES (FASE 4)
-        let salidasQuery = salidasRef; // Por defecto (Admin) carga la colección completa
-        
+        // 🛡️ Lógica Inteligente de Roles
+        let salidasQuery = salidasRef; 
         if (userData?.rol !== 'admin') {
-          // Si es 'user', aplicamos el filtro mágico para traer solo sus tickets
           salidasQuery = query(salidasRef, where('creadoPorUid', '==', user.uid));
         }
 
-        // Ejecutamos la consulta usando la variable que preparamos (salidasQuery)
         const salidasSnap = await getDocs(salidasQuery);
 
         let ventasDelMes = 0;
@@ -295,12 +332,10 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             if (timestampDate >= primerDiaDelMes && timestampDate <= ultimoDiaDelMes) {
               const total = parseFloat(data.total) || 0;
               
-              // Sumar a la caja SOLO si NO es crédito
               if (data.tipoPago !== 'crd') {
                 ventasDelMes += total;
               }
 
-              // Registrar TODO en el historial
               ultimasOperaciones.push({
                 producto: data.producto,
                 cantidad: data.cantidad,
@@ -315,22 +350,21 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         ultimasOperaciones.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         if (isMountedRef.current) {
-          setStats({
-            totalEnExistencia,
-            productosSinStock,
+          setStats(prev => ({
+            ...prev,
             ventasDelMes: parseFloat(ventasDelMes.toFixed(2)),
             ultimasOperaciones: ultimasOperaciones,
-          });
+          }));
         }
       } catch (error) {
-        console.error('❌ Error cargando estadísticas:', error);
+        console.error('❌ Error cargando ventas:', error);
       } finally {
         if (isMountedRef.current) setLoadingStats(false);
       }
     };
 
-    cargarEstadisticas();
-  }, [user, cuentaId, loadingAuth]); 
+    cargarVentas();
+  }, [user, cuentaId, loadingAuth]);
 
   // ==========================================
   // EFECTO 3: Cargar evento activo del Escáner
@@ -460,7 +494,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
 
   const hasPremiumPowers = effectiveTier === 'premium' || effectiveTier === 'special_k';
 
-  // 🚀 FIX 1: Función para blindar las fechas "Invalid Date"
   const formatFechaPTPLocal = (fechaPTP) => {
     if (!fechaPTP) return 'N/A';
     if (typeof fechaPTP === 'object' && typeof fechaPTP.seconds === 'number') {
@@ -495,7 +528,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 styles.bellButton,
                 hayNotificaciones ? styles.bellButtonActive : styles.bellButtonInactive
               ]}
-              // Por ahora, lo mandamos a un selector o seguimos abriendo el modal de buzon
               onPress={() => setGeneralNotificationsModal(true)} 
             >
               <Ionicons 
@@ -503,7 +535,6 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 size={22} 
                 color={hayNotificaciones ? COLORS.blanco : COLORS.grey} 
               />
-              {/* Badge (Puntito rojo o bolita con número) */}
               {hayNotificaciones && (
                 <View style={styles.bellBadge}>
                   {/* Opcional: Si quieres mostrar el número total de alertas adentro del puntito 
@@ -540,6 +571,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
           <Text style={styles.welcomeTitle}>
             {userData?.nombre || 'Usuario'}
           </Text>
+          <Text style={[styles.welcomeSubtitle]}>
+             Gestiona tu inventario y ventas
+          </Text>
         </View>
 
         {/* INFO DE TRIAL */}
@@ -556,55 +590,89 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
 
         {/* DASHBOARD PRINCIPAL */}
         <View style={styles.dashboardSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📊 INICIO</Text>
 
           <TouchableOpacity
-            style={[styles.dashboardBtn, { backgroundColor: themeColors.bgSecondary }]}
+            style={[styles.dashboardBtn, { backgroundColor: COLORS.turquesa, marginTop: 30, }]}
             onPress={() => handleNavigation('existencias')}
             activeOpacity={0.8}
           >
             <View style={styles.dashboardBtnContent}>
-              <Text style={styles.dashboardIcon}>📦</Text>
               <View style={styles.dashboardBtnText}>
-                <Text style={[styles.dashboardLabel, { color: themeColors.text }]}>Total en Existencia</Text>
-                <Text style={styles.dashboardValue}>{stats.totalEnExistencia} unidades</Text>
+                <Text style={[styles.dashboardLabelExistencia]}>
+                    Total
+                    {"\n"}en existencia</Text>
+                <Text style={styles.dashboardValueExistencia}>{stats.totalEnExistencia} unidades</Text>
               </View>
             </View>
-            <Text style={styles.dashboardArrow}>→</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.dashboardBtn, styles.dashboardBtnWarning, { backgroundColor: themeColors.bgSecondary }]}
-            onPress={() => handleNavigation('sin-stock')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.dashboardBtnContent}>
-              <Text style={styles.dashboardIcon}>⚠️</Text>
-              <View style={styles.dashboardBtnText}>
-                <Text style={[styles.dashboardLabel, { color: themeColors.text }]}>Productos sin Stock</Text>
-                <Text style={styles.dashboardValueWarning}>{stats.productosSinStock} productos</Text>
-              </View>
+            <View style={styles.dashboardBtnTextExistencia}>
+                <Image
+                    source={ImgExistencia}
+                    style={styles.ImagenExistencia}
+                  />
+                <Text style={styles.dashboardArrow}>→</Text>
             </View>
-            <Text style={styles.dashboardArrow}>→</Text>
           </TouchableOpacity>
 
+          {/* STOCK */}
+        <View style={styles.dashboardRow}>
+          <View style={styles.dashboardColumn}>
+              <TouchableOpacity
+                style={[styles.dashboardBtn, styles.dashboardBtnStocks, {  }]}
+                onPress={() => handleNavigation('bajo-stock')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.dashboardBtnContent}>
+                  <View style={styles.dashboardBtnText}>
+                    <Text style={[styles.dashboardLabelBajoStock]}>Bajo Stock</Text>
+                    <Text style={styles.dashboardValueStocks}>{stats.bajoStock} productos</Text>
+                  </View>
+                </View>
+                <Text style={styles.dashboardArrow}>→</Text>
+              </TouchableOpacity>
+          </View>
+
+          <View style={styles.dashboardColumn}>
+              <TouchableOpacity
+                style={[styles.dashboardBtn, styles.dashboardBtnStocks, { }]}
+                onPress={() => handleNavigation('sin-stock')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.dashboardBtnContent}>
+                  <View style={styles.dashboardColumn}>
+                    <Text style={[styles.dashboardLabelSinStock]}>Sin Stock</Text>
+                    <Text style={styles.dashboardValueStocks}>{stats.productosSinStock} productos</Text>
+                  </View>
+                </View>
+                <Text style={styles.dashboardArrow}>→</Text>
+              </TouchableOpacity>
+          </View>
+        </View>
+
           <TouchableOpacity
-            style={[styles.dashboardBtn, { backgroundColor: themeColors.bgSecondary }]}
+            style={[styles.dashboardBtn, styles.dashboardBtnVentas, { }]}
             onPress={() => handleNavigation('analytics')}
             activeOpacity={0.8}
           >
             <View style={styles.dashboardBtnContent}>
-              <Text style={styles.dashboardIcon}>💰</Text>
               <View style={styles.dashboardBtnText}>
-                <Text style={[styles.dashboardLabel, { color: themeColors.text }]}>Ventas del Mes</Text>
-                <Text style={styles.dashboardValue}>${stats.ventasDelMes || '0.00'}</Text>
+                <Text style={[styles.dashboardLabelVentas, {  }]}>
+                    Ventas
+                    {"\n"}del Mes</Text>
+                <Text style={styles.dashboardValueExistencia}>Ganancias en el mes</Text>
               </View>
             </View>
+            <View style={styles.dashboardBtnTextVenta}>
+            <Image
+                source={ImgVenta}
+                style={styles.ImagenVenta}
+            />
+            <Text style={styles.dashboardValueVenta}>${stats.ventasDelMes || '0.00'}</Text>
             <Text style={styles.dashboardArrow}>→</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
-        {/* SECCIÓN 2: EVENTO DE ESCÁNER (PREMIUM) */}
+        {/* SECCIÓN 2: EVENTO DE ESCÁNER */}
         {effectiveTier === 'premium' && (
         <View style={styles.scannerSection}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>💻 Evento de Escáner</Text>
@@ -1055,6 +1123,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1118,7 +1187,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   headerTitle: {
-    fontSize: FONT_SIZES.normal,
+    fontSize: 20,
     fontWeight: '600',
     color: COLORS.grey,
     marginBottom: 2,
@@ -1152,7 +1221,8 @@ const styles = StyleSheet.create({
   },
   welcomeSubtitle: {
     fontSize: FONT_SIZES.normal,
-    color: '#565656',
+    color: '#0D0D0D',
+    fontStyle: 'italic',
   },
   trialCard: {
     backgroundColor: COLORS.blanco,
@@ -1179,23 +1249,35 @@ const styles = StyleSheet.create({
   },
   dashboardBtn: {
     backgroundColor: COLORS.blanco,
-    borderRadius: 12,
-    padding: SPACING.btn_padding,
+    borderRadius: 16,
+    //padding: SPACING.btn_padding,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderLeftWidth: 5,
-    borderLeftColor: COLORS.morado,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    //borderLeftWidth: 5,
+    //borderLeftColor: COLORS.morado,
+    //shadowColor: '#000',
+    //shadowOffset: { width: 0, height: 2 },
+    //shadowOpacity: 0.1,
+    //shadowRadius: 3,
+    //elevation: 3,
+  },
+  dashboardBtnExistencia: {
+    backgroundColor: COLORS.verde,
   },
   dashboardBtnWarning: {
     borderLeftColor: COLORS.rojo,
   },
+dashboardBtnStocks: {
+    borderWidth: 1,
+    borderColor: COLORS.turquesa,
+    },
+dashboardBtnVentas: {
+    backgroundColor: COLORS.lila,
+    },
   dashboardBtnContent: {
     flex: 1,
     flexDirection: 'row',
@@ -1208,9 +1290,44 @@ const styles = StyleSheet.create({
   dashboardBtnText: {
     flex: 1,
   },
+  dashboardBtnTextExistencia: {
+      flexDirection: 'column',
+      alignItems: 'center',
+  },
   dashboardLabel: {
     fontSize: FONT_SIZES.normal,
     fontWeight: '600',
+    marginBottom: 4,
+  },
+dashboardLabelExistencia: {
+    fontFamily: 'Poppins',
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#434F4F',
+    lineHeight: 28,
+    marginBottom: 4,
+  },
+dashboardLabelSinStock: {
+    color: '#991B1B',
+    fontFamily: 'Poppins',
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 21,
+    marginBottom: 0,
+    },
+dashboardLabelBajoStock: {
+    color: '#E6672E',
+    fontFamily: 'Poppins',
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 21,
+    marginBottom: 0,
+    },
+dashboardLabelVentas: {
+    fontSize: 38,
+    fontWeight: '800',
+    color: '#7A7AEC',
+    lineHeight: 36,
     marginBottom: 4,
   },
   dashboardValue: {
@@ -1218,20 +1335,63 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.turquesa,
   },
+  dashboardValueExistencia: {
+      fontSize: FONT_SIZES.subtitulo,
+      fontWeight: '600',
+      color: '#1b4848',
+  },
   dashboardValueWarning: {
-    fontSize: FONT_SIZES.subtitulo,
+    fontFamily: 'Roboto',
+    fontSize: 17,
     fontWeight: '600',
     color: COLORS.rojo,
   },
+  dashboardValueStocks: {
+    fontFamily: 'Roboto',
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.grey,
+  },
+dashboardValueVenta: {
+    fontFamily: 'Roboto',
+        fontSize: 30,
+        fontWeight: '600',
+        color: COLORS.grey,
+    },
   dashboardArrow: {
     fontSize: 20,
-    color: COLORS.morado,
+    color: '#ffffff',
     fontWeight: '700',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    borderRadius: 50,
+    paddingHorizontal: 6,
+    paddingBottom: 5,
+    opacity: 0.5,
   },
+dashboardRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+},
+dashboardColumn: {
+    flex: 1,
+    paddingHorizontal: 0,
+    },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
+ImagenExistencia: {
+    marginTop: -54,
+    marginBottom: 0,
+    width: 130,
+    },
+ImagenVenta: {
+    marginTop: -20,
+    marginRight: -40,
+    paddingBottom: 20,
+    },
   menuPressable: {
     position: 'absolute',
     right: 0,

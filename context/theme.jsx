@@ -16,6 +16,7 @@ export const COLORS = {
   rojo: '#f44336',
   naranja: '#FF9800',
   morado: '#7e2b8d',
+  lila: '#a8ccff',
   rojito: '#f97272',
   grey: '#565656',
   rojoCredito: '#f97272',
@@ -381,7 +382,7 @@ export const homeStyles = StyleSheet.create({
   },
   welcomeSubtitle: {
     fontSize: FONT_SIZES.normal,
-    color: '#565656',
+    color: '#ff0000',
   },
   dashboardSection: {
     marginBottom: 30,

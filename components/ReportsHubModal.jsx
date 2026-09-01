@@ -15,7 +15,7 @@ import * as Sharing from 'expo-sharing';
 const TIPOS_REPORTE = [
   { id: 'ventas', label: 'Ventas y Ganancias', icon: 'cash', description: 'Muestra el precio de venta público, costo y margen de ganancia real por cada producto vendido.' },
   { id: 'creditos', label: 'Estado de Créditos', icon: 'wallet', description: 'Detalle de todas las deudas, pagos parciales y fechas de vencimiento de tus clientes.' },
-  { id: 'intercambios', label: 'Historial de Intercambios', icon: 'swap-horizontal', description: 'Registro de trueques con socios, mostrando los productos dados, recibidos y saldos a favor.' },
+  { id: 'intercambios', label: 'Historial de Intercambios', icon: 'swap-horizontal', description: 'Registro de cambios con socios, mostrando los productos dados, recibidos y saldos.' },
   { id: 'compras', label: 'Gasto en Restock', icon: 'cart', description: 'Reporte de todo el dinero invertido en reabastecer tu inventario (entradas).' },
   { id: 'escaneres', label: 'Eventos de Escáner', icon: 'barcode', description: 'Desglose de cobros y número de invitados registrados en eventos.' },
 ];
@@ -44,6 +44,7 @@ const formatearFechaDisplay = (docData) => {
   if (typeof docData.timestamp === 'string' && docData.timestamp.includes('T')) return docData.timestamp.split('T')[0];
   if (typeof docData.createdAt === 'string' && docData.createdAt.includes('T')) return docData.createdAt.split('T')[0];
   if (typeof docData.fecha === 'string') {
+    if (docData.fecha.includes('T')) return docData.fecha.split('T')[0];
     if (docData.fecha.includes('/')) {
       const p = docData.fecha.split('/');
       if (p.length === 3) return `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
@@ -82,14 +83,15 @@ const generarReporte = async () => {
     const finMs = new Date(fechaFin.setHours(23,59,59,999)).getTime();
     let data = [];
 
-    // 1. VENTAS Y PROFIT
+    // ==========================================
+    // 1. VENTAS, FLUJO Y PROFIT (NUEVO MODELO CONTABLE)
+    // ==========================================
     if (reporteSeleccionado.id === 'ventas') {
       const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'salidas'));
       snap.forEach(doc => {
         const d = doc.data();
         const docMs = obtenerMilisegundos(d);
 
-        // 🚨 UPDATE 9: Eliminamos "d.descuentoPorcentaje !== 100" para que SÍ registre cortesías y bonos
         if (docMs >= inicioMs && docMs <= finMs && d.tipo !== 'intercambio' && !d.modoIntercambio) {
 
           let nombreProductoStr = 'N/A';
@@ -98,25 +100,84 @@ const generarReporte = async () => {
           } else if (Array.isArray(d.productos)) {
             nombreProductoStr = d.productos.map(p => p.nombre || p.producto).join(', '); 
           }
+          const cantidad = parseInt(d.cantidad || 1);
+          let clienteFinal = d.cliente || 'Público General';
+
+          const esAbono = d.tipo === 'abono_credito' || d.tipoPago === 'abono_credito' || (d.producto && typeof d.producto === 'string' && d.producto.includes('Abono'));
+          if (esAbono && d.producto) {
+             clienteFinal = d.producto.replace('Abono de crédito:', '').trim();
+          }
+
+          const esEscaner = nombreProductoStr.toLowerCase().includes('escaner') || d.tipo === 'escaner';
+          const esCortesia = d.descuentoPorcentaje === 100;
+          const esBono = d.consumoBono === true;
+          const esCredito = d.tipoPago === 'crd';
+
+          // 💎 VARIABLES BASE (Datos crudos y reales de la transacción)
+          // El subtotal es el valor antes de descuentos
+          let subtotalPublico = parseFloat(d.subtotal || (parseFloat(d.precioUnitario || 0) * cantidad) || 0);
+          
+          // El total es lo que ya incluye descuentos
+          let totalCobrado = parseFloat(d.total || 0); 
+          
+          // El costo real congelado al momento de la venta
+          let costoCongelado = parseFloat(d.costoTotalVenta || d.costoUnitarioReal || 0);
+          
+          // NUEVAS COLUMNAS (Separan la Utilidad del Flujo de Efectivo)
+          let valorMercanciaVendida = 0; 
+          let efectivoRecibido = 0;  
+          let costoTotal = 0; 
+          let gananciaMargen = 0;
+
+          if (esAbono) {
+              efectivoRecibido = totalCobrado;
+          } 
+          else if (esEscaner) {
+              valorMercanciaVendida = totalCobrado;
+              efectivoRecibido = totalCobrado;
+              gananciaMargen = totalCobrado;
+          }  
+          else if (esCortesia) {
+              valorMercanciaVendida = subtotalPublico;
+          } 
+          else {
+              // 1. DETERMINAR COSTO UNIVERSAL
+              // Prioridad 1: Respetar el costo congelado del ticket si existe.
+              if (costoCongelado > 0) {
+                  costoTotal = costoCongelado;
+              } else {
+                  // Prioridad 2 (Tickets Viejos): Calcular sobre el precio público para no afectar el costo base si hubo descuentos
+                  costoTotal = esBono ? (subtotalPublico * 0.10) : (subtotalPublico * 0.50);
+              }
+
+              // 2. DETERMINAR EFECTIVO Y VALOR
+              valorMercanciaVendida = totalCobrado;
+              efectivoRecibido = esCredito ? 0 : totalCobrado; 
+
+              // 3. DETERMINAR GANANCIA ABSOLUTA
+              // ßEsta fórmula mágica absorbe automáticamente cualquier descuento loco que hayas hecho
+              gananciaMargen = totalCobrado - costoTotal;
+          }
           
           data.push({
             id: doc.id,
-            _ms: docMs, // 👈 (Variable oculta para ordenar fechas al final)
+            _ms: docMs, 
             fecha: formatearFechaDisplay(d),
-            cliente: d.cliente || 'Público General',
-            producto: nombreProductoStr,
-            precioVenta: parseFloat(d.precioUnitario || d.total || 0),
-            costo: parseFloat(d.costoUnitarioReal || d.costoTotalVenta || 0),
-            ganancia: parseFloat(d.total || 0) - parseFloat(d.costoTotalVenta || 0),
+            cliente: clienteFinal,
+            movimiento: esAbono ? 'Abono de Credito' : `${cantidad}x ${nombreProductoStr}`,
+            valorMercancia: Math.round(valorMercanciaVendida), 
+            efectivoRecibido: Math.round(efectivoRecibido), // 👈 COLUMNA NUEVA (LIQUIDEZ REAL)
+            costo: Math.round(costoTotal),
+            ganancia: Math.round(gananciaMargen), 
+            descuento: d.descuentoPorcentaje ? `${d.descuentoPorcentaje}%` : '0%', // 👈 NUEVA COLUMNA
             evento: d.nombreEvento || 'N/A',
-            // Opcional: Para que sea visualmente claro si fue regalado
-            etiqueta: d.descuentoPorcentaje === 100 ? 'Cortesía' : (d.descuentoPorcentaje > 0 ? 'Con Descuento' : 'Venta Normal')
+            etiqueta: esCortesia ? 'Cortesía' : (esAbono ? 'Cobranza (Flujo)' : (esBono ? 'Bono Influencer' : (esCredito ? 'Venta a Crédito' : 'Venta Normal')))
           });
         }
       });
     }
 
-    // 2. CRÉDITOS (🚨 UPDATE 3: Blindado contra undefined)
+    // 2. CRÉDITOS 
     else if (reporteSeleccionado.id === 'creditos') {
       const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'creditos'));
       snap.forEach(doc => {
@@ -124,19 +185,47 @@ const generarReporte = async () => {
         const docMs = obtenerMilisegundos(d);
 
         if (docMs >= inicioMs && docMs <= finMs) {
+
+          // Formateador seguro para la fecha de vencimiento PTP
+          let vencimientoStr = 'N/A';
+          if (d.fechaPTP) {
+             if (typeof d.fechaPTP === 'string') vencimientoStr = d.fechaPTP;
+             else if (d.fechaPTP.seconds) vencimientoStr = new Date(d.fechaPTP.seconds * 1000).toISOString().split('T')[0];
+          }
+
+          let historialStr = 'Sin abonos';
+          let totalAbonado = 0;
+
+          if (d.historialPagos && Array.isArray(d.historialPagos) && d.historialPagos.length > 0) {
+            historialStr = d.historialPagos.map(pago => {
+              const fechaPago = pago.fecha ? pago.fecha.split('T')[0] : 'N/A';
+              totalAbonado += parseFloat(pago.monto || 0); // Vamos sumando los abonos
+              return `${fechaPago}: $${pago.monto}`;
+            }).join(' | '); 
+          }
+
+          // 🚀 NUEVO 2: Calculamos la Deuda Inicial (Saldo Restante + Lo que ya pagaron)
+          const saldoActual = parseFloat(d.monto || 0);
+          const deudaInicial = saldoActual + totalAbonado;
+
           data.push({
             id: doc.id,
             _ms: docMs,
             fecha: formatearFechaDisplay(d),
-            cliente: d.clienteNombre || d.cliente || 'Sin Nombre', // Fallback anti-crash
-            montoTotal: parseFloat(d.monto || 0),
-            estado: d.estado || 'pendiente'
+            cliente: d.clienteNombre || d.cliente || 'Público General',
+            deudaInicial: parseFloat(montoTotal.toFixed(2)), // 👈 NUEVA COLUMNA
+            totalAbonado: parseFloat(totalAbonado.toFixed(2)), // 👈 NUEVA COLUMNA
+            saldoPendiente: saldoActual,                       // 👈 SALDO ACTUAL
+            estado: (d.estado || 'pendiente').toUpperCase(),
+            vencimiento: vencimientoStr,
+            historialDePagos: historialStr,                    // 👈 NUEVA COLUMNA CON FECHAS
+            notasAbonos: d.notas || 'Sin notas'
           });
         }
       });
     }
 
-    // 3. INTERCAMBIOS (🚨 MEJORA 7: Tabla de diferencial)
+    // 3. INTERCAMBIOS 
     else if (reporteSeleccionado.id === 'intercambios') {
       const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'salidas'));
       snap.forEach(doc => {
@@ -144,14 +233,14 @@ const generarReporte = async () => {
         const docMs = obtenerMilisegundos(d);
 
         // Aseguramos que solo tome intercambios reales
-        if (docMs >= inicioMs && docMs <= finMs && (d.tipo === 'intercambio' || d.modoIntercambio)) {
+        if (docMs >= inicioMs && docMs <= finMs && (d.tipo === 'intercambio' || d.modoIntercambio === true)) {
           data.push({
             id: doc.id,
             _ms: docMs,
             fecha: formatearFechaDisplay(d),
-            socio: d.socioNombre || d.socio || 'Desconocido',
-            productosDamos: Array.isArray(d.productosEnviados) ? d.productosEnviados.map(p => p.nombre).join(' + ') : 'N/A',
-            productosRecibimos: Array.isArray(d.productosRecibidos) ? d.productosRecibidos.map(p => p.nombre).join(' + ') : 'N/A',
+            socio: d.socioNombre || d.socio || 'Associate',
+            productosDamos: Array.isArray(d.productosEnviados) ? d.productosEnviados.map(p => `${p.nombre} (${p.cantidad})`).join(' + ') : 'N/A',
+            productosRecibimos: Array.isArray(d.productosRecibidos) ? d.productosRecibidos.map(p => `${p.nombre} (${p.cantidad})`).join(' + ') : 'N/A',
             diferencialEfectivo: parseFloat(d.diferenciaIntercambio || d.diferencia || 0),
             saldoPendiente: parseFloat(d.montoPendiente || 0)
           });
@@ -159,7 +248,7 @@ const generarReporte = async () => {
       });
     }
 
-    // 4. COMPRAS / RESTOCK (🚨 MEJORA 8: Precio Unitario y Descuento detallados)
+    // 4. COMPRAS / RESTOCK 
     else if (reporteSeleccionado.id === 'compras') {
       const snap = await getDocs(collection(db, 'cuentas', cuentaId, 'entradas'));
       snap.forEach(doc => {
@@ -173,11 +262,13 @@ const generarReporte = async () => {
                 id: `${doc.id}_${index}`, // Evita IDs duplicados en filas
                 _ms: docMs,
                 fecha: formatearFechaDisplay(d),
+                ordenProveedor: d.ordenProveedor || 'N/A',
                 producto: item.nombre || 'N/A',
                 cantidad: parseInt(item.cantidad || 1),
                 precioUnitarioBase: parseFloat(item.precioCosto || 0),
                 precioPagadoUnitario: parseFloat(item.costoUnitarioAplicado || item.precioCosto || 0),
-                totalPagado: parseFloat(item.costoUnitarioAplicado || item.precioCosto || 0) * parseInt(item.cantidad || 1)
+                totalPagado: parseFloat(item.costoUnitarioAplicado || item.precioCosto || 0) * parseInt(item.cantidad || 1),
+                bonoInfluencer: item.bonoInfluencer ? 'Sí' : 'No'
               });
             });
           }
@@ -199,26 +290,26 @@ const generarReporte = async () => {
             fecha: formatearFechaDisplay(d),
             evento: d.evento || d.nombreEvento || 'N/A',
             invitados: parseInt(d.personas || d.invitados || 0),
-            montoCobrado: parseFloat(d.montoCobrado || d.ventaTotal || 0)
+            montoCobrado: parseFloat(d.montoCobrado || d.ventaTotal || 0),
+            escanersCobrados: parseInt(d.escaneos || 0), 
+            totalCobrado: parseFloat(d.ventaTotal || d.montoCobrado || 0) 
           });
         }
       });
     }
 
     // 🚨 UPDATE 2: Ordenamiento Maestro (Más recientes primero)
-    // Usamos el campo oculto `_ms` para ordenar matemáticamente perfecto y no por texto.
     data.sort((a, b) => b._ms - a._ms);
 
     // Limpiamos el campo oculto `_ms` antes de renderizar la tabla/CSV para que no aparezca
     const dataFinal = data.map(({ _ms, ...resto }) => resto);
-
     setDatosReporte(dataFinal);
 
   } catch (error) {
     console.error("Error al extraer datos:", error);
     Alert.alert('Error', 'Hubo un problema procesando la información del reporte.');
   } finally {
-    setLoading(false); // 👈 (Update 4: Apagamos el loader al terminar)
+    setLoading(false); 
   }
 };
 
@@ -254,7 +345,7 @@ const generarReporte = async () => {
     return (
       <View style={styles.previewContainer}>
         <View style={styles.previewHeaderRow}>
-          <Text style={styles.previewTitle}>Vista Previa ({datosReporte.length} registros)</Text>
+          <Text style={styles.previewTitle}> {datosReporte.length} Registros</Text>
           <TouchableOpacity onPress={exportarCSV} style={styles.exportBtn}>
             <Ionicons name="download-outline" size={20} color={COLORS.blanco} />
             <Text style={styles.exportBtnText}>Guardar en Drive</Text>

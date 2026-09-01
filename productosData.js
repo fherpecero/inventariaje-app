@@ -35,4 +35,5 @@ export const imagenes = {
   '783495495154': require('./assets/productos/783495495154.webp'), // Collagen
   '789234444444': require('./assets/productos/789234444444.webp'), //nourish+
   '789234555555': require('./assets/productos/789234555555.webp'), //performance+
+  '789234445566': require('./assets/productos/789234445566.webp'), // VDAILY SACHETS
 };

@@ -486,6 +486,20 @@ export const PRODUCT_CATALOG = {
     updatedAt: new Date('2026-07-31'),
     createdBy: 'populate-catalog'
   },
+  '789234445566': {
+    codigo: '789234445566',
+    nombre: 'V-DAILY SACHET',
+    descripcion: 'BOLSA CON 30 SACHETS',
+    categoria: 'polvos',
+    precioCostoStandard: 800,
+    precioVentaStandard: 1600,
+    stock: 3,
+    activo: true,
+    imagen: require('../assets/productos/789234445566.webp'),
+    createdAt: new Date('2026-08-26'),
+    updatedAt: new Date('2026-08-26'),
+    createdBy: 'populate-catalog'
+  },
 };
 
 /**

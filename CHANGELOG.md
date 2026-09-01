@@ -1,5 +1,26 @@
 # Changelog - Inventariaje App
 
+##### [2.5.1] - 2026-09-01
+**🚀 QA Release: Gestión de Suscripciones, Reportes Financieros y UI Fixes**
+
+**✨ Nuevas Funcionalidades & UX**
+* **Gestión de Suscripciones (Settings):** Se integró el botón "Administrar Suscripción" con Deep Link directo a Google Play Store, protegido por validación de roles (visible únicamente para Administradores de la cuenta).
+* **Historial de Abonos (Créditos):** El módulo de clientes ahora guarda un recibo individual por cada pago mediante `arrayUnion`, mejorando la trazabilidad de la deuda[cite: 1].
+
+**📊 Mejoras en Reportes y Analytics**
+* **Módulo de Créditos:** El CSV ahora calcula y exporta la "Deuda Inicial", "Total Abonado" y un historial detallado de pagos con fechas[cite: 1].
+* **Reporte de Ventas:** Los abonos de crédito ya reflejan el nombre real del cliente en el CSV, eliminando el error de "Público General"[cite: 1].
+* **Gasto en Restock:** Se añadieron las columnas de `Bono Influencer` y `Orden de Proveedor`, además de limpiar el formato de fechas[cite: 1].
+* **Eventos de Escáner:** Se incorporaron las columnas de "Total de escáneres cobrados" y el "Monto monetario recaudado"[cite: 1].
+* **UI de Vista Previa:** Se limpió la interfaz del generador para mostrar únicamente el número de registros encontrados[cite: 1].
+
+**🐛 Bug Fixes y Estabilidad (Corrección de Errores)**
+* **ExistenciasScreen:** Solucionado el fallo que mostraba todos los productos y el filtro de "sin stock" en 0. Se corrigió el crash (cierre de app) al guardar notas de producto[cite: 1].
+* **EntradasScreen:** Se restauraron las imágenes de los productos, se arregló el margen superior (top padding) y se activó el scroll en el resumen de checkout. También se solucionó el error de permisos denegados al confirmar la compra[cite: 1].
+* **ClientesScreen:** Los créditos ahora se ordenan cronológicamente por su fecha de vencimiento en la vista principal[cite: 1].
+* **SalidasScreen:** Se optimizó el tiempo de carga inicial en modo offline y se agregó la tarjeta de "Bajo Stock" para unificar el diseño con el Dashboard[cite: 1].
+* **Ajustes Visuales Menores:** Corrección del top padding en el menú lateral de HomeScreen y ajuste del tamaño tipográfico en las cajas de texto de AlertasScreen[cite: 1].
+
 ##### [2.5.0] - 2026-08-24
 **🚀 Parche Major: Arquitectura Offline-First, Interfaz y Estabilidad de Reportes**
 
