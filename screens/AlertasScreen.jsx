@@ -13,7 +13,7 @@ import {
 import { doc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { COLORS, GLOBAL_STYLES, ScreenHeader } from '../context/theme';
-
+import { Ionicons } from '@expo/vector-icons';
 import { getProductosActivos } from '../context/productCatalog';
 import { AuthContext } from '../context/AuthContext';
 
@@ -127,31 +127,64 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
   const { alertas, configuracion } = getProductosProcesados();
 
   // ==========================================
-  // RENDERIZADORES
+  // RENDERIZADORES DE TARJETAS (Estilo Minimalista Centralizado)
   // ==========================================
   const renderAlertaItem = ({ item }) => (
-    <View style={[styles.card, styles.cardAlerta]}>
-      <View style={styles.cardInfo}>
-        <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>{item.nombre}</Text>
-        <Text style={GLOBAL_STYLES.textSecondary}>Límite establecido: {item.limiteStock} pzas</Text>
+    <View style={[
+      GLOBAL_STYLES.cardStandard, 
+      { borderColor: COLORS.rojo, backgroundColor: themeColors?.bgSecondary || COLORS.blanco }
+    ]}>
+      <View style={GLOBAL_STYLES.cardStandardContent}>
+        <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+          <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors?.text || COLORS.negro, fontSize: 16 }]} numberOfLines={1}>
+            {item.nombre}
+          </Text>
+          <Text style={GLOBAL_STYLES.cardStandardTitle}>
+            Límite establecido: {item.limiteStock} pzas
+          </Text>
+        </View>
       </View>
-      <View style={styles.stockBadgeDanger}>
-        <Text style={styles.stockBadgeTextDanger}>{item.stockActual} en stock</Text>
+      
+      {/* 🚨 Indicador de Peligro Limpio */}
+      <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+        <Text style={[GLOBAL_STYLES.cardStandardValue, { color: COLORS.rojo, fontSize: 22 }]}>
+          {item.stockActual}
+        </Text>
+        <Text style={{ fontSize: 12, color: COLORS.rojo, fontWeight: '700' }}>
+          en stock
+        </Text>
       </View>
     </View>
   );
 
   const renderConfigItem = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.cardInfo}>
-        <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>{item.nombre}</Text>
-        <Text style={GLOBAL_STYLES.textSecondary}>Stock actual: {item.stockActual}</Text>
+    <View style={[
+      GLOBAL_STYLES.cardStandard, 
+      { backgroundColor: themeColors?.bgSecondary || COLORS.blanco, borderColor: themeColors?.border || '#E2E8F0' }
+    ]}>
+      <View style={GLOBAL_STYLES.cardStandardContent}>
+        <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+          <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors?.text || COLORS.negro, fontSize: 16 }]} numberOfLines={1}>
+            {item.nombre}
+          </Text>
+          <Text style={GLOBAL_STYLES.cardStandardTitle}>
+            Stock actual: {item.stockActual}
+          </Text>
+        </View>
       </View>
-      
-      <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Límite mínimo:</Text>
+
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 10, color: themeColors?.textSecondary || '#64748B', marginBottom: 4, fontWeight: '600' }}>
+          Límite mínimo
+        </Text>
         <TextInput
-          style={styles.numericInput}
+          style={[
+            GLOBAL_STYLES.inputBase, 
+            { 
+              width: 60, height: 40, textAlign: 'center', padding: 0, marginBottom: 0, 
+              backgroundColor: themeColors?.input, color: themeColors?.text, borderColor: themeColors?.border 
+            }
+          ]}
           keyboardType="numeric"
           defaultValue={String(item.limiteStock)}
           onEndEditing={(e) => {
@@ -168,59 +201,81 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
 
   if (loading) {
     return (
-      <View style={[GLOBAL_STYLES.safeArea, styles.centerContainer, { backgroundColor: themeColors?.bg || '#FFFFFF' }]}>
+      <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors?.bg || '#FFFFFF', justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={COLORS?.turquesa || '#0000ff'} />
-        <Text style={styles.loadingText}>Cargando inventario...</Text>
+        <Text style={{ marginTop: 12, color: themeColors?.textSecondary || '#64748B' }}>Cargando inventario...</Text>
       </View>
     );
   }
 
   return (
-    <View style={[GLOBAL_STYLES.safeArea, { backgroundColor: themeColors?.bg || '#FFF', flex: 1 }]}>
+    <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors?.bg || '#FFF' }]}>
       <ScreenHeader 
         title="Alertas" 
-        onPress={() => onNavigate('Configuranza')} 
+        onPress={() => onNavigate('Configuración')} 
         themeColors={themeColors} 
       />
 
-      <View style={styles.tabContainer}>
+      {/* 🎛️ TABS COMO TARJETAS (Basadas en cardStandard) */}
+      <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 15, marginTop: 5 }}>
+        
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'alertas' && styles.activeTab]}
+          style={[
+            GLOBAL_STYLES.cardStandard, 
+            { flex: 1, marginBottom: 0, justifyContent: 'center', paddingVertical: 14 },
+            activeTab === 'alertas' ? { borderColor: COLORS.turquesa, borderWidth: 2 } : { borderColor: themeColors?.border }
+          ]}
           onPress={() => setActiveTab('alertas')}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'alertas' && styles.activeTabText]}>
-            🔔 Alertas ({alertas.length})
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Ionicons name="notifications-outline" size={18} color={activeTab === 'alertas' ? COLORS.turquesa : (themeColors?.text || "black")} />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: activeTab === 'alertas' ? COLORS.turquesa : (themeColors?.text || COLORS.negro) }}>
+              Alertas ({alertas.length})
+            </Text>
+          </View>
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'config' && styles.activeTab]}
+          style={[
+            GLOBAL_STYLES.cardStandard, 
+            { flex: 1, marginBottom: 0, justifyContent: 'center', paddingVertical: 14 },
+            activeTab === 'config' ? { borderColor: COLORS.turquesa, borderWidth: 2 } : { borderColor: themeColors?.border }
+          ]}
           onPress={() => setActiveTab('config')}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'config' && styles.activeTabText]}>
-            ⚙️ Configurar Límite
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Ionicons name="settings-outline" size={18} color={activeTab === 'config' ? COLORS.turquesa : (themeColors?.text || "black")} />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: activeTab === 'config' ? COLORS.turquesa : (themeColors?.text || COLORS.negro) }}>
+              Configurar
+            </Text>
+          </View>
         </TouchableOpacity>
+
       </View>
 
       {guardando && <ActivityIndicator size="small" color={COLORS.turquesa} style={{ marginVertical: 5 }} />}
 
-      <View style={styles.listContainer}>
+      <View style={{ flex: 1, paddingHorizontal: 16 }}>
         {activeTab === 'alertas' ? (
           <FlatList
             data={alertas}
             keyExtractor={item => item.nombre}
             renderItem={renderAlertaItem}
             ListEmptyComponent={
-              <View style={GLOBAL_STYLES.emptyStateContainer}>
-                <Text style={styles.emptyIcon}>✅</Text>
-                <Text style={GLOBAL_STYLES.emptyText}>¡Todo excelente!</Text>
-                <Text style={[GLOBAL_STYLES.textSecondary, styles.emptySubtext]}>
+              <View style={GLOBAL_STYLES.emptyContainer}>
+                {/* Textos limpios sin emojis */}
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: themeColors?.text || COLORS.negro, marginBottom: 6 }}>
+                  ¡Todo excelente!
+                </Text>
+                <Text style={{ fontSize: 14, fontStyle: 'italic', color: themeColors?.textSecondary || COLORS.grey, textAlign: 'center' }}>
                   Ningún producto ha bajado de su límite mínimo configurado.
                 </Text>
               </View>
             }
-            contentContainerStyle={styles.flatListContent}
+            contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
+            showsVerticalScrollIndicator={false}
           />
         ) : (
           <FlatList
@@ -228,11 +283,12 @@ export default function AlertasScreen({ onNavigate, themeColors }) {
             keyExtractor={item => item.nombre}
             renderItem={renderConfigItem}
             ListHeaderComponent={
-              <Text style={[GLOBAL_STYLES.textSecondary, styles.configHeader]}>
+              <Text style={{ fontSize: 12, fontStyle: 'italic', color: themeColors?.textSecondary || COLORS.grey, marginBottom: 15, textAlign: 'center', paddingHorizontal: 10 }}>
                 Define a las cuántas piezas quieres que la app te avise para hacer restock. (0 = Sin alerta)
               </Text>
             }
-            contentContainerStyle={styles.flatListContent}
+            contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
+            showsVerticalScrollIndicator={false}
           />
         )}
       </View>

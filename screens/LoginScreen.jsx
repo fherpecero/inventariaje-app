@@ -7,10 +7,11 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
-import { Ionicons } from '@expo/vector-icons'; // 🚀 NUEVO: Importación de íconos
+import { Ionicons } from '@expo/vector-icons'; 
 
 const COLORS = {
   turquesa: '#24c5c5',
@@ -30,7 +31,6 @@ export default function LoginScreen() {
   const [recordarUsuario, setRecordarUsuario] = useState(false);
   const [cargandoCredenciales, setCargandoCredenciales] = useState(true);
   
-  // 🚀 NUEVO: Estado para ver/ocultar contraseña en Login
   const [showPassword, setShowPassword] = useState(false); 
   
   const { login } = useContext(AuthContext);
@@ -70,7 +70,7 @@ export default function LoginScreen() {
         console.log('💾 Email guardado:', email);
 
         await AsyncStorage.setItem('recordar_password', password);
-        console.log('💾 Contraseña guardada (encriptación recomendada para producción)');
+        console.log('💾 Contraseña guardada');
       } else {
         await AsyncStorage.removeItem('recordar_email');
         await AsyncStorage.removeItem('recordar_password');
@@ -104,28 +104,24 @@ export default function LoginScreen() {
     try {
       setLoading(true);
 
-    if (recordarUsuario) {
-      await guardarCredenciales();
-    } else {
-      await AsyncStorage.removeItem('recordar_email');
-      await AsyncStorage.removeItem('recordar_password');
-    }
+      if (recordarUsuario) {
+        await guardarCredenciales();
+      } else {
+        await AsyncStorage.removeItem('recordar_email');
+        await AsyncStorage.removeItem('recordar_password');
+      }
 
-    const result = await login(email, password);
-    setLoading(false);
+      const result = await login(email, password);
 
-    if (!result.success) {
-      Alert.alert('Error', result.error);
-    }
+      if (!result.success) {
+        Alert.alert('Error', result.error);
+      }
     } catch (error) {
-    console.error("Error inesperado en la vista de login:", error);
-    Alert.alert('Error', 'Ocurrió un problema inesperado.');
-  } finally {
-    // 🛡️ EL ESCUDO DE ACCIÓN: 
-    // Pase lo que pase (error de credenciales, error de red, o éxito),
-    // debemos apagar el loader del botón o de la pantalla local.
-    setLoading(false); 
-  }
+      console.error("Error inesperado en la vista de login:", error);
+      Alert.alert('Error', 'Ocurrió un problema inesperado.');
+    } finally {
+      setLoading(false); 
+    }
   };
 
   if (showRegister) {
@@ -134,7 +130,7 @@ export default function LoginScreen() {
 
   if (cargandoCredenciales) {
     return (
-      <View style={[styles.container, { backgroundColor: COLORS.gris }]}>
+      <View style={styles.container}>
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.turquesa} />
           <Text style={styles.loaderText}>Cargando...</Text>
@@ -144,13 +140,20 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.gris }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
+        <Image 
+          source={require('../assets/inventariaje-logo.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>Inventariaje</Text>
         <Text style={styles.subtitle}>Gestiona tu negocio VH</Text>
       </View>
 
       <View style={styles.formContainer}>
+        
+        
         <TextInput
           style={styles.input}
           placeholder="Email"
@@ -159,12 +162,10 @@ export default function LoginScreen() {
           onChangeText={setEmail}
           autoCapitalize="none"
           editable={!loading}
-          autoComplete="off"
           autoCorrect={false}
           keyboardType="email-address"
         />
 
-        {/* 🚀 NUEVO: Contenedor con Input de Contraseña e Ícono (Login) */}
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
@@ -172,7 +173,7 @@ export default function LoginScreen() {
             placeholderTextColor="#999"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry={!showPassword} // Depende del estado
+            secureTextEntry={!showPassword} 
             editable={!loading}
             autoComplete="off"
           />
@@ -206,9 +207,9 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={olvidarCredenciales}
               disabled={loading}
-              style={{ marginLeft: 'auto' }}
+              style={styles.olvidarBtnContainer}
             >
-              <Text style={styles.olvidarBtn}>Olvidar</Text>
+              <Text style={styles.olvidarBtnText}>Olvidar</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -216,7 +217,7 @@ export default function LoginScreen() {
         <TouchableOpacity 
           onPress={() => setShowRegister(true)} 
           disabled={loading}
-          style={{ marginBottom: 20, marginTop: 15 }}
+          style={styles.createAccountContainer}
         >
           <Text style={styles.createAccountLink}>¿No tienes cuenta? Crear una</Text>
         </TouchableOpacity>
@@ -244,7 +245,6 @@ function RegistroScreen({ onBackToLogin }) {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // 🚀 NUEVO: Estados para ver/ocultar contraseñas en Registro
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
@@ -292,12 +292,11 @@ function RegistroScreen({ onBackToLogin }) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.gris }]}>
+    <View style={styles.container}>
       <View style={styles.headerRegistro}>
-        <TouchableOpacity onPress={onBackToLogin} disabled={loading}>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={onBackToLogin} disabled={loading} />
         <Text style={styles.title}>Crear Cuenta</Text>
-        <View style={{ width: 60 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.formContainer}>
@@ -325,7 +324,6 @@ function RegistroScreen({ onBackToLogin }) {
           autoCorrect={false}
         />
 
-        {/* 🚀 NUEVO: Input Contraseña Registro */}
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
@@ -350,7 +348,6 @@ function RegistroScreen({ onBackToLogin }) {
           </TouchableOpacity>
         </View>
 
-        {/* 🚀 NUEVO: Input Confirmar Contraseña Registro */}
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
@@ -397,11 +394,14 @@ function RegistroScreen({ onBackToLogin }) {
   );
 }
 
+// 📐 STYLESHEET LIMPIO Y CENTRALIZADO
 const styles = StyleSheet.create({
+  // --- Contenedores Globales ---
   container: {
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+    backgroundColor: COLORS.blanco, // 🚀 FONDO BLANCO GENERAL
   },
   loaderContainer: {
     flex: 1,
@@ -413,6 +413,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  formContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 30,
+  },
+  
+  // --- Headers ---
   header: {
     paddingTop: 80,
     paddingBottom: 5,
@@ -422,8 +429,12 @@ const styles = StyleSheet.create({
   headerRegistro: {
     paddingTop: 80,
     paddingBottom: 5,
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between', // Para distribuir el boton invisible, titulo y spacer
     alignItems: 'center',
+    flexDirection: 'row',
+  },
+  headerSpacer: {
+    width: 60,
   },
   title: {
     fontSize: 34,
@@ -435,11 +446,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  formContainer: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 150,
+
+  // --- Elementos Visuales ---
+  logo: {
+    width: 180, 
+    height: 180,
+    alignSelf: 'center',
+    marginBottom: 5,
   },
+
+  // --- Inputs y Formularios ---
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -447,11 +463,9 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderRadius: 8,
     fontSize: 16,
-    backgroundColor: COLORS.blanco,
+    backgroundColor: COLORS.gris, // 🚀 CORREGIDO: (Antes era COLORS.gray)
     color: COLORS.negro,
   },
-
-  // 🚀 NUEVOS ESTILOS PARA LAS CONTRASEÑAS
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,21 +473,21 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     marginBottom: 15,
     borderRadius: 8,
-    backgroundColor: COLORS.blanco,
+    backgroundColor: COLORS.gris, // 🚀 CORREGIDO
   },
   passwordInput: {
-    flex: 1, // Toma todo el espacio disponible dejando espacio al ícono
+    flex: 1, 
     padding: 14,
     fontSize: 16,
     color: COLORS.negro,
   },
   eyeIcon: {
-    padding: 14, // Hace que el área táctil del ícono sea más grande
+    padding: 14, 
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // ----------------------------------------
 
+  // --- Opciones adicionales (Checkbox y links) ---
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,12 +519,27 @@ const styles = StyleSheet.create({
     color: COLORS.negro,
     fontWeight: '500',
   },
-  olvidarBtn: {
+  olvidarBtnContainer: {
+    marginLeft: 'auto', // 🚀 Extraído del estilo en línea
+  },
+  olvidarBtnText: {
     fontSize: 12,
     color: COLORS.rojo,
     fontWeight: '600',
     paddingHorizontal: 8,
   },
+  createAccountContainer: {
+    marginBottom: 20, 
+    marginTop: 15, // 🚀 Extraído del estilo en línea
+  },
+  createAccountLink: {
+    color: COLORS.turquesa,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // --- Botones Principales ---
   button: {
     backgroundColor: COLORS.turquesa,
     padding: 15,
@@ -526,12 +555,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  createAccountLink: {
-    color: COLORS.turquesa,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
+
+  // --- Footers ---
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',

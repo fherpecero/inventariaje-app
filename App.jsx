@@ -159,7 +159,7 @@ function AppContent() {
       )}
 
       {/* PANTALLAS SECUNDARIAS */}
-      {page === 'Configuranza' && (
+      {page === 'Configuración' && (
         <SettingsScreen
           onNavigate={setPage}
           darkMode={darkMode}

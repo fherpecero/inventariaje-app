@@ -94,7 +94,7 @@ Bugs
 
 ✨ Nuevo: Botón para mostrar/ocultar contraseñas en pantallas de Login y Registro.
 
-🐛 Corregido: Botones de retroceso (Back) ya son visibles y funcionales en Configuranza y Miembros.
+🐛 Corregido: Botones de retroceso (Back) ya son visibles y funcionales en Configuración y Miembros.
 
 🐛 Corregido: Solucionada la pantalla de carga infinita (congelada) al instalar la app por primera vez.
 
@@ -294,7 +294,7 @@ Características Estables (v1.3.1):
 ├── ✅ EntradaScreen (agregar productos)
 ├── ✅ SalidaScreen (vender productos)
 ├── ✅ MembersScreen (gestión de usuarios)
-├── ✅ ConfiguranzaScreen (dark mode, preferencias)
+├── ✅ ConfiguraciónScreen (dark mode, preferencias)
 ├── ✅ AnalyticsScreen (reportes básicos)
 └── ✅ Catálogo de 32+ productos (actualizado)
 └── ✅ Modo oscuro

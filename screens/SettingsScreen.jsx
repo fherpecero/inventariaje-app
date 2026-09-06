@@ -10,16 +10,14 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
-  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { AuthContext } from '../context/AuthContext';
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 import { calculateEffectiveTier } from '../utils/tierUtils';
-
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 
 export default function SettingsScreen({
   onNavigate,
@@ -51,7 +49,6 @@ export default function SettingsScreen({
   const cargarDatos = async () => {
     try {
       setLoading(true);
-
       // Cargar preferencias
       try {
         const savedSettings = await AsyncStorage.getItem('appSettings');
@@ -68,7 +65,7 @@ export default function SettingsScreen({
     }
   };
 
-    const abrirModalEdicion = () => {
+  const abrirModalEdicion = () => {
     setNombreTemporal(userData?.nombre || '');
     setModalEditVisible(true);
   };
@@ -85,7 +82,6 @@ export default function SettingsScreen({
     setLoadingGuardar(false);
 
     if (res.success) {
-      // ✅ AHORA SÍ: Apagamos el estado correcto del Modal
       setModalEditVisible(false); 
       Alert.alert('✅ Éxito', 'Nombre actualizado correctamente');
     } else {
@@ -93,29 +89,14 @@ export default function SettingsScreen({
     }
   };
 
-  // 💳 REDIRECCIÓN A GOOGLE PLAY (Suscripciones) - ya que tenga la app publica y revenue cat lo hago
-  // const handleManageSubscription = async () => {
-  // Ajusta tu package name según tu app.json
-//   const PACKAGE_NAME = 'com.tuempresa.inventariaje';
-  
-//   // URL directa a suscripciones de Google Play
-//   const playStoreLink = `https://play.google.com/store/account/subscriptions?package=${PACKAGE_NAME}`;
-//   const playStoreGeneral = 'https://play.google.com/store/account/subscriptions';
-
-//   try {
-//     const supported = await Linking.canOpenURL(playStoreLink);
-//     if (supported) {
-//       await Linking.openURL(playStoreLink);
-//     } else {
-//       await Linking.openURL(playStoreGeneral);
-//     }
-//   } catch (error) {
-//     Alert.alert(
-//       'Aviso',
-//       'No se pudo abrir Google Play automáticamente. Ve a Google Play Store > Pagos y suscripciones.'
-//     );
-//   }
-// };
+  // 💳 REDIRECCIÓN A GOOGLE PLAY / SUSCRIPCIONES (En desarrollo)
+  const handleManageSubscription = () => {
+    Alert.alert(
+      'Suscripción y Planes',
+      'La gestión automatizada de planes y pagos estará disponible muy pronto con nuestra pasarela oficial. Por ahora, si necesitas modificar tu suscripción, contáctanos directamente.',
+      [{ text: 'Entendido', style: 'default' }]
+    );
+  };
 
   const toggleNotificaciones = async () => {
     const newValue = !notificaciones;
@@ -130,19 +111,6 @@ export default function SettingsScreen({
       console.warn('Error guardando notificaciones:', error);
     }
   };
-
-  // const cambiarIdioma = async (nuevoIdioma) => {
-  //   setIdioma(nuevoIdioma);
-
-  //   try {
-  //     const savedSettings = await AsyncStorage.getItem('appSettings');
-  //     const settings = savedSettings ? JSON.parse(savedSettings) : {};
-  //     settings.idioma = nuevoIdioma;
-  //     await AsyncStorage.setItem('appSettings', JSON.stringify(settings));
-  //   } catch (error) {
-  //     console.warn('Error guardando idioma:', error);
-  //   }
-  // };
 
   const cerrarSesion = async () => {
     Alert.alert(
@@ -178,392 +146,221 @@ export default function SettingsScreen({
 
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
-  <ScreenHeader
-    title="Configuranza"
-    onPress={() => onNavigate('home')}
-    themeColors={themeColors}
-  />
+      <ScreenHeader
+        title="Configuración"
+        onPress={() => onNavigate('home')}
+        themeColors={themeColors}
+      />
 
-  {/* CONTENT */}
-  <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-    
-    {/* ═══════════════════════════════════════════════════════════════ */}
-    {/* 1. PERFIL DE USUARIO */}
-    {/* ═══════════════════════════════════════════════════════════════ */}
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-        👤 Mi Cuenta
-      </Text>
+      {/* CONTENT */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 1. PERFIL DE USUARIO */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <FontAwesome6 name="user-gear" size={18} color={themeColors.text} 
+            /> Mi Cuenta
+          </Text>
 
-      {/* TARJETA 3 COLUMNAS: Tocar abre el modal de edición */}
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={abrirModalEdicion}
-        style={[styles.card3Col, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
-      >
-        {/* COLUMNA 1: AVATAR */}
-        <View style={styles.colAvatar}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userAvatarText}>
-              {userData?.nombre ? userData.nombre.charAt(0).toUpperCase() : 'U'}
-            </Text>
-          </View>
-        </View>
-
-        {/* COLUMNA 2: DETALLES DE USUARIO */}
-        <View style={styles.colInfo}>
-          <Text style={[styles.userName, { color: themeColors.text }]} numberOfLines={1}>
-            {userData?.nombre || 'Usuario'}
-          </Text>
-          <Text style={[styles.userEmail, { color: themeColors.textSecondary }]} numberOfLines={1}>
-            {userData?.email || 'Sin correo'}
-          </Text>
-          
-          {/* 🛡️ ROL */}
-          <Text style={{ fontSize: FONT_SIZES.pequeño, fontWeight: '700', color: userData?.rol === 'admin' ? COLORS.morado : COLORS.turquesa }}>
-            {userData?.rol === 'admin' ? '👑 Admin' : '👥 User'}
-          </Text>
-        </View>
-
-        {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
-        <View style={styles.colCuenta}>
-          <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
-            ID: {cuentaId || '---'}
-          </Text>
-          <Text style={styles.tierEmoji}>
-            {effectiveTier === 'premium' ? '💎' : '🪩'}
-          </Text>
-          <Text style={[styles.tierLabel, { color: effectiveTier === 'premium' ? COLORS.turquesa : COLORS.textSecondary }]}>
-            {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
-          </Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* 💳 BOTÓN DE PAUSAR / ADMINISTRAR SUSCRIPCIÓN (Solo visible para Admin) */}
-      {userData?.rol === 'admin' && (
-        <View style={styles.subscriptionContainer}>
-          <TouchableOpacity 
-            style={styles.btnManageSub}
-            activeOpacity={0.8}
-            onPress={handleManageSubscription}
+          {/* TARJETA 3 COLUMNAS: Minimalista Adaptado */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={abrirModalEdicion}
+            style={[
+              GLOBAL_STYLES.cardStandard, 
+              { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }
+            ]}
           >
-            <Ionicons name="logo-google-playstore" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.btnManageSubText}>Administrar Suscripción</Text>
+            {/* COLUMNA 1: AVATAR */}
+            <View style={styles.colAvatar}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>
+                  {userData?.nombre ? userData.nombre.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
+            </View>
+
+            {/* COLUMNA 2: DETALLES DE USUARIO */}
+            <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+              <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text}]} numberOfLines={1}>
+                {userData?.nombre || 'Usuario'}
+              </Text>
+              <Text style={[GLOBAL_STYLES.cardStandardTitle, { marginBottom: 4 }]} numberOfLines={1}>
+                {userData?.email || 'Sin correo'}
+              </Text>
+              
+              {/* 🛡️ ROL */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {userData?.rol === 'admin' ? (
+                  <>
+                    <FontAwesome6 name="crown" size={14} color={COLORS.turquesa} />
+                    <Text style={{ fontSize: FONT_SIZES.pequeño, fontWeight: '700', color: COLORS.turquesa }}>
+                      Admin
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <FontAwesome6 name="user" size={14} color={COLORS.morado} />
+                    <Text style={{ fontSize: FONT_SIZES.pequeño, fontWeight: '700', color: COLORS.morado }}>
+                      Usuario
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
+            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+              <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
+                ID: {cuentaId || '---'}
+              </Text>
+              <Text style={{ fontSize: 20, marginBottom: 2 }}>
+                {effectiveTier === 'premium' ? '💎' : '🪩'}
+              </Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: effectiveTier === 'premium' ? COLORS.turquesa : themeColors.textSecondary }}>
+                {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
+              </Text>
+            </View>
           </TouchableOpacity>
-          <Text style={[styles.subHint, { color: themeColors.textSecondary }]}>
-            Pausa o cancela tu suscripción en Google Play. Mantendrás el acceso al plan Basic.
-          </Text>
-        </View>
-      )}
 
-
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 2. GESTIONAR USUARIOS (SOLO VISIBLE PARA ADMINS) */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* 💳 BOTÓN DE PAUSAR / ADMINISTRAR SUSCRIPCIÓN (Solo visible para Admin) */}
           {userData?.rol === 'admin' && (
+            <View style={styles.subscriptionContainer}>
+              <TouchableOpacity 
+                style={styles.btnManageSub}
+                activeOpacity={0.8}
+                onPress={handleManageSubscription}
+              >
+                <Ionicons name="logo-google-playstore" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.btnManageSubText}>Administrar Suscripción</Text>
+              </TouchableOpacity>
+              <Text style={[styles.subHint, { color: themeColors.textSecondary }]}>
+                Pausa o cancela tu suscripción en Google Play. Mantendrás el acceso al plan Basic.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 2. GESTIONAR USUARIOS (SOLO ADMINS) - USANDO CARD STANDARD */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {userData?.rol === 'admin' && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              👥 Usuarios</Text>
-            <View style={[styles.cardSimple, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
-              <TouchableOpacity style={styles.menuItem} onPress={() => onNavigate('miembros')}>
-                <View style={styles.menuContent}>
-                  <Text style={styles.menuItemIcon}>👥</Text>
-                  <View style={styles.menuTextContainer}>
-                    <Text style={[styles.menuItemText, { color: themeColors.text }]}>Gestionar Usuarios</Text>
-                    <Text style={[styles.menuItemSubtext, { color: themeColors.textSecondary }]}>
-                      Invita o administra los socios de tu cuenta
-                    </Text>
-                  </View>
+              <FontAwesome6 name="users" size={18} color={themeColors.text} 
+              /> Usuarios
+            </Text>
+
+            <TouchableOpacity 
+              style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary }]} 
+              onPress={() => onNavigate('miembros')}
+              activeOpacity={0.7}
+            >
+              <View style={GLOBAL_STYLES.cardStandardContent}>
+                <FontAwesome6 name="user-plus" size={18} color={themeColors.textSecondary} style={GLOBAL_STYLES.cardStandardIcon} />
+                <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+                  <Text style={GLOBAL_STYLES.cardStandardTitle}>Invita o administra socios</Text>
+                  <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>Gestionar Usuarios</Text>
                 </View>
-                <Text style={styles.menuItemArrow}>→</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+              <Text style={GLOBAL_STYLES.cardStandardArrow}>→</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 3. PREFERENCIAS */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              🎨 Preferencias
-            </Text>
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 3. PREFERENCIAS - USANDO CARD STANDARD */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <Ionicons name="settings" size={18} color="black" 
+            /> Preferencias
+          </Text>
 
-            {/* Dark Mode */}
-            <View
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: themeColors.bgSecondary,
-                  borderColor: themeColors.border,
-                },
-              ]}
-            >
-              <View style={styles.settingLeft}>
-                <Text style={styles.settingIcon}>🌚</Text>
-                <View style={styles.settingText}>
-                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>
-                    Modo Oscuro
-                  </Text>
-                  <Text style={[styles.settingDesc, { color: themeColors.textSecondary }]}>
-                    Cambiar el tema visual
-                  </Text>
-                </View>
+          {/* Dark Mode */}
+          <View style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary }]}>
+            <View style={GLOBAL_STYLES.cardStandardContent}>
+              <Text style={GLOBAL_STYLES.cardStandardIcon}>
+                <Ionicons name="moon-outline" size={18} color="black" /></Text>
+              <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+                <Text style={GLOBAL_STYLES.cardStandardTitle}>Cambiar el tema visual</Text>
+                <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>
+                  Modo Oscuro</Text>
               </View>
-              <Switch
-                value={darkMode}
-                onValueChange={onDarkModeChange}
-                trackColor={{ false: '#ddd', true: COLORS.turquesa }}
-                thumbColor={darkMode ? COLORS.turquesa : '#f4f3f4'}
-              />
             </View>
-
-            {/* Notificaciones y Alertas (Rediseñado como botón de navegación) */}
-            <TouchableOpacity
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: themeColors.bgSecondary,
-                  borderColor: themeColors.border,
-                },
-              ]}
-              onPress={() => {
-                if (effectiveTier === 'premium') {
-                  onNavigate('alertas');
-                } else {
-                  onNavigate('upgrade');
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingLeft}>
-                <Text style={styles.settingIcon}>📬</Text>
-                <View style={styles.settingText}>
-                  <Text style={[styles.settingLabel, { color: themeColors.text }]}>
-                    Alertas de Inventario
-                  </Text>
-                  <Text style={[styles.settingDesc, { color: themeColors.textSecondary }]}>
-                    Configurar límites y avisos
-                  </Text>
-                </View>
-              </View>
-              
-              {/* Flecha indicadora de navegación */}
-              <Text style={{ color: themeColors.textSecondary, fontSize: 20, fontWeight: '300' }}>
-                ›
-              </Text>
-            </TouchableOpacity>
-            </View>
-
-            {/* Idioma
-            <View style={styles.idiomaSection}>
-              <Text
-                style={[styles.settingLabel, { color: themeColors.text, marginBottom: 10 }]}
-              >
-                🌍 Idioma
-              </Text>
-              <View style={styles.idiomaBtns}>
-                <TouchableOpacity
-                  style={[
-                    styles.idiomaBtn,
-                    {
-                      backgroundColor:
-                        idioma === 'es'
-                          ? 'rgba(26, 158, 161, 0.1)'
-                          : themeColors.bgSecondary,
-                      borderColor: idioma === 'es' ? COLORS.turquesa : themeColors.border,
-                    },
-                  ]}
-                  onPress={() => cambiarIdioma('es')}
-                >
-                  <Text style={[styles.idiomaBtnText, { color: themeColors.text }]}>
-                    🇲🇽 Español
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.idiomaBtn,
-                    {
-                      backgroundColor:
-                        idioma === 'en'
-                          ? 'rgba(26, 158, 161, 0.1)'
-                          : themeColors.bgSecondary,
-                      borderColor: idioma === 'en' ? COLORS.turquesa : themeColors.border,
-                    },
-                  ]}
-                  onPress={() => cambiarIdioma('en')}
-                >
-                  <Text style={[styles.idiomaBtnText, { color: themeColors.text }]}>
-                    🇺🇸 English
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View> */}
-          </View>
-             {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 5. INFORMACIÓN */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              ℹ️ Información
-            </Text>
-              
-            <View
-              style={[
-                styles.versionInfo,
-                {
-                  backgroundColor: themeColors.bgSecondary,
-                  borderColor: themeColors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.versionTitle, { color: themeColors.text }]}>
-                📱 Versión Actual: v2.5.1
-              </Text>
-              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Compilada: '01/09/2026',
-              </Text>
-              <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>
-                Última actualización: Bug fix Analytics/Productos en 0/Creditos/Offline mode/ UX improvement
-              </Text>
-            </View>
+            <Switch
+              value={darkMode}
+              onValueChange={onDarkModeChange}
+              trackColor={{ false: '#ddd', true: COLORS.turquesa }}
+              thumbColor={darkMode ? COLORS.turquesa : '#f4f3f4'}
+            />
           </View>
 
-
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 4. ESTADO DE FUNCIONALIDADES */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-
-
-            {/* 🔨 EN DESARROLLO */}
-            <View style={styles.featureGroup}>
-              <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>
-                🔨 En Desarrollo
-              </Text>
-
-              <View
-                style={[
-                  styles.featureBox,
-                  styles.featureDeveloping,
-                  {
-                    backgroundColor: themeColors.bgSecondary,
-                    borderColor: '#FF9800',
-                  },
-                ]}
-              >
-                <View style={styles.itemsContainer}>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🎨 Mejora de UX 
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🍏 Desarrollo para iOS
-                  </Text>
-                </View>
-                <Text style={[styles.item, { color: themeColors.text }]}>
-                    🇺🇸 Idiomas
-                  </Text>
-                <Text style={[styles.featureProgreso, { color: themeColors.text }]}>
-                  30% completado - v2.6.0
-                </Text>
+          {/* Alertas */}
+          <TouchableOpacity
+            style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary }]}
+            onPress={() => { effectiveTier === 'premium' ? onNavigate('alertas') : onNavigate('upgrade'); }}
+            activeOpacity={0.7}
+          >
+            <View style={GLOBAL_STYLES.cardStandardContent}>
+              <Text style={GLOBAL_STYLES.cardStandardIcon}><Ionicons name="notifications-outline" size={18} color="black" /></Text>
+              <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+                <Text style={GLOBAL_STYLES.cardStandardTitle}>Configurar límites y avisos</Text>
+                <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>Alertas de Inventario</Text>
               </View>
             </View>
+            <Text style={GLOBAL_STYLES.cardStandardArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📋 Estado de Funcionalidades</Text>
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 4. ESTADO DE FUNCIONALIDADES */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📋 Funcionalidades</Text> */}
 
-          <View style={styles.featureGroup}>
-            <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>✅ Completadas</Text>
-            <View style={[styles.featureBox, styles.featureCompleted, { backgroundColor: themeColors.bgSecondary }]}>
-               {/* FASE 1-2 */}
-              <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                  Fase 1-2 </Text>
-              <Text style={[styles.item, { color: themeColors.text }]}>✓ Dashboard de Inicio</Text>
-              <Text style={[styles.item, { color: themeColors.text }]}>✓ Control de Inventario y productos</Text>
-              <Text style={[styles.item, { color: themeColors.text }]}>✓ Gestión de Cuentas</Text>
-              <Text style={[styles.item, { color: themeColors.text }]}>✓ Base de datos en la nube (real time)</Text>
-
-               {/* FASE 3 */}
-               <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                  Fase 3 </Text>
-               <Text style={[styles.item, { color: themeColors.text }]}>✓ Infraestructura multiusuario</Text>
-               <Text style={[styles.item, { color: themeColors.text }]}>✓ Tier management (version basic & premium)</Text>     
-                    
-                {/* FASE 4 */}
-                  <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                  Fase 4 | Funciones Premium
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Registro de Escaner (Scanner Party)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Ventas a credito
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Modulo de intercambio de productos (socios)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                     Analytics & Reportes (ingresos & egresos/profits)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Descuento por producto (checkout)/Bono influencer (entradas)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Analytics: mejora de reportes y descarga CSV
-                  </Text>
-                   <Text style={[styles.item, { color: themeColors.text }]}>
-                    ✓ Alertas de Restock personalizables
-                  </Text>
-
-                </View>
-              </View>
-            </View>
-
-
-            {/* 🎯 PRÓXIMAS
-            <View style={styles.featureGroup}>
-              <Text style={[styles.featureGroupTitle, { color: themeColors.text }]}>
-                🎯 Próximas (FASE 5)
-              </Text>
-
-              <View
-                style={[
-                  styles.featureBox,
-                  {
-                    backgroundColor: themeColors.bgSecondary,
-                    borderColor: COLORS.morado,
-                  },
-                ]}
-              >
-                <View style={styles.itemsContainer}>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    📜 Historial Completo de operaciones
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    💸 Gastos y Viaticos (costos por restock y eventos)
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    💳 Integración de Pagos - Stripe/Mercado Pago
-                  </Text>
-                  <Text style={[styles.item, { color: themeColors.text }]}>
-                    🌐 Backoffice Web para administración
-                  </Text>
-                </View>
-
-                <Text style={[styles.featureVersion, { color: themeColors.text }]}>
-                  Planeado
-                </Text>
-              </View>
-            </View>
+          {/* EN DESARROLLO */}
+          {/* <View style={[styles.featureBox, styles.featureDeveloping, { backgroundColor: themeColors.bgSecondary, borderColor: '#E2E8F0' }]}>
+            <Text style={styles.featureGroupTitle}>🔨 En Desarrollo</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>🎨 Mejora de UX</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>🍏 Desarrollo para iOS</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>🇺🇸 Idiomas</Text>
+            <Text style={styles.featureProgreso}>30% completado - v2.6.0</Text>
           </View> */}
 
-       
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* 6. CERRAR SESIÓN */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          <View style={styles.section}>
+          {/* COMPLETADAS */}
+          {/* <View style={[styles.featureBox, styles.featureCompleted, { backgroundColor: themeColors.bgSecondary, borderColor: '#E2E8F0' }]}>
+            <Text style={styles.featureGroupTitle}>✅ Completadas</Text>
+            <Text style={styles.featureVersion}>Fase 1 a 4</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>✓ Dashboard, Inventario y Base de Datos RT</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>✓ Multiusuario y Tiers (Basic/Premium)</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>✓ Scanner Party y Ventas a Crédito</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>✓ Intercambios y Bono Influencer</Text>
+            <Text style={[styles.item, { color: themeColors.text }]}>✓ Reportes Analytics avanzados y CSV</Text>
+          </View>
+        </View> */}
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 5. INFORMACIÓN */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+              <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <FontAwesome6 name="circle-info" size={18} color="black"
+            /> Información</Text>
+          <View style={[styles.featureBox, { backgroundColor: themeColors.bgSecondary, borderColor: '#E2E8F0' }]}>
+            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.1</Text>
+            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Compilada: 01/09/2026</Text>
+            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: Minimalist UI, Bug fixes, Offline mode.</Text>
+          </View>
+        </View>
+
+        {/* CERRAR SESIÓN */}
+        <View style={styles.section}>
           <TouchableOpacity style={GLOBAL_STYLES.btnDanger} onPress={cerrarSesion}>
-            <Text style={GLOBAL_STYLES.btnText}>🚪 Cerrar Sesión</Text>
+            <Text style={GLOBAL_STYLES.btnText}><Ionicons name="log-out" size={18} color="white" 
+            /> Cerrar Sesión</Text>
           </TouchableOpacity>
         </View>
 
@@ -579,7 +376,7 @@ export default function SettingsScreen({
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: themeColors.bgSecondary }]}>
-            <Text style={[styles.modalTitle, { color: themeColors.text }]}>✏️ Editar Nombre</Text>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Editar Nombre</Text>
             
             <TextInput
               style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border, marginBottom: 20 }]}
@@ -608,7 +405,8 @@ export default function SettingsScreen({
                 {loadingGuardar ? (
                   <ActivityIndicator color={COLORS.blanco} />
                 ) : (
-                  <Text style={GLOBAL_STYLES.btnText}>💾 Guardar</Text>
+                  <Text style={GLOBAL_STYLES.btnText}><Ionicons name="save-outline" size={18} color="white" 
+                  /> Guardar</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -616,15 +414,14 @@ export default function SettingsScreen({
         </View>
       </Modal>
     </View>
-    
   );
 }
 
-// 📐 STYLESHEET ESTRUCTURAL
+// 📐 STYLESHEET ESTRUCTURAL (LIMPIADO Y MINIMALISTA)
 const styles = StyleSheet.create({
   content: {
     flex: 1,
-    padding: 15,
+    padding: SPACING.content_padding,
   },
   section: {
     marginBottom: 20,
@@ -632,24 +429,23 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: '700',
-    marginBottom: 10,
-  },
-  hintText: {
-    fontSize: FONT_SIZES.pequeño,
-    fontStyle: 'italic',
-    marginTop: 6,
-    textAlign: 'center',
+    marginBottom: 12,
   },
 
-  /* CARD 3 COLUMNAS */
+  /* CARD 3 COLUMNAS (Perfil) - Adaptado al Minimalist Look */
   card3Col: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderLeftWidth: 5,
-    borderLeftColor: COLORS.turquesa,
+    // Sombra sutil plana
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   colAvatar: {
     marginRight: 12,
@@ -681,23 +477,12 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.pequeño,
     marginBottom: 6,
   },
-  badgeRol: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  badgeText: {
-    color: COLORS.blanco,
-    fontSize: 10,
-    fontWeight: '700',
-  },
   colCuenta: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingLeft: 10,
+    paddingLeft: 12,
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(150,150,150,0.2)',
+    borderLeftColor: '#E2E8F0', // Borde interior gris suave
     minWidth: 70,
   },
   accountId: {
@@ -713,73 +498,81 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* ITEMS Y MENÚS */
-  cardSimple: {
-    borderRadius: 12,
-    borderWidth: 1,
+  /* GESTIÓN DE SUSCRIPCIÓN */
+  subscriptionContainer: {
+    marginTop: 5,
   },
-  menuItem: {
+  btnManageSub: {
+    backgroundColor: COLORS.turquesa,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
-    padding: 14,
+    justifyContent: 'center',
+    marginBottom: 6,
   },
-  menuContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  btnManageSubText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
-  menuItemIcon: {
-    fontSize: 22,
-  },
-  menuTextContainer: {
-    flex: 1,
-  },
-  menuItemText: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  menuItemSubtext: {
-    fontSize: FONT_SIZES.pequeño,
+  subHint: {
+    fontSize: 11,
+    textAlign: 'center',
     fontStyle: 'italic',
   },
-  menuItemArrow: {
-    fontSize: 18,
-    color: '#999',
-  },
 
-  /* PREFERENCIAS */
-  settingItem: {
+  /* FUNCIONALIDADES E INFORMACIÓN (Adaptado al Minimalist Look) */
+  featureBox: {
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.turquesa,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  settingLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+  featureCompleted: {
+    borderLeftWidth: 4, // Borde izquierdo sutil indicador
+    borderLeftColor: '#4CAF50',
   },
-  settingIcon: {
-    fontSize: 22,
-    marginRight: 12,
+  featureDeveloping: {
+    borderLeftWidth: 4, // Borde izquierdo sutil indicador
+    borderLeftColor: '#FF9800',
   },
-  settingText: {
-    flex: 1,
-  },
-  settingLabel: {
+  featureGroupTitle: {
     fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#64748B', // Gris profesional
+    marginBottom: 8,
   },
-  settingDesc: {
+  item: {
     fontSize: FONT_SIZES.pequeño,
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  featureVersion: {
+    fontSize: FONT_SIZES.pequeño,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginBottom: 8,
+  },
+  featureProgreso: {
+    fontSize: FONT_SIZES.pequeño,
+    fontWeight: '600',
+    color: '#FF9800',
+    marginTop: 6,
+  },
+  versionTitle: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  versionDesc: {
+    fontSize: FONT_SIZES.pequeño,
+    marginBottom: 4,
   },
 
   /* MODAL */
@@ -807,84 +600,4 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
-  settingLabel: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  settingDesc: {
-    fontSize: FONT_SIZES.pequeño,
-  },
-  featureGroup: {
-    marginBottom: 16,
-  },
-  featureGroupTitle: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '700',
-    marginBottom: 10,
-    paddingLeft: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.turquesa,
-    paddingVertical: 8,
-  },
-  featureBox: {
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  featureCompleted: {
-    borderLeftWidth: 5,
-    borderLeftColor: '#4CAF50',
-    borderColor: '#4CAF50',
-  },
-  featureDeveloping: {
-    borderLeftWidth: 5,
-    borderLeftColor: '#FF9800',
-    borderColor: '#FF9800',
-  },
-  item: {
-    fontSize: FONT_SIZES.pequeño,
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  featureVersion: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: '600',
-    color: '#4CAF50',
-    marginBottom: 6,
-  },
-  featureProgreso: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: '600',
-    color: '#FF9800',
-    marginTop: 8,
-  },
-  subscriptionContainer: {
-    marginTop: 10,
-    paddingHorizontal: 2,
-  },
-  btnManageSub: {
-    backgroundColor: COLORS.turquesa,
-    flexDirection: 'row',
-    paddingVertical: 11,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  btnManageSubText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: FONT_SIZES.pequeño || 13,
-  },
-  subHint: {
-    fontSize: 11,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  /* INFORMACIÓN */
-  versionInfo: { borderRadius: 12, padding: 16, borderWidth: 1, marginBottom: 10 },
-  versionTitle: { fontSize: FONT_SIZES.normal, fontWeight: '700', marginBottom: 8, color: COLORS.turquesa },
-  versionDesc: { fontSize: FONT_SIZES.pequeño, marginBottom: 4 },
 });

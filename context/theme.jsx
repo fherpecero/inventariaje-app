@@ -12,15 +12,21 @@ export const COLORS = {
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
-  verde: '#4CAF50',
-  rojo: '#f44336',
-  naranja: '#FF9800',
+  verde: '#24c5c5',
+  rojo: '#991B1B',
+  naranja: '#E6672E',
   morado: '#7e2b8d',
   lila: '#a8ccff',
-  rojito: '#f97272',
+  rojito: '#991B1B',
   grey: '#565656',
-  rojoCredito: '#f97272',
+  rojoCredito: '#991B1B',
 };
+
+// EXPO ICONS
+// SAVE BUTTON: <Ionicons name="save-outline" size={18} color="black" />
+// DELETE BUTTON: <FontAwesome6 name="trash-can" size={18} color="black" />
+// SETTINGS BUTTON: <Ionicons name="settings-outline" size={24} color="black" />
+// 
 
 // ============================================
 // TAMAÑOS DE FUENTE
@@ -79,6 +85,11 @@ export const GLOBAL_STYLES = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
+
+  // ==========================================
+  // 📇 TARJETAS ESTANDARIZADAS 
+  // (Sin bordes de colores, full minimalistas)
+  // ==========================================
   cardBase: {
     backgroundColor: COLORS.blanco,
     borderRadius: 12,
@@ -134,7 +145,7 @@ export const GLOBAL_STYLES = StyleSheet.create({
     justifyContent: 'center',
   },
   btnDanger: {
-    backgroundColor: COLORS.rojito,
+    backgroundColor: COLORS.rojo,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -165,6 +176,56 @@ export const GLOBAL_STYLES = StyleSheet.create({
     fontSize: FONT_SIZES.normal,
     color: COLORS.negro,
     marginBottom: 15,
+  },
+    // ==========================================
+  // 📇 NUEVAS CARDS CENTRALIZADAS V2.6.0
+  // ==========================================
+  cardStandard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: COLORS.blanco, // Fondo limpio por defecto
+    // Sombra ultra-ligera (casi plana) para dar un poco de cuerpo
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cardStandardContent: {
+    flex: 1,
+    flexDirection: 'row', 
+    alignItems: 'center',
+  },
+  cardStandardTextContainer: {
+    flex: 1,
+    flexDirection: 'column', 
+    justifyContent: 'center',
+  },
+  cardStandardTitle: {
+    fontSize: FONT_SIZES.pequeño,
+    fontWeight: '600',
+    color: '#64748B', // Gris profesional para no competir con el valor
+    marginBottom: 2,
+  },
+  cardStandardValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A', // Texto muy oscuro y fuerte para el dato
+  },
+  cardStandardIcon: {
+    fontSize: 22,
+    marginRight: 14,
+  },
+  cardStandardArrow: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#CBD5E1', // Flecha sutil que no roba atención
   },
 });
 
@@ -690,4 +751,5 @@ export const homeStyles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
+
 });

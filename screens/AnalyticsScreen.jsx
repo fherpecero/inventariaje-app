@@ -573,6 +573,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   kpiIcon: {
     marginBottom: 6,
@@ -582,10 +584,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     fontWeight: '600',
     marginBottom: 4,
+    textAlign: 'center'
   },
   kpiMonto: {
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: 'bold',
+    textAlign: 'center'
   },
   scannerCard: {
     flexDirection: 'row',
@@ -651,6 +655,7 @@ const styles = StyleSheet.create({
   balanceCol: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center'
   },
   balanceDivider: {
     width: 1,
@@ -659,6 +664,7 @@ const styles = StyleSheet.create({
   balanceMonto: {
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: 'bold',
+    justifyContent: 'center'
   },
   columnsContainer: {
     flexDirection: 'row',

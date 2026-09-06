@@ -15,7 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, getDocs, doc, getDoc, addDoc, updateDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import ModalRegistroEscaner from '../components/ModalRegistroEscaner';
@@ -661,11 +661,11 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 <Text style={styles.dashboardValueExistencia}>Ganancias en el mes</Text>
               </View>
             </View>
-            <View style={styles.dashboardBtnTextVenta}>
             <Image
-                source={ImgVenta}
-                style={styles.ImagenVenta}
-            />
+              source={ImgVenta}
+              style={styles.ImagenVenta}
+              />
+            <View style={styles.dashboardBtnTextVenta}>
             <Text style={styles.dashboardValueVenta}>${stats.ventasDelMes || '0.00'}</Text>
             <Text style={styles.dashboardArrow}>→</Text>
             </View>
@@ -673,15 +673,16 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         </View>
 
         {/* SECCIÓN 2: EVENTO DE ESCÁNER */}
-        {effectiveTier === 'premium' && (
         <View style={styles.scannerSection}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>💻 Evento de Escáner</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <FontAwesome6 name="heart-pulse" size={24} color="black" /> Evento de Escáner</Text>
 
           {eventoActivo ? (
             <View style={[styles.eventoCard, { backgroundColor: themeColors.bgSecondary }]}>
               <View style={styles.eventoHeader}>
                 <Text style={[styles.eventoTitle, { color: themeColors.text }]}>{eventoActivo.evento}</Text>
-                <Text style={styles.eventoStatus}>🟢 Activo</Text>
+                <Text style={styles.eventoStatus}>
+                  <Ionicons name="pulse-sharp" size={24} color="green" /> Activo</Text>
               </View>
 
               {/* Cálculos del Escáner en vivo */}
@@ -708,7 +709,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
 
               <View style={styles.eventoButtons}>
                 <TouchableOpacity style={[styles.eventoBtnEdit, { backgroundColor: COLORS.turquesa }]} onPress={() => setModalEventoVisible(true)}>
-                  <Text style={styles.eventoBtnText}>✏️ Editar</Text>
+                  <Text style={styles.eventoBtnText}>
+                    <FontAwesome6 name="edit" size={24} color="black" /> Editar</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -789,7 +791,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             </TouchableOpacity>
           )}
         </View>
-        )}
+        
 
         {/* SECCIÓN 3: CRÉDITOS PENDIENTES (PREMIUM) */}
         {effectiveTier === 'premium' && (
@@ -999,9 +1001,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('Configuranza')}>
+              <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('Configuración')}>
                 <Text style={styles.menuItemIcon}>⚙️</Text>
-                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Configuranza</Text>
+                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Configuración</Text>
                 <Text style={styles.menuItemArrow}>→</Text>
               </TouchableOpacity>
 
@@ -1388,9 +1390,9 @@ ImagenExistencia: {
     width: 130,
     },
 ImagenVenta: {
-    marginTop: -20,
-    marginRight: -40,
-    paddingBottom: 20,
+    position: 'absolute',
+    right: 0,
+    top: 0,
     },
   menuPressable: {
     position: 'absolute',
@@ -1409,7 +1411,7 @@ ImagenVenta: {
     alignItems: 'center',
     paddingHorizontal: SPACING.content_padding,
     paddingVertical: 15,
-    paddingTop: 20,
+    paddingTop: 40,
   },
   menuTitle: {
     fontSize: FONT_SIZES.subtitulo,

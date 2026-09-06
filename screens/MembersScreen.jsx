@@ -13,11 +13,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion, setDoc, query, where, getFirestore } from 'firebase/firestore';
-import { getAuth, signOut, initializeAuth, updateProfile,
-  createUserWithEmailAndPassword, sendPasswordResetEmail, inMemoryPersistence } from 'firebase/auth';
+import { getAuth, signOut, initializeAuth, updateProfile, createUserWithEmailAndPassword, sendPasswordResetEmail, inMemoryPersistence } from 'firebase/auth';
 import { initializeApp, getApps } from 'firebase/app';
 import { db, firebaseConfig } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 
 // 🎨 Importamos el ecosistema visual centralizado
 import { COLORS, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
@@ -63,7 +63,6 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
       const cuentaSnap = await getDoc(cuentaRef);
       const miembrosUIDs = cuentaSnap.data()?.miembros || [];
 
-      // 🛡️ Filtramos la consulta para NO descargar toda la base de datos
       const qUsuarios = query(
         collection(db, 'usuarios'),
         where('cuentaId', '==', String(cuentaId))
@@ -125,7 +124,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
       );
       setMiembros(miembrosActualizados);
 
-      Alert.alert('✅ Guardado', 'Cambios aplicados correctamente');
+      Alert.alert('Guardado', 'Cambios aplicados correctamente');
       setUserSettingsVisible(false);
     } catch (error) {
       Alert.alert('Error', 'No se pudieron guardar los cambios');
@@ -137,7 +136,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
       setEnviandoReset(true);
       const auth = getAuth();
       await sendPasswordResetEmail(auth, usuarioSeleccionado.email);
-      Alert.alert('✅ Enviado', `Se envió un correo de reset a:\n${usuarioSeleccionado.email}`);
+      Alert.alert('Enviado', `Se envió un correo de reset a:\n${usuarioSeleccionado.email}`);
     } catch (error) {
       Alert.alert('Error', 'No se pudo enviar el correo');
     } finally {
@@ -157,10 +156,10 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
       });
 
       Alert.alert(
-        '✅ Éxito',
+        'Estatus Actualizado',
         estaSuspendido 
-          ? `${usuarioSeleccionado.email} ha sido REACTIVADO` 
-          : `${usuarioSeleccionado.email} ha sido SUSPENDIDO`
+          ? `${usuarioSeleccionado.email} ha sido reactivado` 
+          : `${usuarioSeleccionado.email} ha sido suspendido`
       );
 
       setUserSettingsVisible(false);
@@ -170,58 +169,54 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
     }
   };
 
-  const eliminarUsuario = async () => {
-  Alert.alert(
-    '⚠️ ELIMINACIÓN PERMANENTE',
-    `¿Eliminar a ${usuarioSeleccionado.email}?\n\nEsto preservará logs para reportes.`,
-    [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            // 1️⃣ PRIMERO: Quitarlo de la cuenta (Esto sí lo permite Firebase porque eres el Admin)
-            const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
-            const cuentaSnap = await getDoc(cuentaRef);
-            const miembrosActuales = cuentaSnap.data()?.miembros || [];
-
-            const miembrosActualizados = miembrosActuales.filter(
-              (uid) => uid !== usuarioSeleccionado.uid
-            );
-
-            // Actualizamos la base de datos para revocarle el acceso
-            await updateDoc(cuentaRef, { miembros: miembrosActualizados });
-
-            // 2️⃣ SEGUNDO: Intentar marcar su perfil personal
-            // Lo ponemos en su propio try/catch porque si Firebase lo bloquea por reglas de seguridad, 
-            // NO queremos que cancele la eliminación visual de la pantalla.
+  // Recibimos un usuario temporal para que funcione el botón de la tarjeta
+  const eliminarUsuario = async (miembroTarget = null) => {
+    const target = miembroTarget || usuarioSeleccionado;
+    
+    Alert.alert(
+      'Eliminación Permanente',
+      `¿Eliminar a ${target.email}?\n\nEsto preservará logs para reportes.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
             try {
-              const usuarioDocRef = doc(db, 'usuarios', usuarioSeleccionado.uid);
-              await updateDoc(usuarioDocRef, {
-                eliminado: true,
-                deletionRequestedAt: new Date().toISOString(),
-                eliminadoPor: user.uid,
-              });
-            } catch (perfilError) {
-              console.warn('⚠️ Nota: Se borró de la cuenta, pero las reglas de Firebase bloquearon la edición de su perfil personal.');
+              const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
+              const cuentaSnap = await getDoc(cuentaRef);
+              const miembrosActuales = cuentaSnap.data()?.miembros || [];
+
+              const miembrosActualizados = miembrosActuales.filter(
+                (uid) => uid !== target.uid
+              );
+
+              await updateDoc(cuentaRef, { miembros: miembrosActualizados });
+
+              try {
+                const usuarioDocRef = doc(db, 'usuarios', target.uid);
+                await updateDoc(usuarioDocRef, {
+                  eliminado: true,
+                  deletionRequestedAt: new Date().toISOString(),
+                  eliminadoPor: user.uid,
+                });
+              } catch (perfilError) {
+                console.warn('Nota: Se borró de la cuenta, pero las reglas de Firebase bloquearon la edición de su perfil personal.');
+              }
+
+              setMiembros(miembros.filter((m) => m.uid !== target.uid));
+              setUserSettingsVisible(false);
+
+              Alert.alert('Eliminado', `${target.email} ha sido eliminado de la cuenta.`);
+            } catch (error) {
+              console.error(error);
+              Alert.alert('Error al eliminar', error.message);
             }
-
-            // 3️⃣ TERCERO: Limpiar la pantalla y cerrar el modal
-            setMiembros(miembros.filter((m) => m.uid !== usuarioSeleccionado.uid));
-            setUserSettingsVisible(false);
-
-            Alert.alert('✅ Eliminado', `${usuarioSeleccionado.email} ha sido eliminado de la cuenta\n\n📊 Los registros se mantienen`);
-          } catch (error) {
-            // 🚀 Cambiamos este Alert para que nos diga EXACTAMENTE por qué falla si vuelve a pasar
-            console.error(error);
-            Alert.alert('Error al eliminar', error.message);
-          }
+          },
         },
-      },
-    ]
-  );
-};
+      ]
+    );
+  };
 
   const crearUsuarioYAgregarACuenta = async () => {
     if (!isMountedRef.current) return;
@@ -264,19 +259,15 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
 
       await updateProfile(userCredential.user, { displayName: nombreUsuario });
 
-            // 1. Centralizamos todos los datos en una sola referencia
       const usuarioDocRef = doc(secondaryDb, 'usuarios', nuevoUID);
-      
-      // 2. Insertamos el campo "rol" directamente en el perfil principal
       await setDoc(usuarioDocRef, {
         uid: nuevoUID,
         email: emailInput.trim(),
         nombre: emailInput.split('@')[0],
         cuentaId: cuentaId,
-        rol: 'socio', // <-- Campo agregado al documento principal
+        rol: 'socio',
         createdAt: new Date().toISOString(),
       }, { merge: false });
-
 
       const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
       await updateDoc(cuentaRef, { miembros: arrayUnion(nuevoUID) });
@@ -292,7 +283,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
         setPasswordInput('');
         setModalVisible(false);
 
-        Alert.alert('✅ Éxito', `Usuario ${emailInput} creado correctamente`);
+        Alert.alert('Éxito', `Usuario ${emailInput} creado correctamente`);
       }
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -303,17 +294,39 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
 
   const renderMiembro = ({ item }) => (
     <TouchableOpacity
-      style={[styles.miembroCard, { backgroundColor: themeColors.cardBg }]}
+      activeOpacity={0.7}
+      style={[
+        GLOBAL_STYLES.cardStandard, 
+        { 
+          backgroundColor: themeColors.bgSecondary,
+          borderColor: themeColors.border,
+          marginBottom: 10 
+        }
+      ]}
       onPress={() => abrirUserSettings(item)}
     >
-      <View style={styles.miembroInfo}>
-        <Text style={[styles.miembroEmail, { color: themeColors.text }]}>{item.email}</Text>
-        <Text style={[styles.miembroNombre, { color: themeColors.textSecondary }]}>{item.nombre}</Text>
+      <View style={GLOBAL_STYLES.cardStandardContent}>
+        {/* Adios emoji 👤 -> Hola Ionicons */}
+        <Ionicons name="person-circle-outline" size={36} color={COLORS.turquesa} style={{ marginRight: 14 }} />
+
+        <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+          <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]} numberOfLines={1}>
+            {item.nombre || 'Sin nombre'}
+          </Text>
+          <Text style={GLOBAL_STYLES.cardStandardTitle} numberOfLines={1}>
+            {item.email}
+          </Text>
+        </View>
       </View>
 
       {item.uid !== user.uid && (
-        <TouchableOpacity style={styles.deleteBtn} onPress={() => eliminarUsuario()}>
-          <Text style={styles.deleteBtnText}>🗑️</Text>
+        <TouchableOpacity 
+          style={{ padding: 8, marginLeft: 8 }} 
+          onPress={() => eliminarUsuario(item)} // Corrección aplicada
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {/* Adios emoji 🗑️ -> Hola Ionicons rojo */}
+          <Ionicons name="trash-outline" size={22} color={COLORS.rojo} />
         </TouchableOpacity>
       )}
     </TouchableOpacity>
@@ -330,7 +343,6 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       
-      {/* 🚀 COMPONENTE CENTRALIZADO DEL THEME */}
       <ScreenHeader 
         title="Usuarios" 
         onPress={() => onNavigate('home')}  
@@ -343,36 +355,42 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
         keyExtractor={(item) => item.uid}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: themeColors.text }]}>No hay usuarios adicionales</Text>
+          <View style={GLOBAL_STYLES.emptyContainer}>
+            <Text style={[GLOBAL_STYLES.emptyText, { color: themeColors.text }]}>No hay usuarios adicionales</Text>
           </View>
         }
       />
 
-      <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
-        <Text style={styles.addBtnText}>+ Agregar Usuario</Text>
+      <TouchableOpacity 
+        style={[GLOBAL_STYLES.btnSuccess, { marginHorizontal: 15, marginBottom: 40 }]} 
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={GLOBAL_STYLES.btnText}>Agregar Usuario</Text>
       </TouchableOpacity>
 
       {/* MODAL CREAR USUARIO */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
-          <Pressable style={[styles.modalContent, { backgroundColor: themeColors.bgSecondary }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.modalTitle, { color: themeColors.text }]}>🆕 Crear Usuario</Text>
+        <Pressable style={GLOBAL_STYLES.modalOverlay} onPress={() => setModalVisible(false)}>
+          <Pressable style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bgSecondary }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text }]}>
+              <FontAwesome6 name="user-plus" size={18} color={themeColors.text} /> Crear Usuario
+            </Text>
             
-            <Text style={[styles.modalLabel, { color: themeColors.text }]}>Email del nuevo usuario:</Text>
+            <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Email del nuevo usuario:</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
+              style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
               placeholder="usuario@gmail.com"
               placeholderTextColor={themeColors.textSecondary}
               value={emailInput}
               onChangeText={setEmailInput}
               editable={!creating}
               keyboardType="email-address"
+              autoCapitalize="none"
             />
 
-            <Text style={[styles.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Contraseña temporal:</Text>
+            <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Contraseña temporal:</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
+              style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
               placeholder="VH12345"
               placeholderTextColor={themeColors.textSecondary}
               value={passwordInput}
@@ -381,12 +399,23 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
               secureTextEntry
             />
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)} disabled={creating}>
-                <Text style={styles.cancelBtnText}>Cancelar</Text>
+            <View style={GLOBAL_STYLES.modalButtons}>
+              <TouchableOpacity 
+                style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} 
+                onPress={() => setModalVisible(false)} 
+                disabled={creating}
+              >
+                <Text style={GLOBAL_STYLES.btnTextDanger}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.createBtn, creating && styles.disabledBtn]} onPress={crearUsuarioYAgregarACuenta} disabled={creating}>
-                <Text style={styles.createBtnText}>{creating ? '⏳ Creando...' : '✅ Crear'}</Text>
+              
+              <TouchableOpacity 
+                style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, creating && GLOBAL_STYLES.disabledBtn]} 
+                onPress={crearUsuarioYAgregarACuenta} 
+                disabled={creating}
+              >
+                <Text style={GLOBAL_STYLES.btnText}>
+                  {creating ? 'Creando...' : 'Crear'}
+                </Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -395,21 +424,23 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
 
       {/* MODAL USER SETTINGS */}
       <Modal visible={userSettingsVisible} transparent animationType="fade" onRequestClose={() => setUserSettingsVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <View style={GLOBAL_STYLES.modalOverlay}>
           <Pressable style={styles.modalOverlayPress} onPress={() => setUserSettingsVisible(false)} />
           <View style={[styles.userSettingsModal, { backgroundColor: themeColors.bgSecondary }]}>
             <View style={styles.userSettingsHeader}>
-              <Text style={[styles.userSettingsTitle, { color: themeColors.text }]}>⚙️ Configurar Usuario</Text>
+              <Text style={[styles.userSettingsTitle, { color: themeColors.text }]}>
+                <Ionicons name="settings-outline" size={20} color={themeColors.text} /> Configurar Usuario
+              </Text>
               <TouchableOpacity onPress={() => setUserSettingsVisible(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Ionicons name="close" size={28} color={COLORS.rojo} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={true} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 20 }}>
               <View style={styles.compactSection}>
-                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📋 Información</Text>
+                <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Información</Text>
 
-                <Text style={[styles.modalLabel, { color: themeColors.text }]}>Nombre</Text>
+                <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Nombre</Text>
                 <TextInput
                   style={[styles.compactInput, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
                   value={editNombre}
@@ -418,7 +449,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
                   placeholderTextColor={themeColors.textSecondary}
                 />
 
-                <Text style={[styles.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Email</Text>
+                <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Email</Text>
                 <TextInput
                   style={[styles.compactInput, styles.disabledInput, { backgroundColor: '#e3e1e1', color: '#727070', borderColor: themeColors.border }]}
                   value={editEmail}
@@ -426,9 +457,11 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
                   placeholder="Email"
                   placeholderTextColor="#999"
                 />
-                <Text style={[styles.helperText, { color: themeColors.textSecondary }]}>ℹ️ Para cambiar email, crea un nuevo usuario</Text>
+                <Text style={[styles.helperText, { color: themeColors.textSecondary }]}>
+                  <Ionicons name="information-circle-outline" size={12} color={themeColors.textSecondary} /> Para cambiar email, crea un nuevo usuario
+                </Text>
 
-                <Text style={[styles.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Teléfono</Text>
+                <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Teléfono</Text>
                 <TextInput
                   style={[styles.compactInput, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
                   value={editPhone}
@@ -438,29 +471,60 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
                   keyboardType="phone-pad"
                 />
                 
-                <TouchableOpacity style={styles.saveBtnCompact} onPress={guardarCambios}>
-                  <Text style={styles.saveBtnText}>💾 Guardar Cambios</Text>
+                {/* Botón Guardar adaptado a btnSuccess Outline */}
+                <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, { marginTop: 15, paddingVertical: 10 }]} onPress={guardarCambios}>
+                  <Text style={GLOBAL_STYLES.btnText}>
+                    <Ionicons name="save-outline" size={16} color={COLORS.turquesa} /> Guardar Cambios
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.quickActionsContainer}>
-                <TouchableOpacity style={[styles.quickActionBtn, { backgroundColor: COLORS.verde }]} onPress={enviarPasswordReset} disabled={enviandoReset}>
-                  <Text style={styles.quickActionText}>{enviandoReset ? '⏳' : '📧'}</Text>
-                  <Text style={styles.quickActionLabel}>Reset Pass</Text>
+                {/* Botón Outline Tenue (Morado/Lila) */}
+                <TouchableOpacity 
+                  style={[styles.quickActionBtn, { borderColor: COLORS.morado }]} 
+                  onPress={enviarPasswordReset} 
+                  disabled={enviandoReset}
+                >
+                  {enviandoReset ? (
+                    <ActivityIndicator size="small" color={COLORS.morado} style={{ marginBottom: 2 }} />
+                  ) : (
+                    <Ionicons name="mail-outline" size={18} color={COLORS.morado} />
+                  )}
+                  <Text style={[styles.quickActionLabel, { color: COLORS.morado }]}>Reset Password</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.quickActionBtn, { backgroundColor: COLORS.morado }]} onPress={suspenderUsuario}>
-                  <Text style={styles.quickActionText}>🔒</Text>
-                  <Text style={styles.quickActionLabel}>Suspender</Text>
+
+                {/* Botón Outline Tenue (Naranja/Gris) */}
+                <TouchableOpacity 
+                  style={[styles.quickActionBtn, { borderColor: COLORS.naranja }]} 
+                  onPress={suspenderUsuario}
+                >
+                  <Ionicons 
+                    name={usuarioSeleccionado?.suspendido ? "lock-open-outline" : "lock-closed-outline"} 
+                    size={18} 
+                    color={COLORS.naranja} 
+                  />
+                  <Text style={[styles.quickActionLabel, { color: COLORS.naranja }]}>
+                    {usuarioSeleccionado?.suspendido ? 'Reactivar' : 'Suspender'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.deleteUserBtn} onPress={eliminarUsuario}>
-                <Text style={styles.deleteUserBtnText}>🗑️ Eliminar Usuario</Text>
+              {/* REGLA ESTRICTA: ELIMINAR VA FULL COLOR ROJO SÓLIDO */}
+              <TouchableOpacity style={GLOBAL_STYLES.btnDangerSolid} onPress={() => eliminarUsuario(usuarioSeleccionado)}>
+                <Text style={GLOBAL_STYLES.btnTextSolid}>
+                  <FontAwesome6 name="trash-can" size={16} color="white" /> Eliminar Usuario
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.closeModalBtn} onPress={() => setUserSettingsVisible(false)}>
-                <Text style={styles.closeModalBtnText}>Cerrar</Text>
+              {/* Botón Cerrar (Outline gris) */}
+              <TouchableOpacity 
+                style={[GLOBAL_STYLES.btnDanger, { marginTop: 10, paddingVertical: 12, borderColor: themeColors.border }]} 
+                onPress={() => setUserSettingsVisible(false)}
+              >
+                <Text style={[GLOBAL_STYLES.btnTextDanger, { color: themeColors.textSecondary }]}>Cerrar</Text>
               </TouchableOpacity>
+
             </ScrollView>
           </View>
         </View>
@@ -469,70 +533,9 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
   );
 }
 
-const styles = StyleSheet.create({
-  // 🧹 Se borraron los estilos: container, header, backBtn, headerTitle
-  
+const styles = StyleSheet.create({  
   listContent: {
     padding: 15,
-  },
-  miembroCard: {
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.morado,
-  },
-  miembroInfo: {
-    flex: 1,
-  },
-  miembroEmail: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  miembroNombre: {
-    fontSize: 12,
-    color: '#999',
-  },
-  deleteBtn: {
-    padding: 8,
-  },
-  deleteBtnText: {
-    fontSize: 18,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
-  addBtn: {
-    backgroundColor: COLORS.verde,
-    marginHorizontal: 15,
-    marginBottom: 70,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  addBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.blanco,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
   },
   modalOverlayPress: {
     position: 'absolute',
@@ -541,68 +544,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  modalContent: {
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 15,
-  },
-  modalLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: COLORS.rojito,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.blanco,
-  },
-  createBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: COLORS.turquesa,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  createBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.blanco,
-  },
-  disabledBtn: {
-    opacity: 0.5,
-  },
-
   /* USER SETTINGS MODAL */
   userSettingsModal: {
     borderRadius: 16,
     padding: 16,
     width: '90%',
-    maxHeight: '75%',
+    maxHeight: '85%',
     maxWidth: 380,
     zIndex: 10,
   },
@@ -617,18 +564,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   closeBtn: {
-    padding: 8,
-  },
-  closeBtnText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.rojo,
+    padding: 4,
   },
   compactSection: {
-    backgroundColor: 'rgba(26, 158, 161, 0.1)',
+    backgroundColor: 'rgba(36, 197, 197, 0.05)',
     borderRadius: 12,
     padding: 12,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(36, 197, 197, 0.15)',
   },
   sectionTitle: {
     fontSize: 13,
@@ -640,7 +584,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     padding: 10,
-    fontSize: 13,
+    fontSize: 14,
   },
   disabledInput: {
     opacity: 0.6,
@@ -650,18 +594,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 4,
     marginBottom: 8,
-  },
-  saveBtnCompact: {
-    backgroundColor: COLORS.turquesa,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  saveBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.blanco,
   },
   quickActionsContainer: {
     flexDirection: 'row',
@@ -674,38 +606,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  quickActionText: {
-    fontSize: 20,
-    marginBottom: 2,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
   },
   quickActionLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.blanco,
-  },
-  deleteUserBtn: {
-    backgroundColor: COLORS.rojo,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  deleteUserBtnText: {
-    fontSize: 14,
     fontWeight: '700',
-    color: COLORS.blanco,
-  },
-  closeModalBtn: {
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.turquesa,
-  },
-  closeModalBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.turquesa,
+    marginTop: 4,
   },
 });

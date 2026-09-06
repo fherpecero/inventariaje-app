@@ -4,7 +4,7 @@ import {
   ActivityIndicator, ScrollView, FlatList, Modal, Image, Platform, LogBox
 } from 'react-native';
 import { 
-  collection, 
+  collection, onSnapshot,
   getDocs, doc, getDoc, setDoc, addDoc,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
@@ -127,7 +127,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         return {
           id: catalogo.nombre, // 🔑 El ID ahora es el nombre
           nombre: catalogo.nombre,
-          // 🔥 ADIÓS CÓDIGO
+          codigo: catalogo.codigo,
           descripcion: catalogo.descripcion || '',
           precioCosto: catalogo.precioCostoStandard || 0,
           precioVenta: catalogo.precioVentaStandard || 0,
@@ -680,29 +680,35 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const esDeuda = diff > 0; 
   const montoAbsoluto = Math.abs(diff).toFixed(2);
 
-  const renderProductoGrid = ({ item }) => (
-    <TouchableOpacity
-      style={styles.productoGridCard}
-      onPress={() => abrirModalProducto(item)}
-      disabled={item.cantidad === 0}
-      activeOpacity={item.cantidad === 0 ? 0.5 : 0.7}
-    >
-      <View style={styles.imagenPlaceholder}>
-        {imagenes[item.codigo] ? (
-          <Image source={imagenes[item.codigo]} style={{ width: 60, height: 60, resizeMode: 'contain' }} />
+  const renderProductoGrid = ({ item }) => {
+    const codigoReal = item.codigo || item.id;
+    const imagen = imagenes[codigoReal];
+
+    // 2. Retornamos la interfaz
+    return (
+      <TouchableOpacity
+        style={styles.productoGridCard}
+        onPress={() => abrirModalProducto(item)}
+        disabled={item.cantidad === 0}
+        activeOpacity={item.cantidad === 0 ? 0.5 : 0.7}
+      >
+        <View style={styles.imagenPlaceholder}>
+          {imagen ? (
+            <Image source={imagen} style={{ width: 60, height: 60, resizeMode: 'contain' }} />
+          ) : (
+            <Text style={styles.imagenPlaceholderText}>📦</Text>
+          )}
+        </View>
+        <Text style={[styles.productoNombre, { color: themeColors.text }]}>{item.nombre}</Text>
+        <Text style={styles.productoPrecio}>${item.precioVenta}</Text>
+        {item.cantidad === 0 ? (
+          <Text style={styles.sinStock}>Sin Stock</Text>
         ) : (
-          <Text style={styles.imagenPlaceholderText}>📦</Text>
+          <Text style={styles.stock}>Stock: {item.cantidad}</Text>
         )}
-      </View>
-      <Text style={[styles.productoNombre, { color: themeColors.text }]}>{item.nombre}</Text>
-      <Text style={styles.productoPrecio}>${item.precioVenta}</Text>
-      {item.cantidad === 0 ? (
-        <Text style={styles.sinStock}>Sin Stock</Text>
-      ) : (
-        <Text style={styles.stock}>Stock: {item.cantidad}</Text>
-      )}
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderCarritoItem = ({ item }) => (
     <View style={styles.carritoItem}>
@@ -794,7 +800,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           <FlatList
             data={productosFiltrados}
             renderItem={renderProductoGrid}
-            keyExtractor={(item) => item.codigo}
+            keyExtractor={(item, index) => item.codigo ? item.codigo.toString() : (item.id ? item.id.toString() : index.toString())}
             numColumns={3}
             scrollEnabled={false}
             columnWrapperStyle={styles.gridRow}

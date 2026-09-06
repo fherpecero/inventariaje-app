@@ -232,8 +232,12 @@ export default function ExistenciasScreen({
   // =====================================================================
   // 5. RENDERIZADO DE PRODUCTO
   // =====================================================================
-  const renderProducto = ({ item }) => {
-    const imagen = imagenes[item.codigo] || null;
+    const renderProducto = ({ item }) => {
+    // 🧠 Buscamos el código primero en 'codigo' y si no está, usamos 'id'
+    const codigoReal = item.codigo || item.id; 
+    const imagen = imagenes[codigoReal] || null;
+    
+
 
     return (
       <TouchableOpacity
@@ -354,7 +358,7 @@ export default function ExistenciasScreen({
       <FlatList
         data={listaFinalRenderizada}
         renderItem={renderProducto}
-        keyExtractor={(item) => item.codigo}
+        keyExtractor={(item, index) => item.id ? item.id.toString() : (item.codigo ? item.codigo.toString() : index.toString())}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
