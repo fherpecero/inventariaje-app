@@ -25,7 +25,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
@@ -196,7 +196,8 @@ export default function AutocompleteSearchSocios({ onSelect, value = '' }) {
           onPress={() => setTab('app')}
         >
           <Text style={[styles.tabText, tab === 'app' && styles.tabTextActive]}>
-            📱 Con App
+            <Ionicons name="phone-portrait-outline" size={18} color="black" />
+             Con App
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -204,7 +205,8 @@ export default function AutocompleteSearchSocios({ onSelect, value = '' }) {
           onPress={() => setTab('manual')}
         >
           <Text style={[styles.tabText, tab === 'manual' && styles.tabTextActive]}>
-            ✏️ Sin App
+            <FontAwesome name="edit" size={18} color="black" />
+             Sin App
           </Text>
         </TouchableOpacity>
       </View>

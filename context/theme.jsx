@@ -85,11 +85,11 @@ export const GLOBAL_STYLES = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-
-  // ==========================================
-  // 📇 TARJETAS ESTANDARIZADAS 
-  // (Sin bordes de colores, full minimalistas)
-  // ==========================================
+  btnTextDanger: {
+    fontSize: FONT_SIZES.normal,
+    fontWeight: '700',
+    color: COLORS.blanco,
+  },
   cardBase: {
     backgroundColor: COLORS.blanco,
     borderRadius: 12,
@@ -139,15 +139,15 @@ export const GLOBAL_STYLES = StyleSheet.create({
   },
   btnSuccess: {
     backgroundColor: COLORS.verde,
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnDanger: {
-    backgroundColor: COLORS.rojo,
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: COLORS.grey,
+    paddingVertical: 10,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -234,7 +234,6 @@ export const GLOBAL_STYLES = StyleSheet.create({
 // ============================================
 export const HEADER = StyleSheet.create({
   headerContainer: {
-    backgroundColor: COLORS.blanco,
     paddingTop: 50,
   },
   headerContent: {
@@ -287,22 +286,22 @@ export const HEADER = StyleSheet.create({
 // ==========================================
 export const ScreenHeader = ({ title, onPress, themeColors, rightAction }) => {
   return (
-  <View style={HEADER.headerContainer}>
-    <View style={{
-      backgroundColor: themeColors?.header || '#24c5c5',
-      paddingHorizontal: 10,
-      paddingVertical: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between', // Distribuye las 3 zonas
-    }}>
+  <View style={[HEADER.headerContainer, { backgroundColor: themeColors?.header || COLORS.turquesa }]}>
+      
+      <View style={{
+        paddingHorizontal: 10,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
       
       {/* 1. LADO IZQUIERDO: Botón Back */}
       <View style={{ flex: 1, alignItems: 'flex-start' }}>
         {onPress && (
           <TouchableOpacity 
             onPress={onPress}
-            style={{ padding: 8 }} // Padding interno para que sea fácil de tocar
+            style={{ padding: 8 }} 
             activeOpacity={0.7}
           >
             <Ionicons name="chevron-back" size={28} color={COLORS.negro} />
@@ -316,7 +315,7 @@ export const ScreenHeader = ({ title, onPress, themeColors, rightAction }) => {
           style={{ 
             fontSize: 20, 
             fontWeight: '700', 
-            color: COLORS.negro, 
+            color: themeColors?.text || COLORS.negro,
             textAlign: 'center' 
           }}
           numberOfLines={1} 
@@ -372,7 +371,20 @@ export const getThemeColors = (darkMode) => {
     };
   }
 };
-
+// ==========================================
+// COMPONENTE: LÍNEA DIVISORIA CON GRADIENTE
+// ==========================================
+export const GradientDivider = ({ marginVertical = 0 }) => {
+  return (
+    <LinearGradient
+      colors={['rgba(36, 197, 197, 1)', 'rgba(122, 122, 236, 0.7)']} 
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      locations={[0.27, 0.90]}
+      style={[HEADER.headerBorderGradient, { marginVertical: marginVertical, borderRadius: 3 }]}
+    />
+  );
+};
 // ============================================
 // ESTILOS APP.JSX
 // ============================================

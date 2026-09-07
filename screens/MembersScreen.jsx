@@ -345,7 +345,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
       
       <ScreenHeader 
         title="Usuarios" 
-        onPress={() => onNavigate('home')}  
+        onPress={() => onNavigate('Configuración')}  
         themeColors={themeColors}
       />
 

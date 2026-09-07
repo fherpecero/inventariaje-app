@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome6, FontAwesome, MaterialIcons, Entypo } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { db } from '../config/firebase';
@@ -20,7 +20,7 @@ import DatePickerField from '../components/DatePickerField';
 import SearchBar from '../components/SearchBar';
 import AutocompleteSearchSocios from '../components/AutocompleteSearchSocios';
 import DropdownProductoRecibir from '../components/DropdownProductoRecibir';
-import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER } from '../context/theme';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, GradientDivider } from '../context/theme';
 import { getProductosActivos } from '../context/productCatalog'; 
 
 LogBox.ignoreLogs([
@@ -35,7 +35,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       : 'basic';
   
   // ==========================================
-  // ESTADOS Y REFS (Siempre al inicio del componente)
+  // ESTADOS Y REFS
   // ==========================================
   const isMountedRef = useRef(true);
 
@@ -46,7 +46,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
-  // Modal de cantidad (productos)
+  // Modal de cantidad 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProductModal, setSelectedProductModal] = useState(null);
   const [cantidadModal, setCantidadModal] = useState('1');
@@ -66,14 +66,14 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Intercambio Avanzado
-  const [productoRecibir, setProductoRecibir] = useState([]); // Array
+  const [productoRecibir, setProductoRecibir] = useState([]); 
   const [modoIntercambio, setModoIntercambio] = useState(false);
   const [socioIntercambio, setSocioIntercambio] = useState(null);
   const [pagoSaldoPor, setPagoSaldoPor] = useState('efectivo'); 
   const [agregandoProductoExtra, setAgregandoProductoExtra] = useState(false);
 
   // ==========================================
-  // EFECTOS DE MONTAJE Y CICLO DE VIDA
+  // EFECTOS
   // ==========================================
   useEffect(() => {
     return () => {
@@ -85,10 +85,10 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     if (cuenta) cargarEscanerActual();
   }, [cuenta]);
   
-  // ==========================================
-  // LÓGICA DE DATOS
-  // ==========================================
-  const cargarEscanerActual = async () => {
+    // ==========================================
+    // LÓGICA DE DATOS
+    // ==========================================
+    const cargarEscanerActual = async () => {
     try {
       const escanerJSON = await AsyncStorage.getItem('escanerActual');
       if (escanerJSON) {
@@ -103,7 +103,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   // ==========================================
-  // 🚀 MOTOR LOCAL-FIRST (100% BASADO EN NOMBRE)
+  // MOTOR LOCAL-FIRST
   // ==========================================
   useEffect(() => {
     if (!user || !cuenta || !cuentaId) return;
@@ -117,7 +117,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       const firebaseArray = Object.values(productosData);
 
       const productosCombinados = catalogoLocal.map((catalogo) => {
-        // Única búsqueda, basada puramente en el nombre
         let datosFirebase = productosData[catalogo.nombre];
         
         if (!datosFirebase) {
@@ -125,9 +124,9 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         }
 
         return {
-          id: catalogo.nombre, // 🔑 El ID ahora es el nombre
+          id: catalogo.nombre, 
           nombre: catalogo.nombre,
-          codigo: catalogo.codigo,
+          codigo: catalogo.codigo, 
           descripcion: catalogo.descripcion || '',
           precioCosto: catalogo.precioCostoStandard || 0,
           precioVenta: catalogo.precioVentaStandard || 0,
@@ -173,7 +172,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       return;
     }
 
-    const itemExistente = carrito.find((item) => item.codigo === selectedProductModal.codigo);
+    const itemExistente = carrito.find((item) => item.id === selectedProductModal.id);
 
     if (itemExistente) {
       const nuevaCantidad = itemExistente.cantidad + cantidadNum;
@@ -181,7 +180,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         Alert.alert('Error', `Stock insuficiente. Disponible: ${selectedProductModal.cantidad}`);
         return;
       }
-      setCarrito(carrito.map((item) => item.codigo === selectedProductModal.codigo ? { ...item, cantidad: nuevaCantidad } : item));
+      setCarrito(carrito.map((item) => item.id === selectedProductModal.id ? { ...item, cantidad: nuevaCantidad } : item));
     } else {
       setCarrito([...carrito, { ...selectedProductModal, cantidad: cantidadNum, subtotal: selectedProductModal.precioVenta * cantidadNum }]);
     }
@@ -190,20 +189,20 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     setCantidadModal('1');
   };
 
-  const eliminarDelCarrito = (codigo) => {
-    setCarrito(carrito.filter((item) => item.codigo !== codigo));
+  const eliminarDelCarrito = (id) => {
+    setCarrito(carrito.filter((item) => item.id !== id));
   };
 
-  const actualizarCantidadCarrito = (codigo, nuevaCantidad) => {
+  const actualizarCantidadCarrito = (id, nuevaCantidad) => {
     if (nuevaCantidad <= 0) {
-      eliminarDelCarrito(codigo);
+      eliminarDelCarrito(id);
     } else {
-      const producto = allProducts.find((p) => p.codigo === codigo);
+      const producto = allProducts.find((p) => p.id === id);
       if (nuevaCantidad > producto.cantidad) {
         Alert.alert('Error', `Stock insuficiente. Disponible: ${producto.cantidad}`);
         return;
       }
-      setCarrito(carrito.map((item) => item.codigo === codigo ? { ...item, cantidad: nuevaCantidad } : item));
+      setCarrito(carrito.map((item) => item.id === id ? { ...item, cantidad: nuevaCantidad } : item));
     }
   };
 
@@ -217,10 +216,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
   const calcularDiferenciaIntercambio = () => {
     if (carrito.length === 0 || !Array.isArray(productoRecibir) || productoRecibir.length === 0) return 0;
-    
-    const totalDoy = carrito.reduce((sum, item) => sum + (item.precioVentaStandard * item.cantidad || 0), 0);
+    const totalDoy = carrito.reduce((sum, item) => sum + (item.precioVentaStandard * item.cantidad || item.precioVenta * item.cantidad || 0), 0);
     const totalRecibo = productoRecibir.reduce((sum, prod) => sum + (prod?.precioVentaStandard || 0), 0);
-    
     return totalDoy - totalRecibo;
   };
 
@@ -235,7 +232,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   // ==========================================
-  // HELPERS DE INTERCAMBIO
+  // HELPERS DE INTERCAMBIO Y VENTAS
   // ==========================================
   const actualizarInventarioIntercambio = async (cuentaIdTarget, productosSalida, productosEntrada) => {
     const inventarioRef = doc(db, 'cuentas', cuentaIdTarget.toString(), 'inventarios', 'vital_health_principal');
@@ -279,7 +276,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     const timestampCompleto = ahora.toISOString(); 
     const fechaCortaISO = timestampCompleto.split('T')[0]; 
 
-    // 🧠 MÉTRICAS PRE-CALCULADAS PARA ANALYTICS
     const cantidadTotalEnviada = productosEnviados.reduce((sum, item) => sum + (item.cantidad || 0), 0);
     const cantidadTotalRecibida = productosRecibidos.reduce((sum, item) => sum + (item.cantidad || 0), 0);
 
@@ -303,14 +299,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       esManual: esManualSocio,
       productosEnviados: productosEnviados,
       productosRecibidos: productosRecibidos,
-
-      // 📊 CAMPOS APLANADOS PARA ANALYTICS 
       cantidadTotalEnviada: cantidadTotalEnviada,
       cantidadTotalRecibida: cantidadTotalRecibida,
       flujoIngreso: ingresoCaja,
       flujoGasto: gastoCaja,
       mesAnioAnalytics: mesAnio, 
-      
       totalEnviado: totalEnviado,
       totalRecibido: totalRecibido,
       diferencia: diferenciaIntercambio,
@@ -321,6 +314,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       usuario: usuarioEmail,
       fecha: new Date().toLocaleDateString('es-MX'),
       timestamp: new Date().toISOString(),
+      fechaCorta: fechaCortaISO,
     };
 
     const docRef = await addDoc(salidaRef, intercambioDoc);
@@ -354,26 +348,20 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       } 
       else {
         const peticionesRef = collection(db, 'intercambios_pendientes');
-        
         const solicitudDoc = {
           estado: 'pendiente', 
-          
           deCuentaId: cuentaId.toString(),
           deCuentaNombre: cuenta.nombre || user.email,
-          
           paraCuentaId: socioIntercambio.cuentaId.toString(),
           paraCuentaNombre: socioIntercambio.cuentaNombre,
-          
           productosOfrecidos: carrito.map(item => ({ nombre: item.nombre, codigo: item.codigo, cantidad: item.cantidad, precioVenta: item.precioVenta })),
           productosSolicitados: productoRecibir.map(prod => ({ nombre: prod.nombre, codigo: prod.codigo, cantidad: 1, precioVenta: prod.precioVentaStandard })),
-          
           totales: {
             totalOfrecido: totalDoy,
             totalSolicitado: totalRecibo,
             diferencia: diferenciaIntercambio
           },
           pagoSaldoPor: pagoSaldoPor,
-          
           creadoPor: user.email,
           timestamp: new Date().toISOString()
         };
@@ -382,7 +370,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
         Alert.alert(
           '📨 Solicitud Enviada', 
-          `Esperando a que ${socioIntercambio.cuentaNombre} confirme el cambio para actualizar inventarios.`
+          `Esperando a que ${socioIntercambio.cuentaNombre} confirme el cambio.`
         );
       }
 
@@ -396,7 +384,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         setProductoRecibir([]);
         setPagoSaldoPor('efectivo');
         setLoading(false);
-        cargarProductos();
       }
 
     } catch (error) {
@@ -407,9 +394,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     }
   };
 
-  // ==========================================
-  // RUTAS DE VENTA Y CRÉDITO
-  // ==========================================
   const registrarVenta = async () => {
     if (!isMountedRef.current) return;
     if (carrito.length === 0) return Alert.alert('Error', 'El carrito está vacío');
@@ -528,7 +512,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   setCliente('');
                   setTipoPago('efectivo');
                   setLoading(false);
-                  cargarProductos();
                   setEsConsumoBono(false);
                 }
               },
@@ -647,7 +630,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         
         Alert.alert(
           '✅ Crédito registrado',
-          `Cliente: ${creditoClienteNombre}\nMonto: $${totales.total.toFixed(2)}\nVence: ${creditoFechaPTP.toLocaleDateString('es-MX')}`,
+          `Cliente: ${creditoClienteNombre}\nMonto: $${totales.total.toFixed(2)}\nVence: ${fechaLegible}`,
           [{
               text: 'OK',
               onPress: () => {
@@ -658,7 +641,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   setTipoPago('efectivo');
                   setModalCreditoVisible(false);
                   setLoading(false);
-                  cargarProductos();
                 }
               },
           }]
@@ -683,50 +665,73 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const renderProductoGrid = ({ item }) => {
     const codigoReal = item.codigo || item.id;
     const imagen = imagenes[codigoReal];
+    const sinStock = item.cantidad === 0;
 
-    // 2. Retornamos la interfaz
     return (
       <TouchableOpacity
-        style={styles.productoGridCard}
+        style={[
+          GLOBAL_STYLES.cardStandard, 
+          { 
+            backgroundColor: themeColors.bgSecondary, 
+            borderColor: sinStock ? COLORS.rojo : themeColors.border, 
+            width: '30%', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            padding: 10, 
+            marginBottom: 0,
+            opacity: sinStock ? 0.5 : 1 
+          }
+        ]}
         onPress={() => abrirModalProducto(item)}
-        disabled={item.cantidad === 0}
-        activeOpacity={item.cantidad === 0 ? 0.5 : 0.7}
+        disabled={sinStock}
+        activeOpacity={0.7}
       >
-        <View style={styles.imagenPlaceholder}>
-          {imagen ? (
-            <Image source={imagen} style={{ width: 60, height: 60, resizeMode: 'contain' }} />
-          ) : (
-            <Text style={styles.imagenPlaceholderText}>📦</Text>
-          )}
-        </View>
-        <Text style={[styles.productoNombre, { color: themeColors.text }]}>{item.nombre}</Text>
-        <Text style={styles.productoPrecio}>${item.precioVenta}</Text>
-        {item.cantidad === 0 ? (
-          <Text style={styles.sinStock}>Sin Stock</Text>
+        {imagen ? (
+          <Image source={imagen} style={styles.productImage} />
         ) : (
-          <Text style={styles.stock}>Stock: {item.cantidad}</Text>
+          <View style={[styles.productImagePlaceholder, { backgroundColor: themeColors.input }]}>
+            <Text style={styles.productImagePlaceholderText}>
+              <FontAwesome6 name="box" size={20} color={themeColors.textSecondary} />
+            </Text>
+          </View>
+        )}
+        <View style={styles.productInfo}>
+          <Text style={[styles.productName, { color: themeColors.text }]} numberOfLines={2}>
+            {item.nombre}
+          </Text>
+          <Text style={[styles.productPrice, { color: COLORS.turquesa }]}>
+            ${item.precioVenta}
+          </Text>
+          <Text style={[styles.productStock, { color: sinStock ? COLORS.rojo : themeColors.textSecondary, fontWeight: sinStock ? 'bold' : '600' }]}>
+            {sinStock ? 'Sin Stock' : `Stock: ${item.cantidad}`}
+          </Text>
+        </View>
+        {!sinStock && (
+          <View style={[styles.addBtnContainer, { backgroundColor: themeColors.bgSecondary }]}>
+            <Ionicons name="add-circle" size={30} color={COLORS.turquesa} />
+          </View>
         )}
       </TouchableOpacity>
     );
   };
 
   const renderCarritoItem = ({ item }) => (
-    <View style={styles.carritoItem}>
+    <View style={[styles.carritoItem, { borderBottomColor: themeColors.border }]}>
       <View style={styles.carritoItemInfo}>
-        <Text style={styles.carritoItemNombre}>{item.nombre}</Text>
-        <Text style={styles.carritoItemPrecio}>
+        <Text style={[styles.carritoItemNombre, { color: themeColors.text }]}>{item.nombre}</Text>
+        <Text style={[styles.carritoItemPrecio, { color: themeColors.textSecondary }]}>
           ${item.precioVenta} × {item.cantidad} = ${(item.precioVenta * item.cantidad).toFixed(2)}
         </Text>
       </View>
       <View style={styles.carritoItemControles}>
-        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.codigo, item.cantidad - 1)}>
-          <Text style={styles.btnCantidad}>−</Text>
+        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.id || item.codigo, item.cantidad - 1)}>
+          <Text style={styles.btnCantidad}><Ionicons name="remove" size={28} color={themeColors.textSecondary} /></Text>
         </TouchableOpacity>
-        <Text style={styles.cantidadCarrito}>{item.cantidad}</Text>
-        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.codigo, item.cantidad + 1)}>
-          <Text style={styles.btnCantidad}>+</Text>
+        <Text style={[styles.cantidadCarrito, { color: themeColors.text }]}>{item.cantidad}</Text>
+        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.id || item.codigo, item.cantidad + 1)}>
+          <Text style={styles.btnCantidad}><Ionicons name="add" size={28} color={COLORS.turquesa} /></Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => eliminarDelCarrito(item.codigo)} style={styles.btnEliminar}>
+        <TouchableOpacity onPress={() => eliminarDelCarrito(item.id || item.codigo)} style={styles.btnEliminar}>
           <Text style={styles.btnEliminarText}>✕</Text>
         </TouchableOpacity>
       </View>
@@ -747,8 +752,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       
-      {/* 1. HEADER */}
-     <ScreenHeader 
+      <ScreenHeader 
         title="Ventas" 
         onPress={() => onNavigate('home')} 
         themeColors={themeColors} 
@@ -756,67 +760,59 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           effectiveTier === 'special_k' ? (
             <TouchableOpacity 
               onPress={toggleModoIntercambio}
-              style={[
-                styles.btnIntercambio, 
-                modoIntercambio && styles.btnIntercambioActive
-              ]}
+              style={[styles.btnIntercambio, modoIntercambio && styles.btnIntercambioActive]}
             >
-              <Ionicons 
-                name="git-compare" 
-                size={24} 
-                color={modoIntercambio ? COLORS.turquesa : themeColors.text} 
-              />
+              <MaterialIcons name="change-circle" size={30} color={modoIntercambio ? COLORS.turquesa : themeColors.text} />
             </TouchableOpacity>
           ) : null
         }
       />
 
-      {/* 2. ESCÁNER INDICADOR  */}
       {escanerActual && (
         <View style={styles.escanerIndicador}>
           <Text style={styles.escanerIndicadorText}>
-            📌 Evento: {escanerActual.evento} | Total: ${escanerActual.ventaTotal || 0}
+            <Entypo name="pin" size={12} color="red" /> Evento: {escanerActual.evento} | Total: ${escanerActual.ventaTotal || 0}
           </Text>
         </View>
       )}
 
-      {/* BANNER INTERCAMBIO */}
       {modoIntercambio && (
         <View style={styles.bannerIntercambio}>
           <Text style={styles.bannerIntercambioText}>Intercambia productos con asociados</Text>
         </View>
       )}
 
-      <SearchBar 
-        data={allProducts} 
-        onSearch={setProductosFiltrados}
-        searchKeys={['nombre']}
-      />
+      <SearchBar data={allProducts} onSearch={setProductosFiltrados} searchKeys={['nombre', 'codigo']} />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Grid de productos */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        
+        {/* GRID DE PRODUCTOS */}
         <View style={styles.gridContainer}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Selecciona productos y baja hacia el checkout ⬇️</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            Selecciona productos y baja hacia el checkout <FontAwesome6 name="circle-down" size={14} color={COLORS.turquesa} />
+          </Text>
           <FlatList
             data={productosFiltrados}
             renderItem={renderProductoGrid}
-            keyExtractor={(item, index) => item.codigo ? item.codigo.toString() : (item.id ? item.id.toString() : index.toString())}
+            keyExtractor={(item, index) => `${item.codigo || item.id || 'prod'}-${index}`}
             numColumns={3}
             scrollEnabled={false}
             columnWrapperStyle={styles.gridRow}
           />
         </View>
 
-        {/* Carrito */}
+        {/* CARRITO */}
         <View style={styles.carritoContainer}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>🛒 Carrito ({carrito.length} items)</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <Ionicons name="cart-outline" size={18} color={themeColors.text} /> Carrito ({carrito.length} items)
+          </Text>
           {carrito.length === 0 ? (
             <Text style={styles.carritoVacio}>El carrito está vacío</Text>
           ) : (
             <FlatList
               data={carrito}
               renderItem={renderCarritoItem}
-              keyExtractor={(item) => item.codigo}
+              keyExtractor={(item, index) => `cart-${item.codigo || item.id}-${index}`}
               scrollEnabled={false}
             />
           )}
@@ -825,31 +821,22 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         {modoIntercambio ? (
           <>
             {/* MODO INTERCAMBIO */}
-            <View style={styles.formGroup}>
+            <View style={{ marginBottom: 20 }}>
               <Text style={styles.label}>Socio:</Text>
-              <AutocompleteSearchSocios 
-                onSelect={setSocioIntercambio}
-                value={socioIntercambio?.cuentaNombre || ''}
-              />
+              <AutocompleteSearchSocios onSelect={setSocioIntercambio} value={socioIntercambio?.cuentaNombre || ''} />
             </View>
 
             {/* Productos a recibir */}
-            <View style={styles.formGroup}>
+            <View style={{ marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={styles.label}>Productos a recibir:</Text>
-                
-                {/* Botón de "+" para agregar más productos */}
                 {(productoRecibir.length > 0 && !agregandoProductoExtra) && (
-                  <TouchableOpacity 
-                    style={styles.btnAgregarProducto}
-                    onPress={() => setAgregandoProductoExtra(true)}
-                  >
+                  <TouchableOpacity style={styles.btnAgregarProducto} onPress={() => setAgregandoProductoExtra(true)}>
                     <Text style={{ fontSize: 14, color: COLORS.turquesa, fontWeight: 'bold' }}>+ Agregar otro</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
-              {/* 1. Lista de productos ya seleccionados */}
               {productoRecibir.length > 0 && (
                 <View style={styles.productosRecibidosList}>
                   {productoRecibir.map((prod, idx) => (
@@ -866,18 +853,9 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                 </View>
               )}
 
-              {/* 2. El buscador se muestra SI NO HAY productos, o SI PICARON el botón "+" */}
               {(productoRecibir.length === 0 || agregandoProductoExtra) && (
                 <View style={{ marginTop: productoRecibir.length > 0 ? 10 : 0 }}>
-                  <DropdownProductoRecibir 
-                    onSelect={(prod) => {
-                      setProductoRecibir([...productoRecibir, prod]);
-                      setAgregandoProductoExtra(false);
-                    }} 
-                    value={null} 
-                  />
-                  
-                  {/* Botón rojo pequeño para cancelar la búsqueda extra si se arrepienten */}
+                  <DropdownProductoRecibir onSelect={(prod) => { setProductoRecibir([...productoRecibir, prod]); setAgregandoProductoExtra(false); }} value={null} />
                   {agregandoProductoExtra && (
                     <TouchableOpacity onPress={() => setAgregandoProductoExtra(false)} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
                       <Text style={{ color: COLORS.rojo, fontWeight: '600', fontSize: 12 }}>✕ Cancelar</Text>
@@ -906,7 +884,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                     </View>
                   </View>
 
-                  <View style={styles.diferenciasFlecha}><Text style={styles.flechaTexto}>⇄</Text></View>
+                  <View style={styles.diferenciasFlecha}><Text style={styles.flechaTexto}><FontAwesome name="exchange" size={24} color={COLORS.morado} /></Text></View>
 
                   <View style={styles.diferenciasColumna}>
                     <Text style={styles.diferenciaLabel}>RECIBIR</Text>
@@ -933,64 +911,28 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   </Text>
                 </View>
 
-                {/* SECCIÓN BALANCE Y FORMA DE LIQUIDAR (MINIMALISTA) */}
+                {/* SECCIÓN BALANCE Y FORMA DE LIQUIDAR */}
                 {diff !== 0 && (
                   <View style={styles.pagoSaldoContainer}>
                     <Text style={styles.pagoSaldoLabel}>
-                      {esDeuda ? `💳 Saldo en contra: $${montoAbsoluto}` : `💰 Saldo a favor: $${montoAbsoluto}`}
+                      {esDeuda 
+                        ? <><FontAwesome6 name="money-bill-wave" size={14} color={COLORS.rojo} /> Saldo en contra: ${montoAbsoluto}</> 
+                        : <><FontAwesome6 name="money-bill-wave" size={14} color={COLORS.verde} /> Saldo a favor: ${montoAbsoluto}</>}
                     </Text>
                     
-                    {/* Fila única de Checkboxes horizontales */}
                     <View style={styles.checkboxRow}>
-                      
-                      {/* Opción 1: Efectivo */}
-                      <TouchableOpacity 
-                        style={styles.checkboxOption} 
-                        onPress={() => setPagoSaldoPor('efectivo')}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons 
-                          name={pagoSaldoPor === 'efectivo' ? "radio-button-on" : "radio-button-off"} 
-                          size={18} 
-                          color={pagoSaldoPor === 'efectivo' ? COLORS.morado : '#999'} 
-                        />
-                        <Text style={[styles.checkboxText, pagoSaldoPor === 'efectivo' && styles.checkboxTextActive]}>
-                          Efectivo
-                        </Text>
+                      <TouchableOpacity style={styles.checkboxOption} onPress={() => setPagoSaldoPor('efectivo')} activeOpacity={0.7}>
+                        <Ionicons name={pagoSaldoPor === 'efectivo' ? "radio-button-on" : "radio-button-off"} size={18} color={pagoSaldoPor === 'efectivo' ? COLORS.morado : '#999'} />
+                        <Text style={[styles.checkboxText, pagoSaldoPor === 'efectivo' && styles.checkboxTextActive]}>Efectivo</Text>
                       </TouchableOpacity>
-
-                      {/* Opción 2: STP */}
-                      <TouchableOpacity 
-                        style={styles.checkboxOption} 
-                        onPress={() => setPagoSaldoPor('stp')}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons 
-                          name={pagoSaldoPor === 'stp' ? "radio-button-on" : "radio-button-off"} 
-                          size={18} 
-                          color={pagoSaldoPor === 'stp' ? COLORS.morado : '#999'} 
-                        />
-                        <Text style={[styles.checkboxText, pagoSaldoPor === 'stp' && styles.checkboxTextActive]}>
-                          STP
-                        </Text>
+                      <TouchableOpacity style={styles.checkboxOption} onPress={() => setPagoSaldoPor('stp')} activeOpacity={0.7}>
+                        <Ionicons name={pagoSaldoPor === 'stp' ? "radio-button-on" : "radio-button-off"} size={18} color={pagoSaldoPor === 'stp' ? COLORS.morado : '#999'} />
+                        <Text style={[styles.checkboxText, pagoSaldoPor === 'stp' && styles.checkboxTextActive]}>TDD/TDC</Text>
                       </TouchableOpacity>
-
-                      {/* Opción 3: Pendiente */}
-                      <TouchableOpacity 
-                        style={styles.checkboxOption} 
-                        onPress={() => setPagoSaldoPor('pendiente')}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons 
-                          name={pagoSaldoPor === 'pendiente' ? "radio-button-on" : "radio-button-off"} 
-                          size={18} 
-                          color={pagoSaldoPor === 'pendiente' ? COLORS.morado : '#999'} 
-                        />
-                        <Text style={[styles.checkboxText, pagoSaldoPor === 'pendiente' && styles.checkboxTextActive]}>
-                          Dejar Pendiente
-                        </Text>
+                      <TouchableOpacity style={styles.checkboxOption} onPress={() => setPagoSaldoPor('pendiente')} activeOpacity={0.7}>
+                        <Ionicons name={pagoSaldoPor === 'pendiente' ? "radio-button-on" : "radio-button-off"} size={18} color={pagoSaldoPor === 'pendiente' ? COLORS.morado : '#999'} />
+                        <Text style={[styles.checkboxText, pagoSaldoPor === 'pendiente' && styles.checkboxTextActive]}>Dejar Pendiente</Text>
                       </TouchableOpacity>
-
                     </View>
                   </View>
                 )}
@@ -1000,45 +942,81 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         ) : (
           <>
             {/* MODO VENTA NORMAL */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Cliente (opcional):</Text>
-              <TextInput style={styles.input} placeholder="Nombre del cliente" value={cliente} onChangeText={setCliente} editable={!loading} />
+            <View style={{ marginBottom: 15 }}>
+              <TextInput 
+                style={[
+                  GLOBAL_STYLES.inputBase,
+                  { 
+                    backgroundColor: themeColors.bgSecondary, 
+                    color: themeColors.text, 
+                    borderColor: themeColors.border, 
+                    borderWidth: 1,
+                    height: 50 ,
+                    paddingHorizontal: 15
+                  }
+                ]} 
+                placeholder="Cliente (opcional)" 
+                placeholderTextColor={themeColors.textSecondary} 
+                value={cliente} 
+                onChangeText={setCliente} 
+                editable={!loading} 
+              />
             </View>
 
             {/* FILA EN 2 COLUMNAS: DESCUENTO + BONO INFLUENCER */}
-            <View style={styles.rowFormContainer}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
               
-              {/* Columna Izquierda: Input de Descuento */}
-              <View style={styles.halfInputContainer}>
+              {/* Columna 1: Descuento */}
                 <TextInput
-                  style={styles.inputHalf}
+                  style={[
+                    GLOBAL_STYLES.inputBase,
+                    { 
+                      flex: 1,
+                      marginRight: 6,
+                      height: 50,
+                      backgroundColor: themeColors.bgSecondary,
+                      color: themeColors.text,
+                      borderColor: themeColors.border,
+                      borderWidth: 1,
+                      paddingHorizontal: 15,
+                    }
+                  ]}
                   placeholder="Descuento (%)"
                   placeholderTextColor={themeColors.textSecondary}
                   keyboardType="numeric"
                   value={descuentoPorcentaje}
                   onChangeText={setDescuentoPorcentaje}
                 />
-              </View>
-
-              {/* Columna Derecha: Botón Toggle de Bono Influencer */}
+              {/* Columna 2: Bono Influencer */}
               <TouchableOpacity
-                style={[
-                  styles.bonoToggleBtn,
-                  esConsumoBono && styles.bonoToggleBtnActive,
-                ]}
+                style={{
+                  flex: 1,
+                  marginLeft: 6,
+                  height: 50,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: esConsumoBono ? COLORS.turquesa : themeColors.border,
+                  backgroundColor: esConsumoBono ? COLORS.turquesa : themeColors.bgSecondary,
+                  paddingHorizontal: 15,
+                }}
                 onPress={() => setEsConsumoBono(!esConsumoBono)}
                 activeOpacity={0.8}
               >
                 <Ionicons
                   name={esConsumoBono ? "star" : "star-outline"}
                   size={18}
-                  color={esConsumoBono ? COLORS.blanco : COLORS.turquesa}
+                  color={esConsumoBono ? COLORS.blanco : themeColors.textSecondary}
                 />
                 <Text
-                  style={[
-                    styles.bonoToggleText,
-                    esConsumoBono && styles.bonoToggleTextActive,
-                  ]}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    marginLeft: 6,
+                    color: esConsumoBono ? COLORS.blanco : themeColors.textSecondary,
+                  }}
                 >
                   {esConsumoBono ? "Bono Activo" : "Bono Influencer"}
                 </Text>
@@ -1050,74 +1028,131 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
         {/* Totales */}
         {carrito.length > 0 && !modoIntercambio && (
-          <View style={styles.totalesBox}>
-            <View style={styles.totalesRow}>
-              <Text style={styles.totalesLabel}>Subtotal:</Text>
-              <Text style={styles.totalesValue}>${totales.subtotal.toFixed(2)}</Text>
+          <View style={[
+            GLOBAL_STYLES.cardStandard, 
+            { 
+              backgroundColor: themeColors.bgSecondary, 
+              borderColor: themeColors.border,
+              padding: 15, 
+              marginBottom: 15,
+              flexDirection: 'column', 
+              alignItems: 'stretch',
+             // width: '100%' 
+            }
+          ]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, color: themeColors.textSecondary }}>Subtotal:</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: themeColors.text }}>${totales.subtotal.toFixed(2)}</Text>
             </View>
+
             {totales.descuento > 0 && (
-              <View style={styles.totalesRow}>
-                <Text style={styles.totalesLabel}>Descuento ({totales.descuento}%):</Text>
-                <Text style={styles.totalesValue}>-${totales.montoDescuento.toFixed(2)}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, color: themeColors.textSecondary }}>Descuento ({totales.descuento}%):</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.turquesa }}>-${totales.montoDescuento.toFixed(2)}</Text>
               </View>
             )}
-            <View style={styles.totalesRowFinal}>
-              <Text style={styles.totalesLabelFinal}>TOTAL:</Text>
-              <Text style={styles.totalesValueFinal}>${totales.total.toFixed(2)}</Text>
+           
+            {/* 🌈 LÍNEA DIVISORIA */}
+            <GradientDivider marginVertical={15} />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: themeColors.text }}>TOTAL:</Text>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.naranja }}>${totales.total.toFixed(2)}</Text>
             </View>
           </View>
         )}
 
         {/* Tipo de pago */}
         {!modoIntercambio && (
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Tipo de pago:</Text>
-          <View style={styles.pagoOptions}>
-            <TouchableOpacity style={[styles.pagoOption, tipoPago === 'efectivo' && styles.pagoOptionActive]} onPress={() => setTipoPago('efectivo')}>
-              <Text style={styles.pagoOptionText}>💵 Efectivo</Text>
+        <View style={{ marginBottom: 15 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: themeColors.text, marginBottom: 12 }}>Tipo de pago:</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            
+            {/* Efectivo */}
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                borderWidth: 1.5,
+                borderColor: tipoPago === 'efectivo' ? COLORS.turquesa : themeColors.border,
+                backgroundColor: themeColors.bgSecondary,
+                borderRadius: 10,
+                paddingVertical: 12,
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }} 
+              onPress={() => setTipoPago('efectivo')}
+            >
+              <FontAwesome6 name="money-bill-wave" size={24} color={tipoPago === 'efectivo' ? COLORS.turquesa : themeColors.textSecondary} style={{ marginBottom: 6 }} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: tipoPago === 'efectivo' ? COLORS.turquesa : themeColors.textSecondary }}>Efectivo</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.pagoOption, tipoPago === 'stp' && styles.pagoOptionActive]} onPress={() => setTipoPago('stp')}>
-              <Text style={styles.pagoOptionText}>💳 STP</Text>
+
+            {/* STP */}
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                borderWidth: 1.5,
+                borderColor: tipoPago === 'stp' ? COLORS.turquesa : themeColors.border,
+                backgroundColor: themeColors.bgSecondary,
+                borderRadius: 10,
+                paddingVertical: 12,
+                alignItems: 'center',
+                justifyContent: 'center'
+              }} 
+              onPress={() => setTipoPago('stp')}
+            >
+              <FontAwesome6 name="credit-card" size={24} color={tipoPago === 'stp' ? COLORS.turquesa : themeColors.textSecondary} style={{ marginBottom: 6 }} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: tipoPago === 'stp' ? COLORS.turquesa : themeColors.textSecondary }}>TDD/TDC</Text>
             </TouchableOpacity>
-            {effectiveTier === 'premium' && (
-              <TouchableOpacity style={[styles.pagoOption, tipoPago === 'crd' && styles.pagoOptionActive]} onPress={() => setTipoPago('crd')}>
-                <Text style={styles.pagoOptionText}>🏦 CRD</Text>
+
+            {/* CRD */}
+            {(effectiveTier === 'premium' || effectiveTier === 'special_k') && (
+              <TouchableOpacity 
+                style={{
+                  flex: 1,
+                  borderWidth: 1.5,
+                  borderColor: tipoPago === 'crd' ? COLORS.turquesa : themeColors.border,
+                  backgroundColor: themeColors.bgSecondary,
+                  borderRadius: 10,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }} 
+                onPress={() => setTipoPago('crd')}
+              >
+                <FontAwesome6 name="building-columns" size={24} color={tipoPago === 'crd' ? COLORS.turquesa : themeColors.textSecondary} style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: tipoPago === 'crd' ? COLORS.turquesa : themeColors.textSecondary }}>CRD</Text>
               </TouchableOpacity>
             )}
+
           </View>
         </View>
         )}
 
-      {/* Botones principales */}
-        <View style={styles.botonesContainer}>
-          {/* 1. Cancelar (Izquierda) */}
+        {/* Botones principales */}
+        <View style={GLOBAL_STYLES.modalButtons}>
           <TouchableOpacity 
-            style={[styles.btnAccion, styles.cancelBtn]} 
+            style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} 
             onPress={() => { setCarrito([]); setDescuentoPorcentaje(''); setCliente(''); setTipoPago('efectivo'); }} 
             disabled={loading}
           >
-            <Text style={styles.cancelBtnText}>❌ Cancelar</Text>
+            <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
           </TouchableOpacity>
 
-          {/* 2. Confirmar Venta / Cambio (Derecha) */}
           <TouchableOpacity 
-            style={[
-              styles.btnAccion, 
-              styles.confirmBtn, 
-              (loading || carrito.length === 0) && styles.disabledBtn
-            ]} 
+            style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, (loading || carrito.length === 0) && GLOBAL_STYLES.disabledBtn]} 
             onPress={modoIntercambio ? registrarIntercambio : registrarVenta} 
             disabled={loading || carrito.length === 0}
           >
             {loading ? (
-              <ActivityIndicator color={COLORS.blanco} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.confirmBtnText}>
-                {modoIntercambio ? '🔁 Confirmar cambio' : '✅ Confirmar venta'}
+              <Text style={GLOBAL_STYLES.btnText}>
+                {modoIntercambio ? 'Confirmar cambio' : 'Confirmar venta'}
               </Text>
             )}
           </TouchableOpacity>
         </View>
+
       </ScrollView>
 
       {/* Modal: Seleccionar cantidad */}
@@ -1139,11 +1174,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   <Text style={styles.modalLabel}>Cantidad:</Text>
                   <View style={styles.cantidadInputGroup}>
                     <TouchableOpacity onPress={() => setCantidadModal(Math.max(1, parseInt(cantidadModal) - 1).toString())} style={styles.cantidadBtn}>
-                      <Text style={styles.cantidadBtnText}>−</Text>
+                      <Text style={styles.cantidadBtnText}><Ionicons name="remove-circle" size={34} color={ COLORS.turquesa } /></Text>
                     </TouchableOpacity>
                     <TextInput style={styles.cantidadInput} value={cantidadModal} onChangeText={setCantidadModal} keyboardType="number-pad" />
                     <TouchableOpacity onPress={() => { const nueva = parseInt(cantidadModal) + 1; if (nueva <= selectedProductModal.cantidad) setCantidadModal(nueva.toString()); }} style={styles.cantidadBtn}>
-                      <Text style={styles.cantidadBtnText}>+</Text>
+                      <Text style={styles.cantidadBtnText}><Ionicons name="add-circle" size={34} color={ COLORS.turquesa } /></Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1151,12 +1186,12 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   <Text style={styles.modalTotalLabel}>Total:</Text>
                   <Text style={styles.modalTotalValue}>${(selectedProductModal.precioVenta * parseInt(cantidadModal)).toFixed(2)}</Text>
                 </View>
-                <View style={styles.modalBotones}>
-                  <TouchableOpacity style={styles.modalConfirmBtn} onPress={agregarAlCarrito}>
-                    <Text style={styles.modalConfirmBtnText}>✅ Agregar al carrito</Text>
+                <View style={GLOBAL_STYLES.modalButtons}>
+                  <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={() => setModalVisible(false)}>
+                    <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
-                    <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+                  <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf]} onPress={agregarAlCarrito}>
+                    <Text style={GLOBAL_STYLES.btnText}>Agregar</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -1176,7 +1211,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
               <TextInput style={styles.input} placeholder="Ej: Juan García" value={creditoClienteNombre} onChangeText={setCreditoClienteNombre} editable={!loading} />
             </View>
 
-            {/* IMPLEMENTACION HOMOLOGADA */}
             <DatePickerField
               label="Fecha de pago pactada:"
               value={creditoFechaPTP}
@@ -1189,17 +1223,17 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
               <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} placeholder="Ej: Pagar después del 15" value={creditoNotas} onChangeText={setCreditoNotas} multiline={true} editable={!loading} />
             </View>
 
-            <View style={styles.totalesBox}>
-              <Text style={styles.totalesLabel}>Monto total del crédito:</Text>
-              <Text style={styles.totalesValueFinal}>${calcularTotales().total.toFixed(2)}</Text>
+            <View style={{ backgroundColor: themeColors.bgSecondary, padding: 15, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: themeColors.border }}>
+              <Text style={{ fontSize: 14, color: themeColors.textSecondary, marginBottom: 4 }}>Monto total del crédito:</Text>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.naranja }}>${calcularTotales().total.toFixed(2)}</Text>
             </View>
 
-            <View style={styles.modalBotones}>
-              <TouchableOpacity style={[styles.modalConfirmBtn, loading && styles.disabledBtn]} onPress={registrarVentaConCredito} disabled={loading}>
-                {loading ? <ActivityIndicator color={COLORS.blanco} /> : <Text style={styles.modalConfirmBtnText}>✅ Registrar crédito</Text>}
+            <View style={GLOBAL_STYLES.modalButtons}>
+              <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} onPress={() => setModalCreditoVisible(false)} disabled={loading}>
+                <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalCreditoVisible(false)} disabled={loading}>
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+              <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} onPress={registrarVentaConCredito} disabled={loading}>
+                {loading ? <ActivityIndicator color={COLORS.blanco} /> : <Text style={GLOBAL_STYLES.btnText}>Registrar crédito</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -1211,54 +1245,33 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
 const styles = StyleSheet.create({
   container: { 
-    flex: 1 
+    flex: 1, 
   },
   content: { 
     flex: 1, 
-    padding: 15 
-  },
-  headerFallback: { 
     padding: 15, 
-    borderBottomWidth: 1, 
-    marginTop: 30,
-    borderBottomColor: '#eee' 
-  },
-  titleFallback: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#333' 
   },
   loaderContainer: { 
     flex: 1, 
     justifyContent: 'center', 
-    alignItems: 'center' 
+    alignItems: 'center', 
   },
   loaderText: { 
     marginTop: 10, 
     fontSize: 16, 
-    color: '#666' 
+    color: '#666', 
   },
   gridContainer: { 
-    marginBottom: 30 
+    marginBottom: 30, 
   },
   sectionTitle: { 
     fontSize: 16, 
     fontWeight: 'bold', 
-    marginBottom: 12 
+    marginBottom: 12, 
   },
   gridRow: { 
     justifyContent: 'space-between', 
-    marginBottom: 12 
-  },
-  productoGridCard: { 
-    width: '30%', 
-    backgroundColor: 'transparent', 
-    borderRadius: 8, 
-    overflow: 'hidden', 
-    padding: 10, 
-    alignItems: 'center', 
-    borderWidth: 1, 
-    borderColor: COLORS.morado 
+    marginBottom: 12, 
   },
   imagenPlaceholder: { 
     width: '100%', 
@@ -1267,31 +1280,31 @@ const styles = StyleSheet.create({
     borderRadius: 6, 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginBottom: 8 
+    marginBottom: 8, 
   },
   imagenPlaceholderText: { 
-    fontSize: 32 
+    fontSize: 32, 
   },
   productoNombre: { 
     fontSize: 12, 
     fontWeight: '600', 
     textAlign: 'center', 
-    marginBottom: 3 
+    marginBottom: 3, 
   },
   productoPrecio: { 
     fontSize: 13, 
     fontWeight: 'bold', 
     color: COLORS.turquesa, 
-    marginBottom: 4 
+    marginBottom: 4, 
   },
   stock: { 
     fontSize: 10, 
-    color: '#666' 
+    color: '#666', 
   },
   sinStock: { 
     fontSize: 10, 
     color: COLORS.rojo, 
-    fontWeight: 'bold' 
+    fontWeight: 'bold', 
   },
   carritoContainer: { 
     backgroundColor: 'transparent', 
@@ -1299,14 +1312,14 @@ const styles = StyleSheet.create({
     padding: 15, 
     marginBottom: 20, 
     borderWidth: 2, 
-    borderColor: COLORS.turquesa 
+    borderColor: COLORS.turquesa, 
   },
   carritoVacio: { 
     fontSize: 14, 
     color: '#999', 
     fontStyle: 'italic', 
     textAlign: 'center', 
-    paddingVertical: 20 
+    paddingVertical: 20, 
   },
   carritoItem: { 
     flexDirection: 'row', 
@@ -1314,55 +1327,51 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     paddingVertical: 12, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#eee' 
   },
   carritoItemInfo: { 
-    flex: 1 
+    flex: 1, 
   },
   carritoItemNombre: { 
     fontSize: 14, 
     fontWeight: '600', 
-    color: COLORS.negro, 
-    marginBottom: 4 
+    marginBottom: 4, 
   },
   carritoItemPrecio: { 
     fontSize: 12, 
-    color: '#666' 
   },
   carritoItemControles: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 8 
+    gap: 8, 
   },
   btnCantidad: { 
     fontSize: 18, 
     fontWeight: 'bold', 
     color: COLORS.turquesa, 
-    paddingHorizontal: 8 
+    paddingHorizontal: 8, 
   },
   cantidadCarrito: { 
     fontSize: 14, 
     fontWeight: 'bold', 
-    color: COLORS.negro, 
     minWidth: 24, 
-    textAlign: 'center' 
+    textAlign: 'center', 
   },
   btnEliminar: { 
-    paddingLeft: 8 
+    paddingLeft: 8, 
   },
   btnEliminarText: { 
     fontSize: 16, 
     color: COLORS.rojo, 
-    fontWeight: 'bold' 
+    fontWeight: 'bold', 
   },
   formGroup: { 
-    marginBottom: 20 
+    marginBottom: 20, 
   },
   label: { 
     fontSize: 14, 
     fontWeight: '600', 
     color: COLORS.negro, 
-    marginBottom: 8 
+    marginBottom: 8, 
   },
   input: { 
     borderWidth: 1, 
@@ -1370,244 +1379,114 @@ const styles = StyleSheet.create({
     borderRadius: 8, 
     padding: 12, 
     fontSize: 16, 
-    backgroundColor: COLORS.blanco 
-  },
-  pagoOptions: { 
-    flexDirection: 'row', 
-    gap: 10 
-  },
-  pagoOption: { 
-    flex: 1, 
-    borderWidth: 2, 
-    borderColor: '#ccc', 
-    borderRadius: 8, 
-    paddingVertical: 12, 
-    alignItems: 'center', 
-    backgroundColor: COLORS.blanco 
-  },
-  pagoOptionActive: { 
-    borderColor: COLORS.turquesa, 
-    backgroundColor: '#e0f7fa' 
-  },
-  pagoOptionText: { 
-    fontSize: 12, 
-    fontWeight: '600', 
-    color: COLORS.negro 
-  },
-  totalesBox: { 
-    backgroundColor: '#fafafa', 
-    padding: 15, 
-    borderRadius: 8, 
-    marginBottom: 20, 
-    borderLeftWidth: 4, 
-    borderLeftColor: COLORS.naranja 
-  },
-  totalesRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 10 
-  },
-  totalesLabel: { 
-    fontSize: 14, 
-    color: '#666' 
-  },
-  totalesValue: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: COLORS.negro 
-  },
-  totalesRowFinal: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingTop: 20, 
-    marginTop: 10, 
-    borderTopWidth: 2, 
-    borderTopColor: COLORS.turquesa 
-  },
-  totalesLabelFinal: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: COLORS.negro 
-  },
-  totalesValueFinal: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: COLORS.naranja 
-  },
-  botonesContainer: { 
-    gap: 10, 
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 5,
-    marginBottom: 20,
-  },
-  confirmBtn: { 
-    backgroundColor: COLORS.verde, 
-    paddingVertical: 12, 
-    borderRadius: 8, 
-    alignItems: 'center' 
-  },
-  confirmBtnText: { 
-    color: COLORS.blanco, 
-    fontSize: 14, 
-    fontWeight: '600' 
-  },
-  btnAccion: {
-    flex: 1,
-    paddingVertical: 10, // Un alto más compacto
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtn: { 
-    backgroundColor: COLORS.rojito, 
-    paddingVertical: 12, 
-    borderRadius: 8, 
-    alignItems: 'center' 
-  },
-  cancelBtnText: { 
-    color: COLORS.blanco, 
-    fontSize: 14, 
-    fontWeight: '600' 
+    backgroundColor: COLORS.blanco, 
   },
   disabledBtn: { 
-    opacity: 0.5 
+    opacity: 0.5, 
   },
   modalOverlay: { 
     flex: 1, 
     backgroundColor: 'rgba(0,0,0,0.5)', 
     justifyContent: 'center', 
-    alignItems: 'center' 
+    alignItems: 'center', 
   },
   modalContent: { 
     backgroundColor: COLORS.blanco, 
     borderRadius: 16, 
     padding: 20, 
-    width: '85%' 
+    width: '85%', 
   },
   modalTitle: { 
     fontSize: 18, 
     fontWeight: 'bold', 
     color: COLORS.negro, 
     marginBottom: 15, 
-    textAlign: 'center' 
+    textAlign: 'center', 
   },
   modalPrecioBox: { 
     backgroundColor: '#f5f5f5', 
     padding: 12, 
     borderRadius: 8, 
-    marginBottom: 12 
+    marginBottom: 12, 
   },
   modalPrecioLabel: { 
     fontSize: 12, 
     color: '#666', 
-    marginBottom: 4 
+    marginBottom: 4, 
   },
   modalPrecioValue: { 
     fontSize: 20, 
     fontWeight: 'bold', 
-    color: COLORS.turquesa 
+    color: COLORS.turquesa, 
   },
   modalStockBox: { 
     backgroundColor: '#f5f5f5', 
     padding: 12, 
     borderRadius: 8, 
-    marginBottom: 15 
+    marginBottom: 15, 
   },
   modalStockLabel: { 
     fontSize: 12, 
     color: '#666', 
-    marginBottom: 4 
+    marginBottom: 4, 
   },
   modalStockValue: { 
     fontSize: 16, 
     fontWeight: 'bold', 
-    color: COLORS.negro 
+    color: COLORS.negro, 
   },
   modalFormGroup: { 
-    marginBottom: 15 
+    marginBottom: 15, 
   },
   modalLabel: { 
     fontSize: 14, 
     fontWeight: '600', 
     color: COLORS.negro, 
-    marginBottom: 10 
+    marginBottom: 10, 
   },
   cantidadInputGroup: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'center', 
-    gap: 10 
+    gap: 5,
   },
-  cantidadBtn: { 
-    backgroundColor: COLORS.turquesa, 
-    width: 44, 
-    height: 44, 
-    borderRadius: 8, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  cantidadBtnText: { 
-    fontSize: 24, 
-    color: COLORS.blanco, 
-    fontWeight: 'bold' 
-  },
+//   cantidadBtn: {
+//     backgroundColor: COLORS.turquesa,
+//     width: 44,
+//     height: 44,
+//     borderRadius: 8,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+ // },
+//   cantidadBtnText: {
+//     fontSize: 24,
+//     color: COLORS.blanco,
+//     fontWeight: 'bold',
+ // },
   cantidadInput: { 
-    borderWidth: 1, 
-    borderColor: '#ccc', 
-    borderRadius: 8, 
-    paddingHorizontal: 16, 
+    paddingHorizontal: 12,
     paddingVertical: 10, 
-    fontSize: 18, 
+    fontSize: 26,
     fontWeight: 'bold', 
     color: COLORS.negro, 
-    minWidth: 80, 
-    textAlign: 'center' 
+    minWidth: 50,
+    textAlign: 'center', 
   },
   modalTotalBox: { 
-    backgroundColor: '#fff3e0', 
+    backgroundColor: '#f5f5f5',
     padding: 12, 
     borderRadius: 8, 
     marginBottom: 20, 
-    borderLeftWidth: 4, 
-    borderLeftColor: COLORS.naranja 
   },
   modalTotalLabel: { 
     fontSize: 12, 
     color: '#666', 
-    marginBottom: 4 
+    marginBottom: 4, 
   },
   modalTotalValue: { 
     fontSize: 24, 
     fontWeight: 'bold', 
-    color: COLORS.naranja 
-  },
-  modalBotones: { 
-    gap: 10 
-  },
-  modalConfirmBtn: { 
-    backgroundColor: COLORS.verde, 
-    paddingVertical: 12, 
-    borderRadius: 8, 
-    alignItems: 'center' 
-  },
-  modalConfirmBtnText: { 
-    color: COLORS.blanco, 
-    fontSize: 16, 
-    fontWeight: 'bold' 
-  },
-  modalCancelBtn: { 
-    backgroundColor: COLORS.rojito, 
-    paddingVertical: 10, 
-    borderRadius: 8, 
-    alignItems: 'center' 
-  },
-  modalCancelBtnText: { 
-    color: COLORS.negro, 
-    fontSize: 14, 
-    fontWeight: '600' 
+    color: COLORS.turquesa,
   },
   escanerIndicador: { 
     position: 'absolute', 
@@ -1620,11 +1499,7 @@ const styles = StyleSheet.create({
   escanerIndicadorText: { 
     fontSize: 14, 
     fontWeight: '600', 
-    color: COLORS.negro  
-  },
-  datePickerButtonText: { 
-    fontSize: 16, 
-    color: COLORS.negro 
+    color: COLORS.negro, 
   },
   btnIntercambio: { 
     paddingHorizontal: 12, 
@@ -1632,179 +1507,164 @@ const styles = StyleSheet.create({
     borderRadius: 8, 
     backgroundColor: 'transparent', 
     borderWidth: 2, 
-    borderColor: COLORS.blanco 
-  },
-  btnDisabled: { 
-    opacity: 0.2 
+    borderColor: COLORS.blanco, 
   },
   btnIntercambioActive: { 
     backgroundColor: COLORS.blanco, 
-    borderColor: COLORS.turquesa 
-  },
-  btnIntercambioText: { 
-    fontSize: 20, 
-    fontWeight: 'bold' 
   },
   bannerIntercambio: { 
     backgroundColor: COLORS.morado, 
     paddingVertical: 10, 
     paddingHorizontal: 15, 
-    alignItems: 'center' 
+    alignItems: 'center', 
   },
   bannerIntercambioText: { 
     fontSize: 14, 
     fontWeight: 'bold', 
-    color: COLORS.blanco 
+    color: COLORS.blanco, 
   },
   diferenciaPreciosCard: { 
     backgroundColor: COLORS.blanco, 
     borderRadius: 10, 
     padding: 15, 
     marginBottom: 20, 
-    borderLeftWidth: 4,  
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3
+    borderLeftWidth: 4, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 3, 
   },
   diferenciaTitulo: { 
     fontSize: 16, 
     fontWeight: 'bold', 
     color: COLORS.negro, 
     marginBottom: 12, 
-    textAlign: 'center' 
+    textAlign: 'center', 
   },
   diferenciaCuerpo: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
-    alignItems: 'flex-start',
+    alignItems: 'flex-start', 
   },
-  diferenciasColumna: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#eee'
+  diferenciasColumna: { 
+    flex: 1, 
+    backgroundColor: '#f9f9f9', 
+    padding: 10, 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    borderColor: '#eee', 
   },
-  menuSeparator: {
-    height: 1,
-    backgroundColor: COLORS.gris,
-    marginVertical: 0,
-    marginTop: 2,
-    marginBottom: 2,
+  menuSeparator: { 
+    height: 1, 
+    backgroundColor: COLORS.gris, 
+    marginVertical: 0, 
+    marginTop: 2, 
+    marginBottom: 2, 
   },
-  diferenciasFlecha: {
-    fontSize: 24,
+  diferenciasFlecha: { 
+    fontSize: 24, 
   },
-  flechaTexto: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  diferenciaLabel: {
-    fontSize: 12,
+  flechaTexto: { 
+    fontSize: 24, 
     fontWeight: 'bold', 
-    letterSpacing: 0.5,
   },
-  diferenciaProductoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4
+  diferenciaLabel: { 
+    fontSize: 12, 
+    fontWeight: 'bold', 
+    letterSpacing: 0.5, 
   },
-  diferenciaProductoNombre: {
-    fontSize: 12,
-    color: '#333',
-    flex: 1,
-    paddingRight: 5
+  diferenciaProductoRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 4, 
   },
-  diferenciaProductoPrecio: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333'
+  diferenciaProductoNombre: { 
+    fontSize: 12, 
+    color: '#333', 
+    flex: 1, 
+    paddingRight: 5, 
   },
-  diferenciaTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#ddd'
+  diferenciaProductoPrecio: { 
+    fontSize: 12, 
+    fontWeight: '600', 
+    color: '#333', 
   },
-  diferenciaTotalValue: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: COLORS.negro
+  diferenciaTotalRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginTop: 8, 
+    paddingTop: 8, 
+    borderTopWidth: 1, 
+    borderTopColor: '#ddd', 
   },
-
-  diferenciaBalance: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 10
+  diferenciaTotalValue: { 
+    fontSize: 13, 
+    fontWeight: 'bold', 
+    color: COLORS.negro, 
   },
-  diferenciaBalanceDeuda: {
-    backgroundColor: '#ffebee', // Fondo rojito muy claro
-    borderWidth: 1,
-    borderColor: '#ffcdd2'
+  diferenciaBalance: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingVertical: 12, 
+    paddingHorizontal: 12, 
+    borderRadius: 8, 
+    marginTop: 10, 
   },
-  diferenciaBalanceAFavor: {
-    backgroundColor: '#e8f5e9', // Fondo verdecito muy claro
-    borderWidth: 1,
-    borderColor: '#c8e6c9'
+  diferenciaBalanceDeuda: { 
+    backgroundColor: '#ffebee', 
+    borderWidth: 1, 
+    borderColor: '#ffcdd2', 
   },
-  diferenciaBalanceValor: {
-    fontSize: 16,
-    fontWeight: 'bold'
+  diferenciaBalanceAFavor: { 
+    backgroundColor: '#e8f5e9', 
+    borderWidth: 1, 
+    borderColor: '#c8e6c9', 
   },
-  pagoSaldoContainer: {
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#eee'
+  diferenciaBalanceValor: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
   },
-  pagoSaldoLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
-    textAlign: 'center',
-    color: COLORS.negro
+  pagoSaldoContainer: { 
+    marginTop: 15, 
+    paddingTop: 15, 
+    borderTopWidth: 1, 
+    borderTopColor: '#eee', 
   },
-  pagoSaldoOptions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 10
+  pagoSaldoLabel: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    marginBottom: 12, 
+    textAlign: 'center', 
+    color: COLORS.negro, 
   },
-  checkboxRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fafafa',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#f0f0f0'
+  checkboxRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    backgroundColor: '#fafafa', 
+    paddingVertical: 8, 
+    paddingHorizontal: 6, 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    borderColor: '#f0f0f0', 
   },
-  checkboxOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 2
+  checkboxOption: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 4, 
+    paddingHorizontal: 2, 
   },
-  checkboxText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
-    marginLeft: 5
+  checkboxText: { 
+    fontSize: 12, 
+    fontWeight: '500', 
+    color: '#666', 
+    marginLeft: 5, 
   },
-  checkboxTextActive: {
-    fontWeight: '700',
-    color: COLORS.morado
+  checkboxTextActive: { 
+    fontWeight: '700', 
+    color: COLORS.morado, 
   },
   // --- FILA DOBLE COLUMNA PARA MODAL ---
   rowFormContainer: {
@@ -1826,30 +1686,51 @@ const styles = StyleSheet.create({
     height: 48,
     fontSize: FONT_SIZES.normal,
   },
-  bonoToggleBtn: {
-    flex: 1,
-    marginLeft: 6,
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.turquesa,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 8,
+  productImage: { 
+    width: '80%', 
+    height: 80, 
+    resizeMode: 'contain', 
+    marginBottom: 8, 
   },
-  bonoToggleBtnActive: {
-    backgroundColor: COLORS.turquesa,
-    borderColor: COLORS.turquesa,
+  productImagePlaceholder: { 
+    width: '100%', 
+    height: 80, 
+    borderRadius: 6, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 8, 
   },
-  bonoToggleText: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: '600',
-    color: COLORS.turquesa,
-    marginLeft: 6,
+  productImagePlaceholderText: { 
+    fontSize: 32, 
   },
-  bonoToggleTextActive: {
-    color: COLORS.blanco,
+  productInfo: { 
+    paddingHorizontal: 2, 
+    alignItems: 'center', 
+    width: '100%', 
+    backgroundColor: 'transparent', 
+    marginBottom: 8, 
+  },
+  productName: { 
+    fontSize: 11, 
+    fontWeight: '700', 
+    textAlign: 'center', 
+    marginBottom: 3, 
+    lineHeight: 14, 
+    height: 28, 
+    textAlignVertical: 'top', 
+  },
+  productPrice: { 
+    fontSize: 12, 
+    fontWeight: '900', 
+    marginBottom: 2, 
+  },
+  productStock: { 
+    fontSize: 10, 
+  },
+  addBtnContainer: { 
+    position: 'absolute', 
+    bottom: 3, 
+    right: 3, 
+    borderRadius: 15, 
   },
 });

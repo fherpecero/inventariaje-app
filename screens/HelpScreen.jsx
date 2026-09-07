@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { ScreenHeader, GLOBAL_STYLES, COLORS } from '../context/theme'; 
 
 
@@ -80,13 +80,13 @@ export default function HelpScreen({ onNavigate, themeColors }) {
         {/* ================= SECCIÓN 1 ================= */}
         <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Manejo de Inventario</Text>
         
-        <AccordionItem title="Agregar productos" icon="📦" themeColors={themeColors}>
+        <AccordionItem title="Agregar productos" icon={<FontAwesome6 name="box-open" size={16} color="black" />} themeColors={themeColors}>
           <P>Registra aquí la mercancía nueva que recibes.</P>
           <Bullet><B>El carrito:</B> Elige los productos, se van a una lista temporal, y al final revisas y confirma.</Bullet>
           <Bullet><B>Bono Influencer:</B> Si aprovechaste tu Bono Influencer para adquirir nuevos productos, marca la casilla. El sistema sabrá calcular el margen de ganancia.</Bullet>
         </AccordionItem>
 
-        <AccordionItem title="Ventas" icon="💲" themeColors={themeColors}>
+        <AccordionItem title="Ventas" icon={<FontAwesome6 name="money-bill-trend-up" size={16} color="black" />} themeColors={themeColors}>
           <P>Registra todo lo que sale de tu inventario (ventas, cambios, consumo propio o cortesías).</P>
           <Bullet><B>Intercambios:</B> Si cambias producto con un socio, selecciona primero el producto que das a cambio, después mas abajo selecciona de la lista el o los productos que recibirás a cambio. Si hay alguna diferencia de valor, puedes registrar quién pagó la diferencia o si quedó a deber, o bien, puedes dejarlo como saldo pendiente para un proximo intercambio.</Bullet>
           <Bullet><B>Cortesías y Descuentos:</B> Si ofreces algún descuento en la venta (paquetes o promociones especiales), agrega el porcentaje en la casilla y automaticamente registrará la venta con el ajuste. Si tomaste un producto para tu consumo personal, solo aplica el 100% de descuento y se descontará de tu inventario sin impactar tus registros financieros.</Bullet>
@@ -94,7 +94,7 @@ export default function HelpScreen({ onNavigate, themeColors }) {
           <Bullet><B>Créditos:</B> Si entregas el producto pero te lo pagarán después, elige "Crédito". Se guardará en tu sección de Créditos automáticamente.</Bullet>
         </AccordionItem>
 
-        <AccordionItem title="Existencias" icon="📊" themeColors={themeColors}>
+        <AccordionItem title="Existencias" icon={<FontAwesome6 name="clipboard-check" size={16} color="black" />} themeColors={themeColors}>
           <P>Es tu vitrina virtual para saber cuánta mercancía tienes disponible. Una vez que lo registres desde "Agregar" lo verás aquí.</P>
           <Bullet><B>Filtro de búsqueda:</B> Escribe el producto directamente en la barra para ver los resultados.</Bullet>
           <Bullet><B>Botones de Filtro Inteligentes:</B> Ordena los productos por nombre, por cantidad o por descuento, los productos registrados como Bono Influencer aparecerán aqui.</Bullet>
@@ -104,18 +104,27 @@ export default function HelpScreen({ onNavigate, themeColors }) {
        {/* ================= SECCIÓN 2 ================= */}
         <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 25 }]}>Administración y Gestión</Text>
 
-        <AccordionItem title="Créditos (💎 Premium)" icon="💳" themeColors={themeColors}>
-          <P>Ofrece facilidades de pago a tus clientes sin perder el control.</P>
-          <Bullet>Mira quién te debe, cuánto y para cuándo. Registra pagos parciales o liquida deudas fácilmente.</Bullet>
-        </AccordionItem>
 
-        <AccordionItem title="Registro de Escáner (💎 Premium)" icon="💻" themeColors={themeColors}>
+        <AccordionItem title="Registro de Escáner" icon={<FontAwesome6 name="heart-pulse" size={16} color="black" />} themeColors={themeColors}>
           <P>Lleva el detalle de tus Scanner Parties o individuales.</P>
           <Bullet><B>Crea un evento</B> para registrar la fecha, cantidad de invitados, monto cobrado y cuantos escaneos cobraste.</Bullet>
           <Bullet>Mientras el evento esté activo, todo lo que vendas se agrupará ahí para saber cuánto ganaste ese día. ¡Recuerda cerrarlo al terminar!</Bullet>
         </AccordionItem>
 
-        <AccordionItem title="Reportes / Analytics (💎 Premium)" icon="📈" themeColors={themeColors}>
+        <AccordionItem
+            title={<>Créditos <Ionicons name="diamond-outline" size={16} color={themeColors.text} /> Premium</>} 
+            icon={<Ionicons name="analytics-outline" size={14} color={themeColors.text} />} 
+            themeColors={themeColors}
+          >
+          <P>Ofrece facilidades de pago a tus clientes sin perder el control.</P>
+          <Bullet>Mira quién te debe, cuánto y para cuándo. Registra pagos parciales o liquida deudas fácilmente.</Bullet>
+        </AccordionItem>
+
+        <AccordionItem 
+            title={<>Reportes / Analytics <Ionicons name="diamond-outline" size={16} color={themeColors.text} /> Premium</>} 
+            icon={<Ionicons name="analytics-outline" size={14} color={themeColors.text} />} 
+            themeColors={themeColors}
+          >
           <P>Un panel integral donde verás tus ventas totales, ganancias reales y productos estrella por periodos. También puedes descargar este reporte a tu teléfono.</P>
           <Bullet><B>Ventas Totales:</B> El ingreso bruto generado exclusivamente por las salidas regulares de inventario (ventas directas).</Bullet>
           <Bullet><B>Costo de restock:</B> Total de costos ingresados por inventario, considera los descuentos y Bono Influencer.</Bullet>
@@ -126,7 +135,7 @@ export default function HelpScreen({ onNavigate, themeColors }) {
           <Bullet><B>Bonos Consumidos:</B> Costo de los productos de Bono Influencer que salieron del inventario.</Bullet>
         </AccordionItem>
 
-        <AccordionItem title="Configuración" icon="⚙️" themeColors={themeColors}>
+        <AccordionItem title="Configuración" icon={<FontAwesome6 name="gear" size={16} color="black" />} themeColors={themeColors}>
           <P>Ajustes de tu cuenta personal.</P>
           <Bullet><B>Perfil:</B> Encuentra tus datos de perfil, numero de cuenta y nivel de tu cuenta. Puedes cambiar tu nombre de usuario sin afectar tu acceso.</Bullet>
           <Bullet><B>Usuarios:</B> Si trabajas en equipo con otros usuarios, agrega sus correos aquí para que usen la app. Tienes el control total para pausarles el acceso o borrarlos cuando quieras.</Bullet>
@@ -135,7 +144,7 @@ export default function HelpScreen({ onNavigate, themeColors }) {
         {/* ================= SECCIÓN 3 ================= */}
         <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 25 }]}>Soporte</Text>
 
-        <AccordionItem title="Dudas y Comentarios" icon="💬" themeColors={themeColors}>
+        <AccordionItem title="Dudas y Comentarios" icon={<Ionicons name="chatbubble-ellipses-sharp" size={16} color="black" />} themeColors={themeColors}>
           <P>¿Encontraste un error o tienes alguna sugerencia?</P>
           <P>Escríbenos directamente. Leemos todos tus mensajes y nos ayudan a mejorar la aplicación para ti. Puedes hacerlo a traves del modulo de feedback en el menu de opciones o tocando el siguiente botón:</P>
           
@@ -145,7 +154,7 @@ export default function HelpScreen({ onNavigate, themeColors }) {
             onPress={handleSendEmail}
             activeOpacity={0.7}
           >
-            <Text style={styles.emailBtnText}>✉️ hello.inventariaje@gmail.com</Text>
+            <Text style={styles.emailBtnText}>{<Ionicons name="mail-outline" size={12} color= {COLORS.turquesa} />} hello.inventariaje@gmail.com</Text>
           </TouchableOpacity>
         </AccordionItem>
 

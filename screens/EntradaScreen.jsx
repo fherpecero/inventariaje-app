@@ -19,9 +19,10 @@ import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import Toast from '../components/Toast';
 import SearchBar from '../components/SearchBar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, AwesomeFont6 } from '@expo/vector-icons';
 import { getProductosActivos } from '../context/productCatalog';
-import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, GradientDivider } from '../context/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   // =====================================================================
@@ -64,27 +65,22 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       const productosData = docSnap.data()?.productos || {};
       const catalogoLocal = getProductosActivos(); 
-      
-      // 🧠 FIX CRÍTICO: Convertimos el mapa a Array para leer el interior de los objetos antiguos
       const firebaseArray = Object.values(productosData);
 
       const productosCombinados = catalogoLocal.map((catalogo) => {
-        // 1. Búsqueda rápida: Intentamos por llave directa (Sistema Nuevo)
-        let datosFirebase = productosData[catalogo.id] || productosData[catalogo.codigo];
+        // 🧠 1. Búsqueda rápida: Intentamos por NOMBRE (Como en Salidas y Alertas)
+        let datosFirebase = productosData[catalogo.nombre];
         
-        // 2. Búsqueda Profunda: Si no lo encuentra, buscamos adentro de los objetos (Sistema Antiguo)
+        // 2. Búsqueda Profunda: Fallback de seguridad
         if (!datosFirebase) {
-          datosFirebase = firebaseArray.find(item => 
-            item.codigo === catalogo.codigo || 
-            item.nombre === catalogo.nombre
-          );
+          datosFirebase = firebaseArray.find(item => item.nombre === catalogo.nombre) || {};
         }
 
         // 3. Fallback final si de verdad no existe en Firebase
         datosFirebase = datosFirebase || { cantidad: 0, piezasConDescuento: 0, notas: '' };
 
         return {
-          id: catalogo.id || catalogo.codigo,
+          id: catalogo.nombre,
           nombre: catalogo.nombre,
           codigo: catalogo.codigo,
           descripcion: catalogo.descripcion || '',
@@ -245,7 +241,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       };
 
       pedido.forEach(item => {
-        const key = item.id || item.codigo;
+        const key = item.nombre;
         // Modificamos quirúrgicamente solo los campos necesarios, protegiendo notas previas
         inventarioUpdates[`productos.${key}.cantidad`] = increment(Number(item.cantidad) || 1);
         inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
@@ -275,36 +271,48 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   // =====================================================================
-  // 5. RENDERIZADO
+  // 5. RENDERIZADO (Adaptado al Tema Minimalista)
   // =====================================================================
   const renderProducto = ({ item }) => {
     const imagen = imagenes[item.codigo] || null;
 
     return (
       <TouchableOpacity
-        style={[styles.productCard, { borderColor: COLORS.morado }]}
+        style={[
+          GLOBAL_STYLES.cardStandard, 
+          { 
+            backgroundColor: themeColors.bgSecondary, 
+            borderColor: themeColors.border, 
+            width: '30%', 
+            flexDirection: 'column', 
+            alignItems: 'center',
+            padding: 10, 
+            marginBottom: 0 
+          }
+        ]}
         onPress={() => openModal(item)}
         activeOpacity={0.7}
       >
         {imagen ? (
           <Image source={imagen} style={styles.productImage} />
         ) : (
-          <View style={styles.productImagePlaceholder}>
-            <Text style={styles.productImagePlaceholderText}>📦</Text>
+          <View style={[styles.productImagePlaceholder, { backgroundColor: themeColors.input }]}>
+            <Text style={styles.productImagePlaceholderText}><FontAwesome6 name="box" size={20} color="black" /></Text>
           </View>
         )}
 
         <View style={styles.productInfo}>
-          <Text style={[styles.productName, { color: themeColors.text }]} numberOfLines={1}>
+          <Text style={[styles.productName, { color: themeColors.text }]} numberOfLines={2}>
             {item.nombre}
           </Text>
-          <Text style={styles.productStock}>
+          <Text style={[styles.productStock, { color: themeColors.textSecondary }]}>
             Stock: {item.cantidad}
           </Text>
         </View>
 
-        <View style={styles.addBtn}>
-          <Text style={styles.addBtnText}>➕</Text>
+        {/* 🔘 Ícono Flotante de Ionicons */}
+        <View style={[styles.addBtnContainer, { backgroundColor: themeColors.bgSecondary }]}>
+          <Ionicons name="add-circle" size={30} color={COLORS.turquesa} />
         </View>
       </TouchableOpacity>
     );
@@ -369,7 +377,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       {/* MODAL DE SELECCIÓN DE PRODUCTO */}
       <Modal visible={modalVisible} transparent={true} animationType="none" onRequestClose={closeModal}>
         <TouchableOpacity style={GLOBAL_STYLES.modalOverlay} activeOpacity={1} onPress={closeModal}>
-          <TouchableOpacity activeOpacity={1} style={[GLOBAL_STYLES.modalContent, styles.modalContentNoPadding, { backgroundColor: themeColors.bg }]} onPress={Keyboard.dismiss}>
+          <TouchableOpacity activeOpacity={1} style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg }]} onPress={Keyboard.dismiss}>
             {selectedProduct && (
               <>
                 <View style={styles.modalImageContainer}>
@@ -377,12 +385,14 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                     <Image source={imagenes[selectedProduct.codigo]} style={styles.modalImage} />
                   ) : (
                     <View style={styles.modalImagePlaceholder}>
-                      <Text style={styles.modalImagePlaceholderText}>📦</Text>
+                      <Text style={styles.modalImagePlaceholderText}><FontAwesome6 name="box" size={18} color="black" /></Text>
                     </View>
                   )}
                 </View>
-
+                  
                 <View style={styles.modalInnerBody}>
+                  
+                  {/* 1. FILA SUPERIOR: TÍTULO Y BONO */}
                   <View style={styles.modalHeaderColumns}>
                     <View style={styles.modalLeftColumn}>
                       <Text style={[GLOBAL_STYLES.modalTitle, styles.modalProductNameText, { color: themeColors.text }]} numberOfLines={2}>
@@ -405,25 +415,44 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                         Bono Influencer
                       </Text>
                     </View>
-                  </View>
+                  </View> 
 
+                  {/* 2. LÍNEA DIVISORIA (Ahora tiene el mismo margen real arriba y abajo) */}
+                  <GradientDivider marginVertical={22} />
+
+                  {/* 3. SECCIÓN DE CANTIDADES */}
                   <View style={[styles.cantidadSection, { backgroundColor: darkMode ? '#333' : COLORS.gris }]}>
-                    <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Cantidad a agregar:</Text>
+                    
+                    {/* 👇 AQUÍ ESTÁ EL TEXTO CENTRADO Y EN MAYÚSCULAS 👇 */}
+                    <Text style={[GLOBAL_STYLES.modalLabel, styles.cantidadLabel, { color: themeColors.text }]}>
+                      CANTIDAD A AGREGAR
+                    </Text>
+                    
                     <View style={styles.cantidadControls}>
-                      <TouchableOpacity style={styles.cantidadBtn} onPress={disminuirCantidad}><Text style={styles.cantidadBtnText}>−</Text></TouchableOpacity>
-                      <View style={styles.cantidadDisplay}><Text style={styles.cantidadValue}>{cantidad}</Text></View>
-                      <TouchableOpacity style={styles.cantidadBtn} onPress={aumentarCantidad}><Text style={styles.cantidadBtnText}>+</Text></TouchableOpacity>
+                      <TouchableOpacity style={styles.cantidadBtn} onPress={disminuirCantidad}>
+                        <Ionicons name="remove" size={28} color={COLORS.blanco} />
+                      </TouchableOpacity>
+                      
+                      <View style={styles.cantidadDisplay}>
+                        <Text style={styles.cantidadValue}>{cantidad}</Text>
+                      </View>
+                      
+                      <TouchableOpacity style={styles.cantidadBtn} onPress={aumentarCantidad}>
+                        <Ionicons name="add" size={28} color={COLORS.blanco} />
+                      </TouchableOpacity>
                     </View>
                   </View>
 
+                  {/* 4. BOTONES DE ACCIÓN */}
                   <View style={GLOBAL_STYLES.modalButtons}>
                     <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={closeModal}>
                       <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf]} onPress={confirmarEntrada}>
-                      <Text style={GLOBAL_STYLES.btnText}>✅ Aceptar</Text>
+                      <Text style={GLOBAL_STYLES.btnText}>Aceptar</Text>
                     </TouchableOpacity>
                   </View>
+
                 </View>
               </>
             )}
@@ -543,13 +572,13 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: '100%',
-    height: 90,
-    resizeMode: 'cover',
+    height: 80,
+    resizeMode: 'contain',
+    marginBottom: 8,
   },
   productImagePlaceholder: {
     width: '100%',
-    height: 90,
-    backgroundColor: '#f0f0f0',
+    height: 80,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -562,7 +591,8 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     width: '100%',
-    backgroundColor: 'transparent'
+    backgroundColor: 'transparent',
+    marginBottom: 8,
   },
   productName: {
     fontSize: 12,
@@ -588,17 +618,26 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 16,
   },
+  addBtnContainer: {
+    position: 'absolute',
+    bottom: 3,  // Lo "ancla" al borde inferior
+    right: 3,   // Lo "ancla" al borde derecho
+    borderRadius: 15,
+  },
   modalImageContainer: {
     width: '100%',
     height: 220,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: 'hidden',
+    justifyContent: 'center', // 👈 Asegura que flote en el centro
+    alignItems: 'center',
+    padding: 10,
   },
   modalImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   modalImagePlaceholder: {
     width: '100%',
@@ -611,15 +650,14 @@ const styles = StyleSheet.create({
     fontSize: 80,
   },
   modalInnerBody: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 25,
   },
   modalHeaderColumns: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
   },
   modalLeftColumn: {
     flex: 1,
@@ -642,7 +680,7 @@ const styles = StyleSheet.create({
   },
   modalProductStock: {
     fontSize: 13,
-    color: COLORS.turquesa,
+    color: COLORS.negro,
     fontWeight: '600',
     textAlign: 'left',
   },
@@ -650,12 +688,13 @@ const styles = StyleSheet.create({
     padding: 4, 
     justifyContent: 'center',
     alignItems: 'center',
+    color: COLORS.negro,
     marginBottom: 2,
   },
   bonoLabelText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#999',
+    color: COLORS.negro,
     textAlign: 'center',
   },
   bonoLabelTextActive: {
@@ -667,6 +706,13 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 20,
   },
+  cantidadLabel: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 15,
+  },
   cantidadControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -674,8 +720,8 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   cantidadBtn: {
-    width: 50,
-    height: 50,
+    width: 40,
+    height: 40,
     borderRadius: 25,
     backgroundColor: COLORS.turquesa,
     justifyContent: 'center',
@@ -687,19 +733,17 @@ const styles = StyleSheet.create({
     color: COLORS.blanco,
   },
   cantidadDisplay: {
-    width: 80,
-    height: 50,
-    backgroundColor: COLORS.blanco,
-    borderWidth: 2,
-    borderColor: COLORS.turquesa,
+    width: 40,
+    height: 40,
+    backgroundColor: COLORS.gris,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cantidadValue: {
     fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.turquesa,
+    fontWeight: '400',
+    color: COLORS.negro,
   },
   modalResumenWidth: {
     width: '90%',

@@ -126,7 +126,7 @@ export default function ModalExchange({
 
         // 5. Marcar como aceptado
         await updateDoc(peticionRef, { estado: 'aceptado', aprobadoPor: miEmail, fechaAprobacion: new Date().toISOString() });
-        Alert.alert('✅ Éxito', 'Cambio registrado correctamente en ambas cuentas.');
+        Alert.alert('Éxito', 'Cambio registrado correctamente en ambas cuentas.');
       }
 
       if (peticiones.length === 1) onClose(); // Cerrar si era la última
@@ -163,10 +163,10 @@ export default function ModalExchange({
 
       <View style={styles.botones}>
         <TouchableOpacity style={[styles.btn, { backgroundColor: COLORS.rojito }]} onPress={() => handleAccion(item, 'rechazado')} disabled={loading}>
-          <Text style={styles.btnText}>❌ Rechazar</Text>
+          <Text style={styles.btnText}><MaterialIcons name="do-not-touch" size={18} color="black" /> Rechazar</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.btn, { backgroundColor: COLORS.verde }]} onPress={() => handleAccion(item, 'aceptado')} disabled={loading}>
-          <Text style={styles.btnText}>✅ Aceptar</Text>
+          <Text style={styles.btnText}><FontAwesome name="check-square-o" size={18} color="black" /> Aceptar</Text>
         </TouchableOpacity>
       </View>
     </View>

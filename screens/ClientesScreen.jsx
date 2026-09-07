@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 
 // Importas GLOBAL_STYLES
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
@@ -266,7 +267,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
       {item.ventasIds && item.ventasIds.length > 0 && (
         <View style={styles.productosSubrow}>
           <Text style={[styles.productosText, { color: themeColors.textSecondary }]}>
-            📦 {item.ventasIds.length} producto{item.ventasIds.length > 1 ? 's' : ''}
+            <FontAwesome6 name="bag-shopping" size={12} color="black" /> {item.ventasIds.length} producto{item.ventasIds.length > 1 ? 's' : ''}
           </Text>
         </View>
       )}
@@ -278,7 +279,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <ScreenHeader
-        title="👥 Clientes"
+        title="Clientes"
         onPress={() => onNavigate('home')}
         themeColors={themeColors}
       />
@@ -294,7 +295,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
         <ScrollView style={GLOBAL_STYLES.content} showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Ventas a Crédito ({creditosActivos.length})
+              Ventas a Crédito {creditosActivos.length}
             </Text>
 
             {creditosActivos.length === 0 ? (
@@ -352,7 +353,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
                 {creditoEditando && (
                   <>
                     <Text style={[GLOBAL_STYLES.modalTitle, { color: themeColors.text }]}>
-                      💳 Actualizar Crédito
+                       Actualizar Crédito
                     </Text>
 
                     <View style={styles.headerInfo}>
@@ -435,7 +436,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
                         {loadingModal ? (
                           <ActivityIndicator color={COLORS.blanco} />
                         ) : (
-                          <Text style={GLOBAL_STYLES.btnText}>✅ Registrar</Text>
+                          <Text style={GLOBAL_STYLES.btnText}>Registrar</Text>
                         )}
                       </TouchableOpacity>
 

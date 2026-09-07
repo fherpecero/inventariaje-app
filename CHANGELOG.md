@@ -1,5 +1,21 @@
 # Changelog - Inventariaje App
 
+##### [2.5.2] - 2026-09-07
+**🚀 Hotfix: UI Polish, Checkout Optimization & Play Store Prep**
+
+**✨ Interfaz de Checkout (SalidasScreen)**
+* **Rediseño del Cobro:** Se reestructuró la interfaz de venta normal. Los contenedores de "Descuento" y "Bono Influencer" ahora comparten una sola fila alineada horizontalmente de manera simétrica (50/50).
+* **Armonía Vertical:** Se unificaron los márgenes (`marginBottom: 15`) en todos los bloques del checkout para un scroll limpio y predecible.
+* **Reparación de Totales:** Se solucionó el desbordamiento de la línea con gradiente inyectando el componente DRY `GradientDivider` y forzando la caja de totales a comportarse en columna, evitando que los textos se aplasten.
+
+**🔧 Correcciones Previas a Producción (Bug Fixes)**
+* **Módulo de Intercambios:** El cálculo de precios en intercambios se modificó para que ahora utilice correctamente el costo de compra en lugar del precio de venta[cite: 17].
+* **UI Intercambios:** Se alineó de forma absoluta el tag de "intercambio" para que flote correctamente bajo el botón en el Header[cite: 17].
+* **Visibilidad del Sistema (Header):** Se reparó el error visual donde la hora, fecha, batería y WiFi del teléfono desaparecían por renderizarse en color blanco sobre un fondo blanco[cite: 17].
+* **Modal Escáner:** Se integró un nuevo disclaimer en color rojo sobre las ventas en evento[cite: 17].
+* **Modal Escáner (Layout):** Se arregló el `bottom padding` para que el contenido no quede aplastado contra el borde inferior en teléfonos modernos[cite: 17].
+* **Modal Créditos (Teclado):** Se solucionó el fallo del teclado estático; ahora el scroll permite ver correctamente lo que se está escribiendo sin obstruir la pantalla[cite: 17].
+
 ##### [2.5.1] - 2026-09-01
 **🚀 QA Release: Gestión de Suscripciones, Reportes Financieros y UI Fixes**
 

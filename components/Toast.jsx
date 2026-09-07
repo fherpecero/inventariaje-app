@@ -1,42 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
-
-/**
- * 🎯 COMPONENTE: Toast
- * 
- * ¿QUÉ HACE?
- * Muestra una notificación que desaparece automáticamente
- * 
- * PROPS:
- * - visible: boolean (visible o no)
- * - message: string (mensaje a mostrar)
- * - duration: number (milisegundos - default 1500)
- * - type: 'success' | 'error' | 'warning' | 'info' (default 'success')
- * - onHide: function (callback cuando desaparece)
- * 
- * EJEMPLO DE USO:
- * const [toastConfig, setToastConfig] = useState({ visible: false });
- * 
- * const mostrarToast = (msg, type = 'success') => {
- *   setToastConfig({ visible: true, message: msg, type });
- * };
- * 
- * <Toast {...toastConfig} onHide={() => setToastConfig({ visible: false })} />
- */
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 
 const COLORS = {
-  success: '#4CAF50',
+  success: '#24c5c5',
   error: '#f44336',
   warning: '#ff9800',
   info: '#2196F3',
 };
 
 const ICONS = {
-  success: '✅',
-  error: '❌',
-  warning: '⚠️',
-  info: 'ℹ️',
+  success: <FontAwesome6 name="circle-check" size={18} color="white" />,
+  error: <FontAwesome6 name="cancel" size={18} color="white" />,
+  warning: <Ionicons name="warning-outline" size={18} color="white" />,
+  info: <FontAwesome6 name="info" size={18} color="white" />,
 };
+
 
 export default function Toast({ 
   visible, 

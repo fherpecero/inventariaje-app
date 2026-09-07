@@ -23,6 +23,12 @@ import ModalExchange from '../components/ModalExchange';
 import ModalFeedback from '../components/ModalFeedback';
 import { getProductosActivos } from '../context/productCatalog';
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Fontisto from '@expo/vector-icons/Fontisto';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Foundation from '@expo/vector-icons/Foundation';
+import Entypo from '@expo/vector-icons/Entypo';
+import Feather from '@expo/vector-icons/Feather';
 
 // ICONS
 import MenuIcon from '../assets/icons/IconMenu.svg';
@@ -604,11 +610,11 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 <Text style={styles.dashboardValueExistencia}>{stats.totalEnExistencia} unidades</Text>
               </View>
             </View>
-            <View style={styles.dashboardBtnTextExistencia}>
-                <Image
-                    source={ImgExistencia}
-                    style={styles.ImagenExistencia}
-                  />
+            <Image
+                source={ImgExistencia}
+                style={styles.ImagenExistencia}
+            />
+            <View style={styles.dashboardBtnTextBtn}>
                 <Text style={styles.dashboardArrow}>→</Text>
             </View>
           </TouchableOpacity>
@@ -627,7 +633,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                     <Text style={styles.dashboardValueStocks}>{stats.bajoStock} productos</Text>
                   </View>
                 </View>
+                <View style={styles.dashboardBtnTextBtn}>
                 <Text style={styles.dashboardArrow}>→</Text>
+                </View>
               </TouchableOpacity>
           </View>
 
@@ -643,7 +651,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                     <Text style={styles.dashboardValueStocks}>{stats.productosSinStock} productos</Text>
                   </View>
                 </View>
+                <View style={styles.dashboardBtnTextBtn}>
                 <Text style={styles.dashboardArrow}>→</Text>
+                </View>
               </TouchableOpacity>
           </View>
         </View>
@@ -654,7 +664,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             activeOpacity={0.8}
           >
             <View style={styles.dashboardBtnContent}>
-              <View style={styles.dashboardBtnText}>
+              <View style={[styles.dashboardBtnText, { height: 125, paddingTop: 10,}]}>
                 <Text style={[styles.dashboardLabelVentas, {  }]}>
                     Ventas
                     {"\n"}del Mes</Text>
@@ -665,8 +675,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
               source={ImgVenta}
               style={styles.ImagenVenta}
               />
-            <View style={styles.dashboardBtnTextVenta}>
             <Text style={styles.dashboardValueVenta}>${stats.ventasDelMes || '0.00'}</Text>
+            <View style={styles.dashboardBtnTextBtn}>
             <Text style={styles.dashboardArrow}>→</Text>
             </View>
           </TouchableOpacity>
@@ -675,14 +685,14 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
         {/* SECCIÓN 2: EVENTO DE ESCÁNER */}
         <View style={styles.scannerSection}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-            <FontAwesome6 name="heart-pulse" size={24} color="black" /> Evento de Escáner</Text>
+            <FontAwesome6 name="heart-pulse" size={22} color="red" /> Evento de Escáner</Text>
 
           {eventoActivo ? (
             <View style={[styles.eventoCard, { backgroundColor: themeColors.bgSecondary }]}>
               <View style={styles.eventoHeader}>
                 <Text style={[styles.eventoTitle, { color: themeColors.text }]}>{eventoActivo.evento}</Text>
                 <Text style={styles.eventoStatus}>
-                  <Ionicons name="pulse-sharp" size={24} color="green" /> Activo</Text>
+                  {/*<Ionicons name="pulse-sharp" size={24} color="green" />*/} Activo</Text>
               </View>
 
               {/* Cálculos del Escáner en vivo */}
@@ -710,7 +720,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
               <View style={styles.eventoButtons}>
                 <TouchableOpacity style={[styles.eventoBtnEdit, { backgroundColor: COLORS.turquesa }]} onPress={() => setModalEventoVisible(true)}>
                   <Text style={styles.eventoBtnText}>
-                    <FontAwesome6 name="edit" size={24} color="black" /> Editar</Text>
+                    {/*<FontAwesome6 name="edit" size={24} color="black" />*/} Editar</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -778,7 +788,7 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                     ]);
                   }}
                 >
-                  <Text style={styles.eventoBtnText}>💾 Finalizar</Text>
+                  <Text style={styles.eventoBtnText}>Finalizar y Guardar</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -787,6 +797,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
               <View>
                 <Text style={[styles.eventoBtnCreateText, { color: themeColors.text }]}>Crear Evento de Escáner</Text>
                 <Text style={[styles.eventoBtnCreateSubtext, { color: themeColors.textSecondary }]}>Registro de Scanner Party</Text>
+              </View>
+              <View style={styles.dashboardBtnTextBtn}>
+                <Text style={[styles.dashboardArrow, { color: COLORS.turquesa, borderColor: COLORS.turquesa, }]}>→</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -800,7 +813,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             activeOpacity={0.7}
             style={{ marginBottom: 80 }} 
           >
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>💳 Créditos Pendientes</Text>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+                <FontAwesome name="credit-card-alt" size={22} color="darkblue" /> Créditos Pendientes</Text>
 
             <View style={styles.creditoCard}>          
               {loadingCreditos ? (
@@ -918,7 +932,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                     setTimeout(() => setModalBuzonVisible(true), 150);
                   }}
                 >
-                  <Text style={{ fontSize: 24, marginRight: 15 }}>🔁</Text>
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>
+                      <FontAwesome6 name="arrows-rotate" size={24} color="grey" /></Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>Intercambios Pendientes</Text>
                     <Text style={GLOBAL_STYLES.textSecondary}>Tienes {peticionesBuzon.length} solicitudes de socios.</Text>
@@ -930,36 +945,38 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
               {/* 📦 4. ALERTAS DE RESTOCK */}
               {conteoAlertasStock > 0 && (
                 <TouchableOpacity 
-                  style={[styles.notificationOptionBtn, { backgroundColor: '#FEF2F2' }]}
+                  style={[styles.notificationOptionBtn, { backgroundColor: '#ffffff' }]}
                   onPress={() => {
                     setGeneralNotificationsModal(false);
                     onNavigate('alertas'); 
                   }}
                 >
-                  <Text style={{ fontSize: 24, marginRight: 15 }}>📦</Text>
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>
+                      <FontAwesome6 name="box-archive" size={24} color="brown" /></Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>Alertas de Bajo Stock</Text>
                     <Text style={GLOBAL_STYLES.textSecondary}>{conteoAlertasStock} productos requieren restock.</Text>
                   </View>
-                  <View style={[styles.badgeMini, { backgroundColor: '#DC2626' }]}><Text style={styles.badgeMiniText}>{conteoAlertasStock}</Text></View>
+                  <View style={[styles.badgeMini, { backgroundColor: '#E6672E' }]}><Text style={styles.badgeMiniText}>{conteoAlertasStock}</Text></View>
                 </TouchableOpacity>
               )}
 
               {/* 💳 5. CRÉDITOS POR VENCER (Solo Premium) */}
               {conteoCreditosAlertas > 0 && effectiveTier === 'premium' && (
                 <TouchableOpacity 
-                  style={[styles.notificationOptionBtn, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}
+                  style={[styles.notificationOptionBtn, { backgroundColor: '#ffffff' }]}
                   onPress={() => {
                     setGeneralNotificationsModal(false);
                     onNavigate('clientes');
                   }}
                 >
-                  <Text style={{ fontSize: 24, marginRight: 15 }}>💳</Text>
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>
+                      <FontAwesome name="credit-card-alt" size={22} color="darkblue" /></Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[GLOBAL_STYLES.textPrimary, { fontWeight: 'bold' }]}>Cobros por Vencer</Text>
                     <Text style={GLOBAL_STYLES.textSecondary}>{conteoCreditosAlertas} crédito(s) vencen pronto o están vencidos.</Text>
                   </View>
-                  <View style={[styles.badgeMini, { backgroundColor: '#D97706' }]}><Text style={styles.badgeMiniText}>{conteoCreditosAlertas}</Text></View>
+                  <View style={[styles.badgeMini, { backgroundColor: '#E6672E' }]}><Text style={styles.badgeMiniText}>{conteoCreditosAlertas}</Text></View>
                 </TouchableOpacity>
               )}
 
@@ -974,10 +991,10 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
             </ScrollView>
 
             <TouchableOpacity 
-              style={[GLOBAL_STYLES.btnPrimary, { marginTop: 20 }]} 
+              style={[GLOBAL_STYLES.btnClose, { marginTop: 20 }]}
               onPress={() => setGeneralNotificationsModal(false)}
             >
-              <Text style={GLOBAL_STYLES.btnTextPrimary}>Cerrar</Text>
+              <Text style={GLOBAL_STYLES.btnText}>Cerrar</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1002,7 +1019,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
               </View>
 
               <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('Configuración')}>
-                <Text style={styles.menuItemIcon}>⚙️</Text>
+                <Text style={styles.menuItemIcon}>
+                    <Fontisto name="player-settings" size={24} color="grey" /></Text>
                 <Text style={[styles.menuItemText, { color: themeColors.text }]}>Configuración</Text>
                 <Text style={styles.menuItemArrow}>→</Text>
               </TouchableOpacity>
@@ -1015,19 +1033,23 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 {effectiveTier === 'premium' ? (
                   <>
                     <TouchableOpacity style={styles.menuFeatureItem} onPress={() => { cerrarMenu(); setModalEventoVisible(true); }}>
-                      <Text style={styles.menuItemIcon}>💻</Text>
-                      <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.text }]}>Escáner</Text></View>
+                      <Text style={styles.menuItemIcon}>
+                          <FontAwesome6 name="heart-pulse" size={22} color="grey" /></Text>
+                      <View style={{ flex: 1 }}>
+                          <Text style={[styles.menuItemText, { color: themeColors.text }]}>Escáner</Text></View>
                       <Text style={styles.menuItemArrow}>→</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.menuFeatureItem} onPress={() => handleNavigation('analytics')}>
-                      <Text style={styles.menuItemIcon}>📊</Text>
+                      <Text style={styles.menuItemIcon}>
+                          <MaterialCommunityIcons name="google-analytics" size={24} color="grey" /></Text>
                       <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.text }]}>Analytics</Text></View>
                       <Text style={styles.menuItemArrow}>→</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.menuFeatureItem} onPress={() => handleNavigation('clientes')}>
-                      <Text style={styles.menuItemIcon}>👥</Text>
+                      <Text style={styles.menuItemIcon}>
+                          <Fontisto name="persons" size={24} color="grey" /></Text>
                       <View style={{ flex: 1 }}><Text style={[styles.menuItemText, { color: themeColors.text }]}>Clientes</Text></View>
                       <Text style={styles.menuItemArrow}>→</Text>
                     </TouchableOpacity>
@@ -1079,7 +1101,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                   }, 350);
                 }}
               >
-                <Text style={styles.menuItemIcon}>💡</Text>
+                <Text style={styles.menuItemIcon}>
+                    <Foundation name="lightbulb" size={24} color="grey" /></Text>
                 <Text style={[styles.menuItemText, { color: themeColors.text }]}>
                   Enviar Feedback
                 </Text>
@@ -1094,7 +1117,8 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                 style={styles.menuItem}
                 onPress={() => handleNavigation('ayuda')}
               >
-                <Text style={styles.menuItemIcon}>📚</Text>
+                <Text style={styles.menuItemIcon}>
+                    <Entypo name="book" size={24} color="grey" /></Text>
                 <Text style={[styles.menuItemText, { color: themeColors.text }]}>
                   Guía de Uso
                 </Text>
@@ -1104,9 +1128,10 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
               <View style={[styles.menuSeparator, { backgroundColor: themeColors.border }]} />
 
               <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigation('logout')}>
-                <Text style={styles.menuItemIcon}>🚪</Text>
-                <Text style={[styles.menuItemText, { color: themeColors.text }]}>Cerrar Sesión</Text>
-                <Text style={styles.menuItemArrow}>→</Text>
+                <Text style={styles.menuItemIcon}>
+                    <Ionicons name="exit-outline" size={24} color="#F16464" /></Text>
+                <Text style={[styles.menuItemText, { color: '#F16464' }]}>Cerrar Sesión</Text>
+                <Text style={[styles.menuItemArrow, { color: '#F16464' }]}>→</Text>
               </TouchableOpacity>
               
             </View>
@@ -1171,18 +1196,7 @@ const styles = StyleSheet.create({
     borderColor: '#eee' 
   },
   bellButtonActive: { 
-    backgroundColor: COLORS.morado 
-  },
-  bellBadge: { 
-    position: 'absolute', 
-    top: 8, 
-    right: 10, 
-    width: 8, 
-    height: 8, 
-    borderRadius: 4, 
-    backgroundColor: COLORS.rojo, 
-    borderWidth: 1.5, 
-    borderColor: COLORS.morado 
+    backgroundColor: '#7A7AEC',
   },
   headerBorderGradient: {
     height: 2,
@@ -1292,10 +1306,6 @@ dashboardBtnVentas: {
   dashboardBtnText: {
     flex: 1,
   },
-  dashboardBtnTextExistencia: {
-      flexDirection: 'column',
-      alignItems: 'center',
-  },
   dashboardLabel: {
     fontSize: FONT_SIZES.normal,
     fontWeight: '600',
@@ -1332,6 +1342,9 @@ dashboardLabelVentas: {
     lineHeight: 36,
     marginBottom: 4,
   },
+dashboardHVentas: {
+    height: 90,
+},
   dashboardValue: {
     fontSize: FONT_SIZES.subtitulo,
     fontWeight: '600',
@@ -1341,6 +1354,7 @@ dashboardLabelVentas: {
       fontSize: FONT_SIZES.subtitulo,
       fontWeight: '600',
       color: '#1b4848',
+      marginBottom: 'auto',
   },
   dashboardValueWarning: {
     fontFamily: 'Roboto',
@@ -1359,9 +1373,22 @@ dashboardValueVenta: {
         fontSize: 30,
         fontWeight: '600',
         color: COLORS.grey,
+        paddingTop: 10,
+    },
+dashboardBtnTextBtn: {
+    //flexDirection: 'column',
+    //alignItems: 'center',
+    //right: 0,
+    //bottom: 0,
+    //marginTop: 'auto',
+    position: 'absolute',
+    right: 15,
+    bottom: 15,
     },
   dashboardArrow: {
+    width: 'auto',
     fontSize: 20,
+    textAlign: 'center',
     color: '#ffffff',
     fontWeight: '700',
     borderWidth: 3,
@@ -1385,8 +1412,11 @@ dashboardColumn: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
 ImagenExistencia: {
-    marginTop: -54,
-    marginBottom: 0,
+    position: 'absolute',
+    top: -50,
+    right: 20,
+    //marginTop: -54,
+    //marginBottom: 0,
     width: 130,
     },
 ImagenVenta: {
@@ -1501,8 +1531,6 @@ ImagenVenta: {
   eventoCard: {
     borderRadius: 12,
     padding: 16,
-    borderLeftWidth: 5,
-    borderLeftColor: COLORS.turquesa,
     marginBottom: 1,
   },
   eventoHeader: {
@@ -1513,6 +1541,7 @@ ImagenVenta: {
   },
   eventoTitle: {
     fontSize: FONT_SIZES.subtitulo,
+    textTransform: 'uppercase',
     fontWeight: '700',
     flex: 1,
   },
@@ -1520,6 +1549,11 @@ ImagenVenta: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.verde,
+    borderWidth: 1,
+    borderColor: COLORS.verde,
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   eventoDetails: {
     marginBottom: 16,
@@ -1568,13 +1602,12 @@ ImagenVenta: {
     padding: SPACING.btn_padding,
     flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 5,
-    borderLeftColor: COLORS.turquesa,
-    shadowColor: '#000',
+    shadowColor: '#000000',
+    shadowOpacity: .25,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 16,
+    elevation: 4,
     marginBottom: 12,
   },
   eventoBtnCreateIcon: {
@@ -1598,8 +1631,6 @@ ImagenVenta: {
     borderRadius: 12,
     padding: 16,
     backgroundColor: COLORS.blanco,
-    borderLeftWidth: 5,
-    borderLeftColor: COLORS.turquesa,
     marginBottom: 12,
   },
   creditoItem: {

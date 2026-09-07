@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar'; // 👈 Importamos el control de la barra de estado
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
@@ -49,7 +50,6 @@ export default function SettingsScreen({
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      // Cargar preferencias
       try {
         const savedSettings = await AsyncStorage.getItem('appSettings');
         if (savedSettings) {
@@ -70,7 +70,6 @@ export default function SettingsScreen({
     setModalEditVisible(true);
   };
 
-  // ✏️ ACTUALIZACIÓN CENTRALIZADA: Llama a AuthContext
   const handleGuardarNombre = async () => {
     if (!nombreTemporal.trim()) {
       Alert.alert('Error', 'El nombre no puede estar vacío');
@@ -89,7 +88,6 @@ export default function SettingsScreen({
     }
   };
 
-  // 💳 REDIRECCIÓN A GOOGLE PLAY / SUSCRIPCIONES (En desarrollo)
   const handleManageSubscription = () => {
     Alert.alert(
       'Suscripción y Planes',
@@ -146,13 +144,19 @@ export default function SettingsScreen({
 
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
+      
+      {/* 📱 1. ARREGLO DE BARRA DE ESTADO */}
+      <StatusBar 
+        backgroundColor={themeColors.header} 
+        style={darkMode ? 'light' : 'dark'} 
+      />
+
       <ScreenHeader
         title="Configuración"
         onPress={() => onNavigate('home')}
         themeColors={themeColors}
       />
 
-      {/* CONTENT */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -160,16 +164,15 @@ export default function SettingsScreen({
         {/* ═══════════════════════════════════════════════════════════════ */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-            <FontAwesome6 name="user-gear" size={18} color={themeColors.text} 
-            /> Mi Cuenta
+            <FontAwesome6 name="user-gear" size={18} color={themeColors.text} /> Mi Cuenta
           </Text>
 
-          {/* TARJETA 3 COLUMNAS: Minimalista Adaptado */}
+          {/* 💳 2. ARREGLO DE LAYOUT (Volvemos a styles.card3Col) y BORDE DINÁMICO */}
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={abrirModalEdicion}
             style={[
-              GLOBAL_STYLES.cardStandard, 
+              styles.card3Col, 
               { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }
             ]}
           >
@@ -183,15 +186,14 @@ export default function SettingsScreen({
             </View>
 
             {/* COLUMNA 2: DETALLES DE USUARIO */}
-            <View style={GLOBAL_STYLES.cardStandardTextContainer}>
-              <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text}]} numberOfLines={1}>
+            <View style={styles.colInfo}>
+              <Text style={[styles.userName, { color: themeColors.text}]} numberOfLines={1}>
                 {userData?.nombre || 'Usuario'}
               </Text>
-              <Text style={[GLOBAL_STYLES.cardStandardTitle, { marginBottom: 4 }]} numberOfLines={1}>
+              <Text style={[styles.userEmail, { color: themeColors.textSecondary, marginBottom: 4 }]} numberOfLines={1}>
                 {userData?.email || 'Sin correo'}
               </Text>
               
-              {/* 🛡️ ROL */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 {userData?.rol === 'admin' ? (
                   <>
@@ -212,20 +214,20 @@ export default function SettingsScreen({
             </View>
 
             {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
-            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+            <View style={[styles.colCuenta, { borderLeftColor: themeColors.border }]}>
               <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
                 ID: {cuentaId || '---'}
               </Text>
-              <Text style={{ fontSize: 20, marginBottom: 2 }}>
+              <Text style={styles.tierEmoji}>
                 {effectiveTier === 'premium' ? '💎' : '🪩'}
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: effectiveTier === 'premium' ? COLORS.turquesa : themeColors.textSecondary }}>
+              <Text style={[styles.tierLabel, { color: effectiveTier === 'premium' ? COLORS.turquesa : themeColors.textSecondary }]}>
                 {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
               </Text>
             </View>
           </TouchableOpacity>
 
-          {/* 💳 BOTÓN DE PAUSAR / ADMINISTRAR SUSCRIPCIÓN (Solo visible para Admin) */}
+          {/* BOTÓN DE PAUSAR / ADMINISTRAR SUSCRIPCIÓN */}
           {userData?.rol === 'admin' && (
             <View style={styles.subscriptionContainer}>
               <TouchableOpacity 
@@ -244,7 +246,7 @@ export default function SettingsScreen({
         </View>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 2. GESTIONAR USUARIOS (SOLO ADMINS) - USANDO CARD STANDARD */}
+        {/* 2. GESTIONAR USUARIOS (SOLO ADMINS) */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {userData?.rol === 'admin' && (
           <View style={styles.section}>
@@ -254,40 +256,38 @@ export default function SettingsScreen({
             </Text>
 
             <TouchableOpacity 
-              style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary }]} 
+              style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]} 
               onPress={() => onNavigate('miembros')}
               activeOpacity={0.7}
             >
               <View style={GLOBAL_STYLES.cardStandardContent}>
-                <FontAwesome6 name="user-plus" size={18} color={themeColors.textSecondary} style={GLOBAL_STYLES.cardStandardIcon} />
+                <FontAwesome6 name="person-add-outline" size={20} color={themeColors.text} style={{ marginRight: 14 }} />
                 <View style={GLOBAL_STYLES.cardStandardTextContainer}>
-                  <Text style={GLOBAL_STYLES.cardStandardTitle}>Invita o administra socios</Text>
+                  <Text style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary }]}>Invita o administra socios</Text>
                   <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>Gestionar Usuarios</Text>
                 </View>
               </View>
-              <Text style={GLOBAL_STYLES.cardStandardArrow}>→</Text>
+              <Text style={[GLOBAL_STYLES.cardStandardArrow, { color: themeColors.textSecondary }]}>→</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 3. PREFERENCIAS - USANDO CARD STANDARD */}
+        {/* 3. PREFERENCIAS */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-            <Ionicons name="settings" size={18} color="black" 
-            /> Preferencias
+            {/* 💡 3. ARREGLO DE ICONOS (Ahora apuntan al tema visual, no a 'black') */}
+            <Ionicons name="settings" size={18} color={themeColors.text} /> Preferencias
           </Text>
 
           {/* Dark Mode */}
-          <View style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary }]}>
+          <View style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
             <View style={GLOBAL_STYLES.cardStandardContent}>
-              <Text style={GLOBAL_STYLES.cardStandardIcon}>
-                <Ionicons name="moon-outline" size={18} color="black" /></Text>
+              <Ionicons name="moon-outline" size={22} color={themeColors.text} style={{ marginRight: 14 }} />
               <View style={GLOBAL_STYLES.cardStandardTextContainer}>
-                <Text style={GLOBAL_STYLES.cardStandardTitle}>Cambiar el tema visual</Text>
-                <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>
-                  Modo Oscuro</Text>
+                <Text style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary }]}>Cambiar el tema visual</Text>
+                <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>Modo Oscuro</Text>
               </View>
             </View>
             <Switch
@@ -300,67 +300,41 @@ export default function SettingsScreen({
 
           {/* Alertas */}
           <TouchableOpacity
-            style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary }]}
+            style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
             onPress={() => { effectiveTier === 'premium' ? onNavigate('alertas') : onNavigate('upgrade'); }}
             activeOpacity={0.7}
           >
             <View style={GLOBAL_STYLES.cardStandardContent}>
-              <Text style={GLOBAL_STYLES.cardStandardIcon}><Ionicons name="notifications-outline" size={18} color="black" /></Text>
+              <Ionicons name="notifications-outline" size={22} color={themeColors.text} style={{ marginRight: 14 }} />
               <View style={GLOBAL_STYLES.cardStandardTextContainer}>
-                <Text style={GLOBAL_STYLES.cardStandardTitle}>Configurar límites y avisos</Text>
+                <Text style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary }]}>Configurar límites y avisos</Text>
                 <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>Alertas de Inventario</Text>
               </View>
             </View>
-            <Text style={GLOBAL_STYLES.cardStandardArrow}>→</Text>
+            <Text style={[GLOBAL_STYLES.cardStandardArrow, { color: themeColors.textSecondary }]}>→</Text>
           </TouchableOpacity>
         </View>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 4. ESTADO DE FUNCIONALIDADES */}
+        {/* 4. INFORMACIÓN */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>📋 Funcionalidades</Text> */}
-
-          {/* EN DESARROLLO */}
-          {/* <View style={[styles.featureBox, styles.featureDeveloping, { backgroundColor: themeColors.bgSecondary, borderColor: '#E2E8F0' }]}>
-            <Text style={styles.featureGroupTitle}>🔨 En Desarrollo</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>🎨 Mejora de UX</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>🍏 Desarrollo para iOS</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>🇺🇸 Idiomas</Text>
-            <Text style={styles.featureProgreso}>30% completado - v2.6.0</Text>
-          </View> */}
-
-          {/* COMPLETADAS */}
-          {/* <View style={[styles.featureBox, styles.featureCompleted, { backgroundColor: themeColors.bgSecondary, borderColor: '#E2E8F0' }]}>
-            <Text style={styles.featureGroupTitle}>✅ Completadas</Text>
-            <Text style={styles.featureVersion}>Fase 1 a 4</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>✓ Dashboard, Inventario y Base de Datos RT</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>✓ Multiusuario y Tiers (Basic/Premium)</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>✓ Scanner Party y Ventas a Crédito</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>✓ Intercambios y Bono Influencer</Text>
-            <Text style={[styles.item, { color: themeColors.text }]}>✓ Reportes Analytics avanzados y CSV</Text>
-          </View>
-        </View> */}
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 5. INFORMACIÓN */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <View style={GLOBAL_STYLES.cardStandardTextContainer}>
-              <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-            <FontAwesome6 name="circle-info" size={18} color="black"
-            /> Información</Text>
-          <View style={[styles.featureBox, { backgroundColor: themeColors.bgSecondary, borderColor: '#E2E8F0' }]}>
-            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.1</Text>
-            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Compilada: 01/09/2026</Text>
-            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: Minimalist UI, Bug fixes, Offline mode.</Text>
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <FontAwesome6 name="circle-info" size={18} color={themeColors.text} /> Información
+          </Text>
+          <View style={[styles.featureBox, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
+            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.2</Text>
+            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Compilada: 07/09/2026</Text>
+            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: UI update, Bug fixes </Text>
           </View>
         </View>
 
         {/* CERRAR SESIÓN */}
         <View style={styles.section}>
           <TouchableOpacity style={GLOBAL_STYLES.btnDanger} onPress={cerrarSesion}>
-            <Text style={GLOBAL_STYLES.btnText}><Ionicons name="log-out" size={18} color="white" 
-            /> Cerrar Sesión</Text>
+            <Text style={GLOBAL_STYLES.btnText}>
+              <Ionicons name="log-out" size={18} color="white" /> Cerrar Sesión
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -405,8 +379,9 @@ export default function SettingsScreen({
                 {loadingGuardar ? (
                   <ActivityIndicator color={COLORS.blanco} />
                 ) : (
-                  <Text style={GLOBAL_STYLES.btnText}><Ionicons name="save-outline" size={18} color="white" 
-                  /> Guardar</Text>
+                  <Text style={GLOBAL_STYLES.btnText}>
+                    <Ionicons name="save-outline" size={18} color="white" /> Guardar
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -417,7 +392,7 @@ export default function SettingsScreen({
   );
 }
 
-// 📐 STYLESHEET ESTRUCTURAL (LIMPIADO Y MINIMALISTA)
+// 📐 STYLESHEET ESTRUCTURAL
 const styles = StyleSheet.create({
   content: {
     flex: 1,
@@ -432,7 +407,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* CARD 3 COLUMNAS (Perfil) - Adaptado al Minimalist Look */
+  /* CARD 3 COLUMNAS (Perfil) - Layout Original Restaurado */
   card3Col: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -440,7 +415,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    // Sombra sutil plana
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -475,14 +449,12 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     fontSize: FONT_SIZES.pequeño,
-    marginBottom: 6,
   },
   colCuenta: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingLeft: 12,
-    borderLeftWidth: 1,
-    borderLeftColor: '#E2E8F0', // Borde interior gris suave
+    borderLeftWidth: 1, // El color lo dictamos dinámicamente arriba en la vista
     minWidth: 70,
   },
   accountId: {
@@ -522,7 +494,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  /* FUNCIONALIDADES E INFORMACIÓN (Adaptado al Minimalist Look) */
+  /* FUNCIONALIDADES E INFORMACIÓN */
   featureBox: {
     borderRadius: 12,
     padding: 16,
@@ -533,37 +505,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 2,
     elevation: 1,
-  },
-  featureCompleted: {
-    borderLeftWidth: 4, // Borde izquierdo sutil indicador
-    borderLeftColor: '#4CAF50',
-  },
-  featureDeveloping: {
-    borderLeftWidth: 4, // Borde izquierdo sutil indicador
-    borderLeftColor: '#FF9800',
-  },
-  featureGroupTitle: {
-    fontSize: FONT_SIZES.normal,
-    fontWeight: '700',
-    color: '#64748B', // Gris profesional
-    marginBottom: 8,
-  },
-  item: {
-    fontSize: FONT_SIZES.pequeño,
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  featureVersion: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: '600',
-    color: '#4CAF50',
-    marginBottom: 8,
-  },
-  featureProgreso: {
-    fontSize: FONT_SIZES.pequeño,
-    fontWeight: '600',
-    color: '#FF9800',
-    marginTop: 6,
   },
   versionTitle: {
     fontSize: FONT_SIZES.normal,
