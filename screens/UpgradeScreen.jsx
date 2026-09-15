@@ -24,7 +24,7 @@ export default function UpgradeScreen({ onNavigate, themeColors }) {
     { feature: 'Existencias totales', basic: true, premier: true},
     { feature: 'Productos sin Stock', basic: true, premier: true},
     { feature: 'Usuarios adicionales', basic: true, premier: true},
-    { feature: 'Eventos de Escaner', basic: false, premier: true},
+    { feature: 'Eventos de Escaner', basic: true, premier: true},
     { feature: 'Modulo de Creditos', basic: false, premier: true},
     { feature: 'Modulo de intercambios', basic: false, premier: true},
     { feature: 'Analytics y control de ventas', basic: false, premier: true},
@@ -160,7 +160,7 @@ export default function UpgradeScreen({ onNavigate, themeColors }) {
           {/* Encabezado de la tabla */}
           <View style={[styles.tableHeader, { borderBottomColor: themeColors.border }]}>
             <Text style={[styles.colFeatureTitle, { color: themeColors.textSecondary }]}>Función</Text>
-            <Text style={[styles.colHeaderTitle, { color: themeColors.textSecondary }]}>Emprendedor</Text>
+            <Text style={[styles.colHeaderTitle, { color: themeColors.textSecondary }]}>Basic</Text>
             <Text style={styles.colHeaderTitlePremium}>Premium</Text>
           </View>
 
@@ -177,7 +177,7 @@ export default function UpgradeScreen({ onNavigate, themeColors }) {
                 {item.feature}
               </Text>
               
-              {/* Celda Básico/Emprendedor */}
+              {/* Celda Básico */}
               <View style={styles.cellBox}>
                 {item.basic ? (
                   <Ionicons name="checkmark-circle" size={18} color="#888888" />
@@ -204,7 +204,7 @@ export default function UpgradeScreen({ onNavigate, themeColors }) {
           onPress={() => onNavigate('home')}
         >
           <Text style={[styles.cancelText, { color: themeColors.textSecondary }]}>
-            Continuar con Plan Emprendedor sin cargo adicional
+            Continuar con Plan Basic sin cargo adicional
           </Text>
         </TouchableOpacity>
 

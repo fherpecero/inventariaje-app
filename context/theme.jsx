@@ -8,18 +8,41 @@ import { Ionicons } from '@expo/vector-icons';
 // PALETA DE COLORES GLOBAL
 // ============================================
 export const COLORS = {
-  turquesa: '#24c5c5',
+  turquesa: '#17C2C2',
   blanco: '#fff',
   negro: '#000',
   gris: '#f5f5f5',
-  verde: '#24c5c5',
+  verde: '#3CC69A',
   rojo: '#991B1B',
   naranja: '#E6672E',
   morado: '#7e2b8d',
   lila: '#a8ccff',
   rojito: '#991B1B',
   grey: '#565656',
-  rojoCredito: '#991B1B',
+};
+// ==========================================
+// 🎨 TEMAS DINÁMICOS CENTRALIZADOS
+// ==========================================
+export const lightTheme = {
+  bg: COLORS.gris || '#f5f5f5',
+  bgSecondary: COLORS.blanco || '#ffffff',
+  text: COLORS.negro || '#000000',
+  textSecondary: '#666666', // Considera agregar este gris a COLORS en el futuro
+  header: COLORS.blanco || '#ffffff',
+  border: '#e0e0e0',
+  input: COLORS.blanco || '#ffffff',
+  cardBg: COLORS.blanco || '#ffffff',
+};
+
+export const darkTheme = {
+  bg: '#1a1a1a',          // Fondo principal oscuro
+  bgSecondary: '#2d2d2d', // Fondo secundario (Tarjetas, modales)
+  text: '#ffffff',        // Texto principal claro
+  textSecondary: '#cccccc', // Texto secundario tenue
+  header: '#0d5f60',      // Turquesa oscuro para el header
+  border: '#444444',      // Bordes sutiles
+  input: '#333333',       // Cajas de texto
+  cardBg: '#2a2a2a',      // Fondo de componentes flotantes
 };
 
 // EXPO ICONS
@@ -90,19 +113,19 @@ export const GLOBAL_STYLES = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.blanco,
   },
-  cardBase: {
-    backgroundColor: COLORS.blanco,
-    borderRadius: 12,
-    padding: SPACING.content_padding,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.turquesa,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
+  // cardBase: {
+  //   backgroundColor: COLORS.blanco,
+  //   borderRadius: 12,
+  //   padding: SPACING.content_padding,
+  //   marginBottom: 12,
+  //   borderLeftWidth: 4,
+  //   borderLeftColor: COLORS.turquesa,
+  //   shadowColor: '#000',
+  //   shadowOffset: { width: 0, height: 2 },
+  //   shadowOpacity: 0.1,
+  //   shadowRadius: 3,
+  //   elevation: 3,
+  // },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -138,7 +161,7 @@ export const GLOBAL_STYLES = StyleSheet.create({
     justifyContent: 'center',
   },
   btnSuccess: {
-    backgroundColor: COLORS.verde,
+    backgroundColor: COLORS.turquesa,
     paddingVertical: 10,
     borderRadius: 30,
     alignItems: 'center',
@@ -189,8 +212,7 @@ export const GLOBAL_STYLES = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    backgroundColor: COLORS.blanco, // Fondo limpio por defecto
-    // Sombra ultra-ligera (casi plana) para dar un poco de cuerpo
+    backgroundColor: COLORS.blanco, 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,

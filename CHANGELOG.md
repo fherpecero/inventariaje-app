@@ -1,5 +1,14 @@
 # Changelog - Inventariaje App
 
+##### [2.5.3] - 2026-09-14
+**🚀 Core Refactor: Single Source of Truth & Analytics Optimization**
+
+**🔧 Arquitectura y Cambios Técnicos**
+* **Centralización SST (Single Source of Truth):** El "Cerebro Matemático" de la aplicación fue extraído por completo de la interfaz gráfica. Todos los cálculos financieros de KPIs (Ganancias, Flujo de Efectivo, Gastos y Rankings) ahora viven de forma exclusiva en `businessRules.js`.
+* **Desacoplamiento UI / Lógica:** `AnalyticsScreen` fue refactorizada para actuar puramente como capa de presentación. Ahora solo consume la regla central para dibujar las tarjetas y gráficas, manteniendo la métrica de latencia visual de 0ms sin ahogar la memoria del dispositivo.
+* **Mantenibilidad Global:** Las reglas operativas como la RN-09 (Cálculo de Ganancia) y la RN-03 (Trazabilidad Inmutable del Costo) ahora se controlan desde un solo punto. Un cambio en la lógica de bonos o cortesías se propagará automáticamente a todas las pantallas de reportes.
+* **Preparación para Auditoría:** Estructura preparada para la inyección de Puntos de Control (Logs) que permitirán rastrear con exactitud milimétrica la latencia de las consultas a Firebase.
+
 ##### [2.5.2] - 2026-09-07
 **🚀 Hotfix: UI Polish, Checkout Optimization & Play Store Prep**
 

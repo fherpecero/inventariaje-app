@@ -214,7 +214,7 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
           {/* HEADER */}
           <View style={styles.header}>
             <Text style={styles.title}>
-              {eventoEdicion ? '✏️ Editar Evento' : '💻 Crear Evento de Escáner'}
+              {eventoEdicion ? 'Editar Evento' : 'Crear Evento de Escáner'}
             </Text>
             <TouchableOpacity onPress={handleClose}>
               <Text style={styles.closeBtn}>✕</Text>
@@ -340,7 +340,7 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
             </View>
 
             <View style={styles.totalRowFinal}>
-                <Text style={{ color: COLORS.rojo, fontWeight: 'bold', textAlign: 'center' }}>AVISO: Las ventas registradas durante el evento se vincularán automáticamente a los reportes de Analytics.</Text>
+                <Text style={{ color: COLORS.grey, fontWeight: 'bold', textAlign: 'center' }}>AVISO: Las ventas registradas durante el evento se vincularán automáticamente a los reportes de Analytics.</Text>
               </View>
 
             {/* ESPACIADOR */}
@@ -366,7 +366,7 @@ const ModalRegistroEscaner = ({ visible, onClose, onSuccess, cuentaId, eventoEdi
                 <ActivityIndicator color={COLORS.blanco} />
               ) : (
                 <Text style={styles.acceptBtnText}>
-                  {eventoEdicion ? '✏️ Actualizar' : 'Crear Evento'}
+                  {eventoEdicion ? 'Actualizar' : 'Crear Evento'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -424,6 +424,8 @@ const styles = StyleSheet.create({
   },
   formGroupHalf: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   label: {
     fontSize: 14,
@@ -484,8 +486,6 @@ const styles = StyleSheet.create({
   },
   totalBox: {
     backgroundColor: '#fff3e0',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.naranja,
     borderRadius: 8,
     padding: 14,
     marginVertical: 16,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    backgroundColor: COLORS.rojito,
+    backgroundColor: COLORS.grey,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   acceptBtn: {
     flex: 1,
     paddingVertical: 14,
-    backgroundColor: COLORS.verde,
+    backgroundColor: COLORS.turquesa,
     borderRadius: 8,
     alignItems: 'center',
   },

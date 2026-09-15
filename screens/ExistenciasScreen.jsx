@@ -11,19 +11,16 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-  SafeAreaView,
 } from 'react-native';
 import { imagenes } from '../productosData';
-import { collection, getDocs, doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; // onSnapshot eliminado
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
+// ✅ NUEVO: Importación del Motor Central
+import { InventarioContext } from '../context/InventarioContext'; 
 import SearchBar from '../components/SearchBar';
-import { LinearGradient } from 'expo-linear-gradient';
-import { getProductosActivos } from '../context/productCatalog';
-
-
-// ✅ 1. Importamos la Fuente de la Verdad y los componentes globales
-import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER } from '../context/theme';
+import { Ionicons, FontAwesome6, FontAwesome } from '@expo/vector-icons';
+import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 
 export default function ExistenciasScreen({ 
     onNavigate, 
@@ -36,9 +33,11 @@ export default function ExistenciasScreen({
   // 1. ESTADOS Y CONTEXTO
   // =====================================================================
   const { user, cuenta, cuentaId } = useContext(AuthContext);
-  const [productos, setProductos] = useState([]);
+  // 🔌 CONEXIÓN AL CEREBRO GLOBAL
+  const { inventarioGlobal, loadingInventario } = useContext(InventarioContext);
+  
   const [productosFiltrados, setProductosFiltrados] = useState([]); // Salida de la barra de búsqueda
-  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // Estado exclusivo para notas
   
   const [modalNotasVisible, setModalNotasVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -46,7 +45,7 @@ export default function ExistenciasScreen({
   const [isOwner, setIsOwner] = useState(false);
 
   // Estados de Filtros y Ordenamiento
-  const [ordenamiento, setOrdenamiento] = useState('nombre'); // 'nombre', 'cantidad-asc', 'cantidad-desc'
+  const [ordenamiento, setOrdenamiento] = useState('nombre'); 
   const [filtroDescuentos, setFiltroDescuentos] = useState(false);
 
   const isMountedRef = useRef(true);
@@ -66,6 +65,11 @@ export default function ExistenciasScreen({
     }
   }, [user, cuenta]);
 
+  // Sincronizar los datos del Contexto con el estado local del buscador
+  useEffect(() => {
+    setProductosFiltrados(inventarioGlobal);
+  }, [inventarioGlobal]);
+
   // =====================================================================
   // 3. FUNCIONES DE LÓGICA Y DATOS
   // =====================================================================
@@ -76,82 +80,28 @@ export default function ExistenciasScreen({
       
       if (cuentaSnap.exists()) {
         const esOwner = cuentaSnap.data().propietarioUid === user.uid;
-        setIsOwner(esOwner);
+        if (isMountedRef.current) setIsOwner(esOwner);
       }
     } catch (error) {
       console.error('❌ Error verificando propietario:', error);
     }
   };
 
-  // ==========================================
-  // 🚀 CARGA LOCAL-FIRST (Tiempo real + Offline + 0ms Latencia)
-  // ==========================================
-  useEffect(() => {
-    // Si no hay cuenta, no hacemos nada
-    if (!user || !cuenta || !cuentaId) return;
-
-    if (isMountedRef.current) setLoading(true);
-
-    const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-
-    // 📡 onSnapshot lee el disco duro del celular AL INSTANTE. 
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      const productosData = docSnap.data()?.productos || {};
-      
-      // 🧠 Cruzamos cantidades de Firebase con Nombres/Fotos de tu RAM local
-      const catalogoLocal = getProductosActivos(); 
-      
-      // 🔥 FIX CRÍTICO: Convertimos el mapa a Array para leer el interior de los objetos antiguos
-      const firebaseArray = Object.values(productosData);
-
-      const productosCombinados = catalogoLocal.map((catalogo) => {
-        let datosFirebase = productosData[catalogo.nombre];
-        if (!datosFirebase) {
-          datosFirebase = firebaseArray.find(item => item.nombre === catalogo.nombre);
-        }
-        datosFirebase = datosFirebase || { cantidad: 0, limiteStock: 0, notas: '', piezasConDescuento: 0 };
-
-        return {
-          id: catalogo.id, 
-          nombre: catalogo.nombre,
-          limiteStock: parseInt(datosFirebase.limiteStock) || 0,
-          cantidad: parseInt(datosFirebase.cantidad) || 0,
-          notas: datosFirebase.notas || '',
-          piezasConDescuento: parseInt(datosFirebase.piezasConDescuento) || 0,
-          precioCosto: catalogo.precioCostoStandard || 0,
-          precioVenta: catalogo.precioVentaStandard || 0,
-          imagen: catalogo.imagen || null
-        };
-      });
-
-      if (isMountedRef.current) {
-        setProductos(productosCombinados);
-        setProductosFiltrados(productosCombinados);
-        setLoading(false);
-      }
-    }, (error) => {
-      console.log('✈️ Silenciador Offline / Permisos:', error.message);
-      if (isMountedRef.current) setLoading(false);
-    });
-
-    // 🧹 Limpiamos el túnel al cambiar de pantalla para ahorrar batería y evitar errores
-    return () => unsubscribe();
-  }, [user, cuenta, cuentaId]);
-
-  // ✅ SOLUCIÓN DE RE-ORDENAMIENTO EN CASCADA
-  // Tomamos los resultados del SearchBar y AHORA aplicamos los filtros/orden
+  // ✅ FILTRADO Y ORDENAMIENTO (Usando la propiedad stockTotal pre-calculada)
   const listaFinalRenderizada = useMemo(() => {
-    let resultado = [...productosFiltrados]; // Inicia con lo que coincida en el texto de búsqueda
+    let resultado = [...productosFiltrados];
 
     // 1. Filtro Sin Stock
     if (modoSoloSinStock) {
-      resultado = resultado.filter(p => p.cantidad <= 0);
+      resultado = resultado.filter(p => p.stockTotal <= 0);
     }
 
-    // 2. Filtro Bajo Stock (La nueva respuesta)
+    // 2. Filtro Bajo Stock
     if (modoBajoStock) {
       resultado = resultado.filter(p => 
-        p.limiteStock > 0 && p.cantidad > 0 && p.cantidad <= p.limiteStock
+        p.limiteStock > 0 && 
+        p.stockTotal > 0 && 
+        p.stockTotal <= p.limiteStock
       );
     }
 
@@ -164,15 +114,14 @@ export default function ExistenciasScreen({
     if (ordenamiento === 'nombre') {
       resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     } else if (ordenamiento === 'cantidad-asc') {
-      resultado.sort((a, b) => a.cantidad - b.cantidad);
+      resultado.sort((a, b) => a.stockTotal - b.stockTotal);
     } else if (ordenamiento === 'cantidad-desc') {
-      resultado.sort((a, b) => b.cantidad - a.cantidad);
+      resultado.sort((a, b) => b.stockTotal - a.stockTotal);
     }
 
     return resultado;
-  }, [productosFiltrados, modoSoloSinStock, filtroDescuentos, ordenamiento]);
+  }, [productosFiltrados, modoSoloSinStock, modoBajoStock, filtroDescuentos, ordenamiento]);
 
-  // Alternador de botón de Stock
   const handleToggleStock = () => {
     if (ordenamiento === 'cantidad-desc') {
       setOrdenamiento('cantidad-asc');
@@ -203,97 +152,115 @@ export default function ExistenciasScreen({
   const guardarNotas = async () => {
     if (!selectedProduct) return;
 
-    try {
-      setLoading(true);
+    const claveUnica = selectedProduct.codigo;
 
+    if (!claveUnica) {
+      Alert.alert('Error Estructural', 'Este producto no tiene un código asignado.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
 
       await updateDoc(inventarioRef, {
-        [`productos.${selectedProduct.id}.notas`]: notasEdicion,
-        [`productos.${selectedProduct.id}.updatedAt`]: new Date().toISOString(),
+        [`productos.${claveUnica}.notas`]: notasEdicion,
+        [`productos.${claveUnica}.updatedAt`]: new Date().toISOString(),
       });
 
       Alert.alert('✅ Guardado', 'Las notas se actualizaron correctamente', [
-        {
-          text: 'OK',
-          onPress: () => {
-            closeModalNotas();
-          },
-        },
+        { text: 'OK', onPress: () => closeModalNotas() },
       ]);
     } catch (error) {
       console.error('❌ Error guardando notas:', error);
       Alert.alert('Error', 'No se pudieron guardar las notas');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setIsSaving(false);
     }
   };
 
   // =====================================================================
   // 5. RENDERIZADO DE PRODUCTO
   // =====================================================================
-    const renderProducto = ({ item }) => {
-    // 🧠 Buscamos el código primero en 'codigo' y si no está, usamos 'id'
-    const codigoReal = item.codigo || item.id; 
-    const imagen = imagenes[codigoReal] || null;
-    
-
+  const renderProducto = ({ item }) => {
+    const imagen = imagenes[item.codigo] || null;
+    const tieneNota = item.notas && item.notas.trim() !== '';
 
     return (
       <TouchableOpacity
-        style={[styles.productoCard, { backgroundColor: themeColors.bgSecondary }]}
+        style={[
+          GLOBAL_STYLES.cardStandard, 
+          { 
+            backgroundColor: themeColors.bgSecondary,
+            borderColor: themeColors.border || '#E2E8F0'
+          }
+        ]}
         onPress={() => openModalNotas(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.imagenContainer}>
-          {imagen ? (
-            <Image source={imagen} style={styles.imagen} />
-          ) : (
-            <View style={styles.imagenPlaceholder}>
-              <Text style={styles.imagenPlaceholderText}>📦</Text>
-            </View>
-          )}
-        </View>
+        <View style={[GLOBAL_STYLES.cardStandardContent, { gap: 12 }]}>
+          <View style={styles.imagenContainer}>
+            {imagen ? (
+              <Image source={imagen} style={styles.imagen} />
+            ) : (
+              <View style={styles.imagenPlaceholder}>
+                <FontAwesome6 name="box" size={24} color={themeColors.textSecondary} />
+              </View>
+            )}
+          </View>
 
-        <View style={styles.info}>
-          <Text style={[styles.nombre, { color: themeColors.text }]} numberOfLines={2}>
-            {item.nombre}
-          </Text>
-
-          <View style={styles.detalles}>
-            <Text style={[styles.codigo, { color: themeColors.textSecondary, flex: 1 }]} numberOfLines={1}>
-              {item.notas ? `📝 ${item.notas}` : ''}
+          <View style={GLOBAL_STYLES.cardStandardTextContainer}>
+            <Text 
+              style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]} 
+              numberOfLines={2}
+            >
+              {item.nombre}
             </Text>
-          </View>          
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              {tieneNota ? (
+                <FontAwesome name="sticky-note" size={14} color={themeColors.textSecondary} />
+              ) : (
+                <FontAwesome6 name="sticky-note" size={14} color={themeColors.textSecondary} />
+              )}
+              <Text 
+                style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary, marginBottom: 0 }]} 
+                numberOfLines={1}
+              >
+                {tieneNota ? item.notas : ''}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* 👁️ VISIBILIDAD INTELIGENTE DE STOCK */}
-            <View style={{alignItems: 'center'}}>
-              <Text style={styles.cantidad}>
-                {filtroDescuentos ? `${item.piezasConDescuento} pz ⭐` : `${item.cantidad} pz`}
-              </Text>
-              
-              {/* Si no está filtrado, mostramos una pequeña pista debajo de que hay piezas con bono */}
-              {!filtroDescuentos && item.piezasConDescuento > 0 && (
-                <Text style={{ fontSize: 10, color: COLORS.morado, fontWeight: 'bold' }}>
-                  ({item.piezasConDescuento} con bono)
-                </Text>
-              )}
-            </View>
+        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>
+              {filtroDescuentos ? `${item.piezasConDescuento}` : `${item.cantidad}`}
+            </Text>
+            <Text style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary, marginBottom: 0 }]}>pz</Text>
+            
+            {filtroDescuentos && (
+              <Ionicons name="star" size={12} color='gold' />
+            )}
+          </View>
+          
+          {!filtroDescuentos && item.piezasConDescuento > 0 && (
+            <Text style={{ fontSize: 10, color: COLORS.morado, fontWeight: 'bold', marginTop: 2 }}>
+              ({item.piezasConDescuento} bono)
+            </Text>
+          )}
 
-        <View style={styles.accionesDerecha}>
-          <Text style={[styles.precioTexto, { color: themeColors.textSecondary }]}>
+          <Text style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary, marginTop: 4, marginBottom: 0 }]}>
             ${item.precioVenta}
           </Text>
-          <TouchableOpacity style={styles.notasBtn} onPress={() => openModalNotas(item)}>
-            <Text style={styles.notasBtnText}>📝</Text>
-          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
   };
 
-  if (loading && productos.length === 0) {
+  // 🔥 Pantalla de carga utiliza el booleano del contexto
+  if (loadingInventario && productosFiltrados.length === 0) {
     return (
       <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
         <View style={GLOBAL_STYLES.loaderContainer}>
@@ -316,9 +283,8 @@ export default function ExistenciasScreen({
         themeColors={themeColors} 
       />
 
-      {/* Buscador: Filtra el catálogo crudo */}
       <SearchBar 
-        data={productos} 
+        data={inventarioGlobal} 
         onSearch={setProductosFiltrados}
         searchKeys={['nombre', 'codigo']}
       />
@@ -348,17 +314,16 @@ export default function ExistenciasScreen({
             onPress={() => setFiltroDescuentos(!filtroDescuentos)}
           >
             <Text style={[styles.filtroBtnText, filtroDescuentos && styles.filtroBtnTextActive]}>
-              ⭐ Descuentos
+              <Ionicons name="star" size={12} color='gold' /> Descuentos
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* FlatList renderiza la lista re-ordenada y filtrada */}
       <FlatList
         data={listaFinalRenderizada}
         renderItem={renderProducto}
-        keyExtractor={(item, index) => item.id ? item.id.toString() : (item.codigo ? item.codigo.toString() : index.toString())}
+        keyExtractor={(item, index) => item.codigo ? item.codigo.toString() : index.toString()}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -370,7 +335,6 @@ export default function ExistenciasScreen({
         }
       />
 
-      {/* Modal de Notas */}
       <Modal visible={modalNotasVisible} transparent={true} animationType="fade" onRequestClose={closeModalNotas}>
         <Pressable style={GLOBAL_STYLES.modalOverlay} onPress={closeModalNotas}>
           <Pressable style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bgSecondary }]} onPress={(e) => e.stopPropagation()}>
@@ -389,21 +353,16 @@ export default function ExistenciasScreen({
                   <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>
                     Cantidad: {selectedProduct.cantidad} unid.
                   </Text>
-                  <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.textSecondary }]}>
-                    Código: {selectedProduct.codigo}
-                  </Text>
                 </View>
 
                 <View style={styles.notasInputContainer}>
-                  
-                  {/* ✅ Fila de Encabezado: Título y Botón de Eliminar Notas */}
                   <View style={styles.notasHeaderRow}>
                     <Text style={[GLOBAL_STYLES.modalLabel, styles.notasLabelAdjust, { color: themeColors.text }]}>
-                      📝 Notas
+                      <FontAwesome name="sticky-note" size={12} color={themeColors.textSecondary} /> Notas
                     </Text>
                     {notasEdicion.length > 0 && (
                       <TouchableOpacity onPress={limpiarNotas} style={styles.btnLimpiarNotas}>
-                        <Text style={styles.btnLimpiarNotasText}>🗑️ Limpiar</Text>
+                        <Text style={styles.btnLimpiarNotasText}><FontAwesome6 name="trash-can" size={12} color={themeColors.textSecondary} /> Limpiar</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -428,9 +387,9 @@ export default function ExistenciasScreen({
                     <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} onPress={guardarNotas} disabled={loading}>
+                  <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, isSaving && GLOBAL_STYLES.disabledBtn]} onPress={guardarNotas} disabled={isSaving}>
                     <Text style={GLOBAL_STYLES.btnText}>
-                      {loading ? '⏳' : '💾 Guardar'}
+                      {isSaving ? '⏳' : 'Guardar'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -447,70 +406,46 @@ export default function ExistenciasScreen({
 // 7. HOJA DE ESTILOS PURIFICADA
 // =====================================================================
 const styles = StyleSheet.create({
-  // HEADER
-  headerFlex: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between',
-  },
-  headerBtnWrapper: {
-    width: 40,
-  },
-  headerIconText: {
-    fontSize: 24,
-  },
-  headerTitleText: {
-    flex: 1, 
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40,
-  },
-
-  // FILTROS
   filtrosContainer: {
     flexDirection: 'row',
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingTop: 4, 
+    paddingBottom: 4,
     gap: 8,
   },
   filtroBtn: {
     paddingHorizontal: 12,
+    backgroundColor: COLORS.blanco,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.morado,
     justifyContent: 'center',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   filtroBtnActive: {
     backgroundColor: COLORS.morado,
+    borderColor: COLORS.blanco,
   },
   filtroBtnDescuentoActive: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#C084FC',
+    backgroundColor: COLORS.morado,
+    borderColor: COLORS.blanco,
   },
   filtroBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.morado,
+    color: COLORS.negro,
   },
   filtroBtnTextActive: {
     color: COLORS.blanco,
   },
-
-  // LISTA Y TARJETAS DE PRODUCTO
   listContent: {
     padding: 15,
     paddingBottom: 30,
-  },
-  productoCard: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.morado,
   },
   imagenContainer: {
     width: 60,
@@ -531,59 +466,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imagenPlaceholderText: {
-    fontSize: 28,
-  },
-  info: {
-    flex: 1,
-  },
-  nombre: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  detalles: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  codigo: {
-    fontSize: 11,
-    marginRight: 10,
-  },
-  cantidad: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.turquesa,
-    textAlign: 'center',
-    minWidth: 40,
-  },
-  
-  // ACCIONES DERECHA
-  accionesDerecha: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
-  precioTexto: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  notasBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.gris,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notasBtnText: {
-    fontSize: 16,
-  },
-  
-  // LAYOUT INTERNO DEL MODAL DE NOTAS
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

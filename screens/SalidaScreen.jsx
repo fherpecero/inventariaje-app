@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
+import { InventarioContext } from '../context/InventarioContext';
 import { calculateEffectiveTier } from '../utils/tierUtils';
 import { imagenes } from '../productosData';
 import DatePickerField from '../components/DatePickerField';
@@ -102,53 +103,19 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     }
   };
 
-  // ==========================================
-  // MOTOR LOCAL-FIRST
-  // ==========================================
+  // =====================================================================
+  // 2. CONSUMO DE INVENTARIO CENTRALIZADO (0ms Latencia)
+  // =====================================================================
+  const { inventarioGlobal, loadingInventario } = useContext(InventarioContext);
+
   useEffect(() => {
-    if (!user || !cuenta || !cuentaId) return;
-    if (isMountedRef.current) setLoadingProducts(true);
-
-    const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      const productosData = docSnap.data()?.productos || {};
-      const catalogoLocal = getProductosActivos();
-      const firebaseArray = Object.values(productosData);
-
-      const productosCombinados = catalogoLocal.map((catalogo) => {
-        let datosFirebase = productosData[catalogo.nombre];
-        
-        if (!datosFirebase) {
-          datosFirebase = firebaseArray.find(item => item.nombre === catalogo.nombre) || {};
-        }
-
-        return {
-          id: catalogo.nombre, 
-          nombre: catalogo.nombre,
-          codigo: catalogo.codigo, 
-          descripcion: catalogo.descripcion || '',
-          precioCosto: catalogo.precioCostoStandard || 0,
-          precioVenta: catalogo.precioVentaStandard || 0,
-          cantidad: parseInt(datosFirebase.cantidad) || 0,
-          categoria: catalogo.categoria || '',
-        };
-      });
-
-      productosCombinados.sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-      if (isMountedRef.current) {
-        setAllProducts(productosCombinados);
-        setProductosFiltrados(prev => prev.length === 0 ? productosCombinados : productosCombinados);
-        setLoadingProducts(false);
-      }
-    }, (error) => {
-      console.log('✈️ Silenciador Offline (Salidas):', error.message);
-      if (isMountedRef.current) setLoadingProducts(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, cuenta, cuentaId]);
+    // Cuando el inventario global se actualice, hidratamos las listas de esta pantalla
+    if (inventarioGlobal && inventarioGlobal.length > 0) {
+      setAllProducts(inventarioGlobal); // Usa 'setProductos' si así se llama en Entradas
+      setProductosFiltrados(inventarioGlobal);
+      setLoadingProducts(false); // Usa 'setLoading' si así se llama en Entradas
+    }
+  }, [inventarioGlobal]);
 
   // ==========================================
   // LOGICA DEL CARRITO Y MODALES
@@ -167,42 +134,57 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
     const cantidadNum = parseInt(cantidadModal);
 
-    if (cantidadNum > selectedProductModal.cantidad) {
-      Alert.alert('Error', `Stock insuficiente. Disponible: ${selectedProductModal.cantidad}`);
+    // 🛡️ ESCUDO HÍBRIDO: Previene el falso "0" leyendo la propiedad correcta según el contexto activo
+    const stockDisponible = selectedProductModal.stockTotal !== undefined 
+      ? selectedProductModal.stockTotal 
+      : selectedProductModal.cantidad;
+
+    if (cantidadNum > stockDisponible) {
+      Alert.alert('Error', `Stock insuficiente. Disponible: ${stockDisponible}`);
       return;
     }
 
-    const itemExistente = carrito.find((item) => item.id === selectedProductModal.id);
+    const itemExistente = carrito.find((item) => item.codigo === selectedProductModal.codigo);
 
     if (itemExistente) {
       const nuevaCantidad = itemExistente.cantidad + cantidadNum;
-      if (nuevaCantidad > selectedProductModal.cantidad) {
-        Alert.alert('Error', `Stock insuficiente. Disponible: ${selectedProductModal.cantidad}`);
+      if (nuevaCantidad > stockDisponible) {
+        Alert.alert('Error', `Stock insuficiente. Disponible: ${stockDisponible}`);
         return;
       }
-      setCarrito(carrito.map((item) => item.id === selectedProductModal.id ? { ...item, cantidad: nuevaCantidad } : item));
+      setCarrito(carrito.map((item) => item.codigo === selectedProductModal.codigo ? { ...item, cantidad: nuevaCantidad } : item));
     } else {
-      setCarrito([...carrito, { ...selectedProductModal, cantidad: cantidadNum, subtotal: selectedProductModal.precioVenta * cantidadNum }]);
+      // 🧊 RN-03: Congelamos el costo base para blindar el Analytics
+      setCarrito([...carrito, { 
+        ...selectedProductModal, 
+        cantidad: cantidadNum, 
+        subtotal: selectedProductModal.precioVenta * cantidadNum,
+        costoUnitarioCongelado: parseFloat(selectedProductModal.precioCostoStandard || 0)
+      }]);
     }
     setModalVisible(false);
     setSelectedProductModal(null);
     setCantidadModal('1');
   };
 
-  const eliminarDelCarrito = (id) => {
-    setCarrito(carrito.filter((item) => item.id !== id));
-  };
-
-  const actualizarCantidadCarrito = (id, nuevaCantidad) => {
+  const actualizarCantidadCarrito = (codigo, nuevaCantidad) => {
     if (nuevaCantidad <= 0) {
-      eliminarDelCarrito(id);
+      eliminarDelCarrito(codigo);
     } else {
-      const producto = allProducts.find((p) => p.id === id);
-      if (nuevaCantidad > producto.cantidad) {
-        Alert.alert('Error', `Stock insuficiente. Disponible: ${producto.cantidad}`);
+      // 🔍 Búsqueda resiliente en cualquier catálogo disponible
+      const producto = productosFiltrados.find((p) => p.codigo === codigo) 
+                    || allProducts?.find((p) => p.codigo === codigo) 
+                    || inventarioGlobal?.find((p) => p.codigo === codigo);
+      
+      if (!producto) return;
+
+      const stockDisponible = producto.stockTotal !== undefined ? producto.stockTotal : producto.cantidad;
+      
+      if (nuevaCantidad > stockDisponible) {
+        Alert.alert('Error', `Stock insuficiente. Disponible: ${stockDisponible}`);
         return;
       }
-      setCarrito(carrito.map((item) => item.id === id ? { ...item, cantidad: nuevaCantidad } : item));
+      setCarrito(carrito.map((item) => item.codigo === codigo ? { ...item, cantidad: nuevaCantidad } : item));
     }
   };
 
@@ -216,8 +198,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
   const calcularDiferenciaIntercambio = () => {
     if (carrito.length === 0 || !Array.isArray(productoRecibir) || productoRecibir.length === 0) return 0;
-    const totalDoy = carrito.reduce((sum, item) => sum + (item.precioVentaStandard * item.cantidad || item.precioVenta * item.cantidad || 0), 0);
-    const totalRecibo = productoRecibir.reduce((sum, prod) => sum + (prod?.precioVentaStandard || 0), 0);
+    
+    // 🧮 Parseo forzado a decimales para evitar concatenaciones
+    const totalDoy = carrito.reduce((sum, item) => sum + ((parseFloat(item.precioVentaStandard) || parseFloat(item.precioVenta) || 0) * item.cantidad), 0);
+    const totalRecibo = productoRecibir.reduce((sum, prod) => sum + (parseFloat(prod?.precioVentaStandard) || 0), 0);
+    
     return totalDoy - totalRecibo;
   };
 
@@ -428,22 +413,35 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       
       for (let i = 0; i < carrito.length; i++) {
         const item = carrito[i];
-        
-        const cantidadActual = productosActualizados[item.id]?.cantidad || 0;
-        const piezasConDescuentoActual = productosActualizados[item.id]?.piezasConDescuento || 0;
 
-        let nuevasPiezasConDescuento = piezasConDescuentoActual;
-        
+        // 1. Leemos ambos estantes directamente del documento
+        let cantidadRegular = productosActualizados[item.id]?.cantidad || 0;
+        let cantidadBono = productosActualizados[item.id]?.piezasConDescuento || 0;
+
+        // 2. Lógica de Deducción Inteligente
         if (esConsumoBono) {
-          nuevasPiezasConDescuento = Math.max(0, piezasConDescuentoActual - item.cantidad);
+          // Si activaste el Bono Influencer, cobramos del estante de descuentos
+          cantidadBono -= item.cantidad;
+          
+          // Si intentas vender más bonos de los que hay, el excedente se resta del regular
+          if (cantidadBono < 0) {
+            cantidadRegular += cantidadBono; // Sumamos el número negativo (resta)
+            cantidadBono = 0;
+          }
+        } else {
+          // Venta normal, cobramos del estante regular
+          cantidadRegular -= item.cantidad;
         }
 
+        // Prevención contra desfases negativos por errores humanos
+        if (cantidadRegular < 0) cantidadRegular = 0;
+
+        // 3. Escribimos la actualización separada
         productosActualizados[item.id] = {
           ...productosActualizados[item.id],
-          cantidad: cantidadActual - item.cantidad,
-          piezasConDescuento: nuevasPiezasConDescuento, 
-          codigo: item.codigo, 
-          consumoBono: esConsumoBono,
+          cantidad: cantidadRegular,
+          piezasConDescuento: cantidadBono,
+          codigo: item.codigo,
           updatedAt: timestampCompleto,
         };
       }
@@ -673,8 +671,9 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           GLOBAL_STYLES.cardStandard, 
           { 
             backgroundColor: themeColors.bgSecondary, 
-            borderColor: sinStock ? COLORS.rojo : themeColors.border, 
-            width: '30%', 
+            borderColor: sinStock ? COLORS.rojo : themeColors.border,
+            width: '48%',
+            justifyContent: 'space-between',
             flexDirection: 'column', 
             alignItems: 'center',
             padding: 10, 
@@ -769,8 +768,17 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       />
 
       {escanerActual && (
-        <View style={styles.escanerIndicador}>
-          <Text style={styles.escanerIndicadorText}>
+        <View style={[
+          styles.escanerIndicador, 
+          { 
+            backgroundColor: themeColors.cardBg, 
+            borderColor: themeColors.border      
+          }
+      ]}>
+          <Text style={[
+            styles.escanerIndicadorText,
+          { color: themeColors.text }
+      ]}>
             <Entypo name="pin" size={12} color="red" /> Evento: {escanerActual.evento} | Total: ${escanerActual.ventaTotal || 0}
           </Text>
         </View>
@@ -795,7 +803,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
             data={productosFiltrados}
             renderItem={renderProductoGrid}
             keyExtractor={(item, index) => `${item.codigo || item.id || 'prod'}-${index}`}
-            numColumns={3}
+            numColumns={2}
+            key={2}
             scrollEnabled={false}
             columnWrapperStyle={styles.gridRow}
           />
@@ -964,7 +973,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
             </View>
 
             {/* FILA EN 2 COLUMNAS: DESCUENTO + BONO INFLUENCER */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'top', marginBottom: 15 }}>
               
               {/* Columna 1: Descuento */}
                 <TextInput
@@ -1057,7 +1066,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
               <Text style={{ fontSize: 16, fontWeight: 'bold', color: themeColors.text }}>TOTAL:</Text>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.naranja }}>${totales.total.toFixed(2)}</Text>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: themeColors.text }}>${totales.total.toFixed(2)}</Text>
             </View>
           </View>
         )}
@@ -1286,23 +1295,23 @@ const styles = StyleSheet.create({
     fontSize: 32, 
   },
   productoNombre: { 
-    fontSize: 12, 
+    fontSize: 12,
     fontWeight: '600', 
     textAlign: 'center', 
     marginBottom: 3, 
   },
   productoPrecio: { 
-    fontSize: 13, 
+    fontSize: 13,
     fontWeight: 'bold', 
     color: COLORS.turquesa, 
     marginBottom: 4, 
   },
   stock: { 
-    fontSize: 10, 
+    fontSize: 10,
     color: '#666', 
   },
   sinStock: { 
-    fontSize: 10, 
+    fontSize: 10,
     color: COLORS.rojo, 
     fontWeight: 'bold', 
   },
@@ -1513,15 +1522,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.blanco, 
   },
   bannerIntercambio: { 
-    backgroundColor: COLORS.morado, 
+    backgroundColor: COLORS.turquesa,
     paddingVertical: 10, 
     paddingHorizontal: 15, 
     alignItems: 'center', 
   },
   bannerIntercambioText: { 
     fontSize: 14, 
-    fontWeight: 'bold', 
-    color: COLORS.blanco, 
+    fontWeight: 'bold',
+    color: COLORS.grey,
+    fontStyle: 'italic',
+    letterSpacing: 1,
   },
   diferenciaPreciosCard: { 
     backgroundColor: COLORS.blanco, 
@@ -1733,4 +1744,84 @@ const styles = StyleSheet.create({
     right: 3, 
     borderRadius: 15, 
   },
+  // YEMINA ME DIJO QUE CAMBIARA LOS ESTILOS DE LOS INTERCAMBIOS 
+  // PERO NO QUISE HACERLO ASI QUE LOS DEJO AQUI POR SI ACASO SE 
+  // NECESITA MAS DELANTE
+  // ==========================================
+  // ESTILOS: TARJETA DE INTERCAMBIO
+  // ==========================================
+  // diferenciaPreciosCard: { 
+  //   backgroundColor: '#fafafa', 
+  //   borderRadius: 10, 
+  //   padding: 15, 
+  //   marginBottom: 20, 
+  //   borderLeftWidth: 4, 
+  //   borderLeftColor: COLORS.turquesa 
+  // },
+  // diferenciaTitulo: { 
+  //   fontSize: 14, 
+  //   fontWeight: 'bold', 
+  //   color: COLORS.negro, 
+  //   marginBottom: 12, 
+  //   textAlign: 'center' 
+  // },
+  // diferenciaCuerpo: { 
+  //   flexDirection: 'row', 
+  //   justifyContent: 'space-between', 
+  //   alignItems: 'flex-start', 
+  //   gap: 10, 
+  //   marginBottom: 12 
+  // },
+  // diferenciasColumna: { 
+  //   flex: 1, 
+  //   paddingHorizontal: 8, 
+  //   paddingVertical: 8, 
+  //   backgroundColor: COLORS.blanco, 
+  //   borderRadius: 6, 
+  //   borderWidth: 1, 
+  //   borderColor: '#e0e0e0' 
+  // },
+  // diferenciaLabel: { 
+  //   fontSize: 11, 
+  //   fontWeight: 'bold', 
+  //   color: COLORS.turquesa, 
+  //   marginBottom: 8, 
+  //   textAlign: 'center' 
+  // },
+  // diferenciaProductoRow: { 
+  //   flexDirection: 'row', 
+  //   justifyContent: 'space-between', 
+  //   alignItems: 'center', 
+  //   paddingVertical: 6, 
+  //   borderBottomWidth: 1, 
+  //   borderBottomColor: '#f0f0f0' 
+  // },
+  // diferenciaProductoNombre: { 
+  //   fontSize: 11, 
+  //   fontWeight: '500', 
+  //   color: COLORS.negro, 
+  //   flex: 1 
+  // },
+  // diferenciaProductoPrecio: { 
+  //   fontSize: 11, 
+  //   fontWeight: 'bold', 
+  //   color: COLORS.turquesa, 
+  //   marginLeft: 4, 
+  //   minWidth: 50, 
+  //   textAlign: 'right' 
+  // },
+  // diferenciaTotalRow: { 
+  //   flexDirection: 'row', 
+  //   justifyContent: 'space-between', 
+  //   alignItems: 'center', 
+  //   marginTop: 8, 
+  //   paddingTop: 8, 
+  //   borderTopWidth: 1, 
+  //   borderTopColor: COLORS.turquesa 
+  // },
+  // diferenciaTotalValue: { 
+  //   fontSize: 12, 
+  //   fontWeight: 'bold', 
+  //   color: COLORS.naranja 
+  // },
 });

@@ -11,14 +11,14 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar'; // 👈 Importamos el control de la barra de estado
+import { StatusBar } from 'expo-status-bar'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { AuthContext } from '../context/AuthContext';
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES } from '../context/theme';
 import { calculateEffectiveTier } from '../utils/tierUtils';
-import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
+import { Ionicons, FontAwesome6, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function SettingsScreen({
   onNavigate,
@@ -214,15 +214,38 @@ export default function SettingsScreen({
             </View>
 
             {/* COLUMNA 3: DETALLES DE CUENTA Y TIER */}
-            <View style={[styles.colCuenta, { borderLeftColor: themeColors.border }]}>
+            <View style={styles.colCuenta}>
               <Text style={[styles.accountId, { color: themeColors.textSecondary }]}>
                 ID: {cuentaId || '---'}
               </Text>
+              
+              {/* 👑 ICONO DEL TIER */}
               <Text style={styles.tierEmoji}>
-                {effectiveTier === 'premium' ? '💎' : '🪩'}
+                {effectiveTier === 'special_k' ? (
+                  <MaterialCommunityIcons name="shield-crown-outline" size={24} color={COLORS.morado} />
+                ) : effectiveTier === 'premium' ? (
+                  '💎'
+                ) : (
+                  '🪩'
+                )}
               </Text>
-              <Text style={[styles.tierLabel, { color: effectiveTier === 'premium' ? COLORS.turquesa : themeColors.textSecondary }]}>
-                {effectiveTier === 'premium' ? 'PREMIUM' : 'BASIC'}
+
+              {/* 🏷️ ETIQUETA DEL TIER */}
+              <Text style={[
+                styles.tierLabel, 
+                { 
+                  color: effectiveTier === 'special_k' 
+                    ? COLORS.morado 
+                    : effectiveTier === 'premium' 
+                      ? COLORS.turquesa 
+                      : themeColors.textSecondary 
+                }
+              ]}>
+                {effectiveTier === 'special_k' 
+                  ? 'MASTER' 
+                  : effectiveTier === 'premium' 
+                    ? 'PREMIUM' 
+                    : 'BASIC'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -261,7 +284,7 @@ export default function SettingsScreen({
               activeOpacity={0.7}
             >
               <View style={GLOBAL_STYLES.cardStandardContent}>
-                <FontAwesome6 name="person-add-outline" size={20} color={themeColors.text} style={{ marginRight: 14 }} />
+                <Ionicons name="person-add-outline" size={20} color={themeColors.text} style={{ marginRight: 14 }} />
                 <View style={GLOBAL_STYLES.cardStandardTextContainer}>
                   <Text style={[GLOBAL_STYLES.cardStandardTitle, { color: themeColors.textSecondary }]}>Invita o administra socios</Text>
                   <Text style={[GLOBAL_STYLES.cardStandardValue, { color: themeColors.text, fontSize: 16 }]}>Gestionar Usuarios</Text>
@@ -282,7 +305,7 @@ export default function SettingsScreen({
           </Text>
 
           {/* Dark Mode */}
-          <View style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
+          {/* <View style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
             <View style={GLOBAL_STYLES.cardStandardContent}>
               <Ionicons name="moon-outline" size={22} color={themeColors.text} style={{ marginRight: 14 }} />
               <View style={GLOBAL_STYLES.cardStandardTextContainer}>
@@ -296,7 +319,7 @@ export default function SettingsScreen({
               trackColor={{ false: '#ddd', true: COLORS.turquesa }}
               thumbColor={darkMode ? COLORS.turquesa : '#f4f3f4'}
             />
-          </View>
+          </View> */}
 
           {/* Alertas */}
           <TouchableOpacity
@@ -323,9 +346,9 @@ export default function SettingsScreen({
             <FontAwesome6 name="circle-info" size={18} color={themeColors.text} /> Información
           </Text>
           <View style={[styles.featureBox, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
-            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.2</Text>
+            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.3</Text>
             <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Compilada: 07/09/2026</Text>
-            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: UI update, Bug fixes </Text>
+            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: Centralizacion de calculso para analytics |RN optimizadas y aplicadas |Bug Fix </Text>
           </View>
         </View>
 

@@ -17,6 +17,7 @@ import { imagenes } from '../productosData';
 import { collection, doc, writeBatch, onSnapshot, increment } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
+import { InventarioContext } from '../context/InventarioContext';
 import Toast from '../components/Toast';
 import SearchBar from '../components/SearchBar';
 import { Ionicons, AwesomeFont6 } from '@expo/vector-icons';
@@ -29,9 +30,10 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   // 1. ESTADOS Y CONTEXTO
   // =====================================================================
   const { user, userData, cuenta, cuentaId } = useContext(AuthContext);
-  const [productos, setProductos] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const [productosFiltrados, setProductosFiltrados] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loading, setLoading] = useState(false); 
   
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -54,68 +56,23 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   }, []);
 
   // =====================================================================
-  // 2. MOTOR LOCAL-FIRST (CON DEEP MATCHING PARA DATOS ANTIGUOS)
+  // 2. CONSUMO DE INVENTARIO CENTRALIZADO 
   // =====================================================================
+  const { inventarioGlobal, loadingInventario } = useContext(InventarioContext);
+
   useEffect(() => {
-    if (!user || !cuenta || !cuentaId) return;
-    if (isMountedRef.current) setLoading(true);
-
-    const docRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      const productosData = docSnap.data()?.productos || {};
-      const catalogoLocal = getProductosActivos(); 
-      const firebaseArray = Object.values(productosData);
-
-      const productosCombinados = catalogoLocal.map((catalogo) => {
-        // 🧠 1. Búsqueda rápida: Intentamos por NOMBRE (Como en Salidas y Alertas)
-        let datosFirebase = productosData[catalogo.nombre];
-        
-        // 2. Búsqueda Profunda: Fallback de seguridad
-        if (!datosFirebase) {
-          datosFirebase = firebaseArray.find(item => item.nombre === catalogo.nombre) || {};
-        }
-
-        // 3. Fallback final si de verdad no existe en Firebase
-        datosFirebase = datosFirebase || { cantidad: 0, piezasConDescuento: 0, notas: '' };
-
-        return {
-          id: catalogo.nombre,
-          nombre: catalogo.nombre,
-          codigo: catalogo.codigo,
-          descripcion: catalogo.descripcion || '',
-          precioCosto: catalogo.precioCostoStandard || 0,
-          precioVenta: catalogo.precioVentaStandard || 0,
-          cantidad: parseInt(datosFirebase.cantidad) || 0,
-          piezasConDescuento: parseInt(datosFirebase.piezasConDescuento) || 0,
-          notas: datosFirebase.notas || '',
-          categoria: catalogo.categoria || '',
-          bonoInfluencer: false,
-          timestamp: new Date()
-        };
-      });
-
-      // Forzamos el ordenamiento alfabético
-      productosCombinados.sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-      if (isMountedRef.current) {
-        setProductos(productosCombinados);
-        setProductosFiltrados(prev => prev.length === 0 ? productosCombinados : prev); 
-        setLoading(false);
-      }
-    }, (error) => {
-      console.log('✈️ Silenciador Offline:', error.message);
-      if (isMountedRef.current) setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, cuenta, cuentaId]);
+    if (inventarioGlobal && inventarioGlobal.length > 0) {
+      setAllProducts(inventarioGlobal); 
+      setProductosFiltrados(inventarioGlobal);
+      setLoadingProducts(false); 
+    }
+  }, [inventarioGlobal]);
 
   // =====================================================================
   // 3. FUNCIONES DE BÚSQUEDA Y CARRITO
   // =====================================================================
   const handleSearch = useCallback((filtrados) => setProductosFiltrados(filtrados), []);
-  const productosParaSearch = useMemo(() => productos, [productos]);
+  const productosParaSearch = useMemo(() => { return allProducts; }, [allProducts]);
 
   const openModal = (producto) => {
     setSelectedProduct({ ...producto, bonoInfluencer: false });
@@ -348,7 +305,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
         }
       />
       {/* RENDERIZADO CONDICIONAL INTERNO */}
-      {loading && productos.length === 0 ? (
+      {(loadingProducts && allProducts.length === 0) ? (
         
         <View style={GLOBAL_STYLES.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.turquesa} />
@@ -357,21 +314,22 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       ) : (
 
         <>
-      <SearchBar 
-        data={productosParaSearch} 
-        onSearch={handleSearch}
-        searchKeys={['nombre', 'codigo']}
-      />      
-      <FlatList
-        data={productosFiltrados.length > 0 ? productosFiltrados : productos}
-        renderItem={renderProducto}
-        keyExtractor={(item) => item.codigo}
-        numColumns={3}
-        columnWrapperStyle={styles.row}
-        scrollEnabled={true}
-        contentContainerStyle={styles.gridContent}
-      />
-      </>
+          <SearchBar 
+            data={productosParaSearch} 
+            onSearch={handleSearch}
+            searchKeys={['nombre', 'codigo']}
+          />      
+          <FlatList
+            data={productosFiltrados.length > 0 ? productosFiltrados : allProducts}
+            renderItem={renderProducto}
+            keyExtractor={(item) => item.codigo}
+            numColumns={3}
+            columnWrapperStyle={styles.row}
+            scrollEnabled={true}
+            contentContainerStyle={styles.gridContent}
+          />
+        </>
+        
       )}
       
       {/* MODAL DE SELECCIÓN DE PRODUCTO */}
@@ -541,7 +499,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
               <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={() => setModalResumenVisible(false)}>
                 <Text style={GLOBAL_STYLES.btnText}>Volver</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loading && GLOBAL_STYLES.disabledBtn]} onPress={registrarEntradaInventario} disabled={loading}>
+              <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, loadingProducts && GLOBAL_STYLES.disabledBtn]} onPress={registrarEntradaInventario} disabled={loading}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={GLOBAL_STYLES.btnText}>Confirmar</Text>}
               </TouchableOpacity>
             </View>

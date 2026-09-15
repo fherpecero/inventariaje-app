@@ -2,11 +2,12 @@ import React, { useState, useContext } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Alert, ActivityIndicator 
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+
 import { collection, getDocs } from 'firebase/firestore'; // ⚠️ Quitamos query y where para filtrar de forma segura localmente
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
 import { COLORS, FONT_SIZES, SPACING, GLOBAL_STYLES } from '../context/theme';
+import { Ionicons, MaterialComunityIcons, FontAwesome6, Entypo, FontAwesome, Feather, Fontisto, MaterialCommunityIcons, Foundation } from '@expo/vector-icons';
 import DatePickerField from './DatePickerField';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -396,7 +397,8 @@ const generarReporte = async () => {
           <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
             
             {/* --- PASO 1: SELECCIÓN DE REPORTE (DROPDOWN) --- */}
-            <Text style={[styles.sectionLabel, { color: themeColors.textSecondary }]}>Paso 1: Selecciona el reporte</Text>
+            <Text style={[styles.sectionLabel, { color: themeColors.textSecondary }]}><MaterialCommunityIcons name="numeric-1-circle-outline" size={18} color={themeColors.textSecondary}  
+            /> Selecciona el reporte</Text>
             
             <View style={{ zIndex: 10 }}>
               <TouchableOpacity 
@@ -433,12 +435,13 @@ const generarReporte = async () => {
 
             {/* 4. TEXTO DINÁMICO (DISCLAIMER) */}
             <Text style={[styles.disclaimerText, { color: themeColors.textSecondary }]}>
-              ℹ️ {reporteSeleccionado.description}
+              <FontAwesome6 name="circle-info" size={12} color={themeColors.textSecondary} /> {reporteSeleccionado.description}
             </Text>
 
 
             {/* --- PASO 2: RANGO DE FECHAS --- */}
-            <Text style={[styles.sectionLabel, { color: themeColors.textSecondary, marginTop: SPACING.l }]}>Paso 2: Rango de Fechas</Text>
+            <Text style={[styles.sectionLabel, { color: themeColors.textSecondary, marginTop: SPACING.l }]}><MaterialCommunityIcons name="numeric-2-circle-outline" size={18} color={themeColors.textSecondary}  
+            /> Rango de Fechas</Text>
             <View style={styles.datesRow}>
               <View style={styles.dateWrapper}>
                 <DatePickerField label="Desde" value={fechaInicio} onDateChange={setFechaInicio} />
