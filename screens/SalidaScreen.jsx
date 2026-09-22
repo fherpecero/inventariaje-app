@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, Alert,
-  ActivityIndicator, ScrollView, FlatList, Modal, Image, Platform, LogBox
+  ActivityIndicator, ScrollView, FlatList, Modal, Image, 
+  Platform, LogBox, Keyboard
 } from 'react-native';
 import { 
   collection, onSnapshot,
   getDocs, doc, getDoc, setDoc, addDoc,
+  writeBatch, increment,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -57,7 +59,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const [tipoPago, setTipoPago] = useState('efectivo');
   const [cliente, setCliente] = useState('');
   const [escanerActual, setEscanerActual] = useState(null);
-  const [esConsumoBono, setEsConsumoBono] = useState(false);
 
   // Modal de crédito
   const [modalCreditoVisible, setModalCreditoVisible] = useState(false);
@@ -121,7 +122,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   // LOGICA DEL CARRITO Y MODALES
   // ==========================================
   const abrirModalProducto = (producto) => {
-    setSelectedProductModal(producto);
+    setSelectedProductModal({ ...producto, bonoInfluencer: false });
     setCantidadModal('1');
     setModalVisible(true);
   };
@@ -133,8 +134,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     }
 
     const cantidadNum = parseInt(cantidadModal);
-
-    // 🛡️ ESCUDO HÍBRIDO: Previene el falso "0" leyendo la propiedad correcta según el contexto activo
     const stockDisponible = selectedProductModal.stockTotal !== undefined 
       ? selectedProductModal.stockTotal 
       : selectedProductModal.cantidad;
@@ -144,7 +143,10 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       return;
     }
 
-    const itemExistente = carrito.find((item) => item.codigo === selectedProductModal.codigo);
+    const esBono = !!selectedProductModal.bonoInfluencer;
+    const idCarrito = `${selectedProductModal.codigo}-${esBono ? 'bono' : 'regular'}`;
+
+    const itemExistente = carrito.find((item) => item.idCarrito === idCarrito);
 
     if (itemExistente) {
       const nuevaCantidad = itemExistente.cantidad + cantidadNum;
@@ -152,11 +154,12 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         Alert.alert('Error', `Stock insuficiente. Disponible: ${stockDisponible}`);
         return;
       }
-      setCarrito(carrito.map((item) => item.codigo === selectedProductModal.codigo ? { ...item, cantidad: nuevaCantidad } : item));
+      setCarrito(carrito.map((item) => item.idCarrito === idCarrito ? { ...item, cantidad: nuevaCantidad } : item));
     } else {
-      // 🧊 RN-03: Congelamos el costo base para blindar el Analytics
       setCarrito([...carrito, { 
         ...selectedProductModal, 
+        idCarrito: idCarrito, // Identificador de fila
+        consumoBono: esBono,  // 🚀 ETIQUETA INDIVIDUAL DE BONO
         cantidad: cantidadNum, 
         subtotal: selectedProductModal.precioVenta * cantidadNum,
         costoUnitarioCongelado: parseFloat(selectedProductModal.precioCostoStandard || 0)
@@ -167,14 +170,19 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     setCantidadModal('1');
   };
 
-  const actualizarCantidadCarrito = (codigo, nuevaCantidad) => {
+  const eliminarDelCarrito = (idCarrito) => {
+    setCarrito(carrito.filter((item) => item.idCarrito !== idCarrito));
+  };
+
+  const actualizarCantidadCarrito = (idCarrito, nuevaCantidad) => {
     if (nuevaCantidad <= 0) {
-      eliminarDelCarrito(codigo);
+      eliminarDelCarrito(idCarrito);
     } else {
       // 🔍 Búsqueda resiliente en cualquier catálogo disponible
-      const producto = productosFiltrados.find((p) => p.codigo === codigo) 
-                    || allProducts?.find((p) => p.codigo === codigo) 
-                    || inventarioGlobal?.find((p) => p.codigo === codigo);
+      const codigoReal = idCarrito.split('-')[0];
+      const producto = productosFiltrados.find((p) => p.codigo === codigoReal) 
+                    || allProducts?.find((p) => p.codigo === codigoReal) 
+                    || inventarioGlobal?.find((p) => p.codigo === codigoReal);
       
       if (!producto) return;
 
@@ -393,74 +401,58 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
     await guardarVentaDirecto();
   };
 
+  // ==========================================
+  // FUNCIÓN: Guardar venta directa OFFLINE-FIRST
+  // ==========================================
   const guardarVentaDirecto = async () => {
     if (!isMountedRef.current) return;
     if (isMountedRef.current) setLoading(true);
 
     try {
       const totales = calcularTotales();
-      const ahora = new Date(); 
+      const ahora = new Date();
       const timestampCompleto = ahora.toISOString();
       const fechaCortaISO = timestampCompleto.split('T')[0];
       
       const productosLocales = getProductosActivos();
-
-      const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-      const docSnap = await getDoc(inventarioRef);
-      let productosActuales = docSnap.data()?.productos || {};
-
-      const productosActualizados = { ...productosActuales };
       
-      for (let i = 0; i < carrito.length; i++) {
-        const item = carrito[i];
+      // 🚀 1. ABRIMOS EL BUZÓN LOCAL (writeBatch soporta offline nativo)
+      const batch = writeBatch(db);
 
-        // 1. Leemos ambos estantes directamente del documento
-        let cantidadRegular = productosActualizados[item.id]?.cantidad || 0;
-        let cantidadBono = productosActualizados[item.id]?.piezasConDescuento || 0;
+      // 📦 2. PREPARAR ACTUALIZACIÓN DE INVENTARIO (Usando increment sin leer la BD)
+      const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
+      const inventarioUpdates = { updatedAt: timestampCompleto };
 
-        // 2. Lógica de Deducción Inteligente
-        if (esConsumoBono) {
-          // Si activaste el Bono Influencer, cobramos del estante de descuentos
-          cantidadBono -= item.cantidad;
-          
-          // Si intentas vender más bonos de los que hay, el excedente se resta del regular
-          if (cantidadBono < 0) {
-            cantidadRegular += cantidadBono; // Sumamos el número negativo (resta)
-            cantidadBono = 0;
-          }
-        } else {
-          // Venta normal, cobramos del estante regular
-          cantidadRegular -= item.cantidad;
-        }
-
-        // Prevención contra desfases negativos por errores humanos
-        if (cantidadRegular < 0) cantidadRegular = 0;
-
-        // 3. Escribimos la actualización separada
-        productosActualizados[item.id] = {
-          ...productosActualizados[item.id],
-          cantidad: cantidadRegular,
-          piezasConDescuento: cantidadBono,
-          codigo: item.codigo,
-          updatedAt: timestampCompleto,
-        };
-      }
-
-      await setDoc(inventarioRef, { productos: productosActualizados, updatedAt: timestampCompleto }, { merge: true });
-
-      const salidaRef = collection(db, 'cuentas', cuentaId.toString(), 'salidas');
-      const escanerJSON = await AsyncStorage.getItem('escanerActual');
-      let escanerActualActualizado = escanerJSON ? JSON.parse(escanerJSON) : null;
-
-      for (let i = 0; i < carrito.length; i++) {
-        const item = carrito[i];
+      carrito.forEach((item) => {
+        const key = item.id || item.codigo; // Llave maestra
         
+        // Usamos increment con valor negativo para restar sin necesidad de internet
+        inventarioUpdates[`productos.${key}.cantidad`] = increment(-item.cantidad);
+        
+        if (esConsumoBono) {
+          inventarioUpdates[`productos.${key}.piezasConDescuento`] = increment(-item.cantidad);
+        }
+        
+        inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
+        inventarioUpdates[`productos.${key}.nombre`] = item.nombre;
+        inventarioUpdates[`productos.${key}.consumoBono`] = esConsumoBono || false;
+        inventarioUpdates[`productos.${key}.updatedAt`] = timestampCompleto;
+      });
+
+      batch.update(inventarioRef, inventarioUpdates);
+
+      // 🧾 3. CREAR LOS TICKETS DE SALIDA
+      const salidaRef = collection(db, 'cuentas', cuentaId.toString(), 'salidas');
+      let escanerActualActualizado = escanerActual;
+
+      carrito.forEach((item) => {
         const prodCatalogo = productosLocales.find(p => p.codigo === item.codigo || p.id === item.codigo);
         const costoUnitarioBase = prodCatalogo ? parseFloat(prodCatalogo.precioCostoStandard || prodCatalogo.costo || prodCatalogo.precioCosto || 0) : 0;
-        const costoTotalLinea = costoUnitarioBase * item.cantidad;
-
-        const ventaDoc = {
+        
+        const ventaDocRef = doc(salidaRef); // Generamos ID automático de Firebase
+        batch.set(ventaDocRef, {
           producto: item.nombre,
+          codigo: item.codigo,
           cantidad: item.cantidad,
           precioUnitario: item.precioVenta,
           subtotal: item.precioVenta * item.cantidad,
@@ -468,11 +460,11 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           descuentoMonto: totales.montoDescuento / carrito.length,
           total: (item.precioVenta * item.cantidad) - (totales.montoDescuento / carrito.length),
           costoUnitarioReal: costoUnitarioBase,
-          costoTotalVenta: costoTotalLinea,
+          costoTotalVenta: costoUnitarioBase * item.cantidad,
           cliente: cliente || 'Sin cliente',
           tipoPago: tipoPago,
-          consumoBono: esConsumoBono,
-          usuario: user.email,
+          consumoBono: item.consumoBono || false,
+          usuario: user?.email || 'Usuario',
           fecha: fechaCortaISO,
           timestamp: timestampCompleto,
           escanerId: escanerActualActualizado?.id || null,
@@ -480,51 +472,51 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           escanerFecha: escanerActualActualizado?.fechaFormato || null,
           escanerMonto: escanerActualActualizado?.monto || null,
           escanerInvitados: escanerActualActualizado?.invitados || null,
+          creadoPorUid: user?.uid || 'sistema',
+          creadoPorNombre: userData?.nombre || user?.email || 'Usuario',
+        });
+      });
 
-          creadoPorUid: user.uid,
-          creadoPorNombre: userData?.nombre || user.email,
-        };
-        await addDoc(salidaRef, ventaDoc);
-      }
-
+      // 🔄 4. ACTUALIZAR ESCÁNER LOCAL
       if (escanerActualActualizado) {
-        const escanerActualizadoFinal = {
+        escanerActualActualizado = {
           ...escanerActualActualizado,
           cantidad: (escanerActualActualizado.cantidad || 0) + carrito.length,
           ventaTotal: (escanerActualActualizado.ventaTotal || 0) + totales.total,
         };
-        await AsyncStorage.setItem('escanerActual', JSON.stringify(escanerActualizadoFinal));
-        setEscanerActual(escanerActualizadoFinal);
+        await AsyncStorage.setItem('escanerActual', JSON.stringify(escanerActualActualizado));
+        setEscanerActual(escanerActualActualizado);
       }
 
-      if (isMountedRef.current) {
-        Alert.alert(
-          '✅ Venta registrada',
-          `Total: $${totales.total.toFixed(2)}\nTipo de pago: ${tipoPago.toUpperCase()}\nCliente: ${cliente || 'Sin cliente'}`,
-          [{
-              text: 'OK',
-              onPress: () => {
-                if (isMountedRef.current) {
-                  setCarrito([]);
-                  setDescuentoPorcentaje('');
-                  setCliente('');
-                  setTipoPago('efectivo');
-                  setLoading(false);
-                  setEsConsumoBono(false);
-                }
-              },
-          }]
-        );
-      }
+      // 🎉 5. ÉXITO Y LIMPIEZA INMEDIATA DE UI (Antes del commit para que no haya lag)
+      setCarrito([]);
+      setDescuentoPorcentaje('');
+      setCliente('');
+      setTipoPago('efectivo');
+      setEsConsumoBono(false);
+      if (isMountedRef.current) setLoading(false);
+      
+      Alert.alert(
+        '✅ Venta registrada',
+        `Total: $${totales.total.toFixed(2)}\nTipo de pago: ${tipoPago.toUpperCase()}\nCliente: ${cliente || 'Sin cliente'}`
+      );
+
+      // 🚀 6. EJECUTAR EL BATCH (Firebase lo subirá silenciosamente en 2do plano)
+      batch.commit().catch(err => console.log('Sincronización en segundo plano:', err));
+
     } catch (error) {
+      console.error('❌ Error registrando venta:', error);
+      Alert.alert('Error', 'Fallo al procesar. Detalles: ' + error.message);
       if (isMountedRef.current) {
-        Alert.alert('Error', 'Error al registrar venta: ' + error.message);
         setLoading(false);
         setEsConsumoBono(false);
       }
     }
   };
 
+  // ==========================================
+  // FUNCIÓN: Registrar Crédito OFFLINE-FIRST
+  // ==========================================
   const registrarVentaConCredito = async () => {
     if (!creditoClienteNombre.trim()) return Alert.alert('Error', 'Ingresa el nombre del cliente');
     if (isMountedRef.current) setLoading(true);
@@ -537,118 +529,92 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
       let fechaPTPSegura = fechaCortaISO; 
       try {
-        if (creditoFechaPTP) {
-          const parsedDate = new Date(creditoFechaPTP);
-          if (!isNaN(parsedDate.getTime())) {
-            fechaPTPSegura = parsedDate.toISOString().split('T')[0]; 
-          }
+        if (creditoFechaPTP && !isNaN(new Date(creditoFechaPTP).getTime())) {
+          fechaPTPSegura = new Date(creditoFechaPTP).toISOString().split('T')[0]; 
         }
-      } catch(e) {
-        console.log("Error parseando fecha PTP, usando fallback");
-      }
+      } catch(e) {}
 
+      // 🚀 1. ABRIMOS EL BUZÓN LOCAL
+      const batch = writeBatch(db);
+
+      // 📦 2. ACTUALIZACIÓN DE INVENTARIO (increment)
       const inventarioRef = doc(db, 'cuentas', cuentaId.toString(), 'inventarios', 'vital_health_principal');
-      const docSnap = await getDoc(inventarioRef);
-      let productosActuales = docSnap.data()?.productos || {};
+      const inventarioUpdates = { updatedAt: timestampCompleto };
+      
+      carrito.forEach((item) => {
+        const key = item.id || item.codigo;
+        inventarioUpdates[`productos.${key}.cantidad`] = increment(-item.cantidad);
+        inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
+        inventarioUpdates[`productos.${key}.nombre`] = item.nombre;
+        inventarioUpdates[`productos.${key}.updatedAt`] = timestampCompleto;
+      });
 
-      const productosActualizados = { ...productosActuales };
-      for (let i = 0; i < carrito.length; i++) {
-        const item = carrito[i];
-        const cantidadActual = productosActualizados[item.id]?.cantidad || 0;
-        productosActualizados[item.id] = {
-          ...productosActualizados[item.id],
-          cantidad: cantidadActual - item.cantidad,
-          codigo: item.codigo,
-          nombre: item.nombre,
-          updatedAt: timestampCompleto,
-        };
-      }
+      batch.update(inventarioRef, inventarioUpdates);
 
-      await setDoc(inventarioRef, { productos: productosActualizados, updatedAt: timestampCompleto }, { merge: true });
-
-      const escanerJSON = await AsyncStorage.getItem('escanerActual');
-      let escanerActualActualizado = escanerJSON ? JSON.parse(escanerJSON) : null;
+      // 🧾 3. CREAR TICKETS DE SALIDA Y RECOLECTAR IDs
       const salidaRef = collection(db, 'cuentas', cuentaId.toString(), 'salidas');
       const ventasIds = [];
-
-      for (let i = 0; i < carrito.length; i++) {
-        const item = carrito[i];
-        const ventaDoc = {
-          producto: item.nombre,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioVenta,
+      
+      carrito.forEach((item) => {
+        const ventaDocRef = doc(salidaRef);
+        batch.set(ventaDocRef, {
+          producto: item.nombre, 
+          codigo: item.codigo, 
+          cantidad: item.cantidad, 
+          precioUnitario: item.precioVenta, 
           subtotal: item.precioVenta * item.cantidad,
-          descuentoPorcentaje: parseFloat(descuentoPorcentaje) || 0,
-          descuentoMonto: totales.montoDescuento / carrito.length,
+          descuentoPorcentaje: parseFloat(descuentoPorcentaje) || 0, 
+          descuentoMonto: totales.montoDescuento / carrito.length, 
           total: (item.precioVenta * item.cantidad) - (totales.montoDescuento / carrito.length),
-          cliente: creditoClienteNombre,
-          tipoPago: 'crd',
-          usuario: user.email,
-          fecha: fechaCortaISO,
+          cliente: creditoClienteNombre, 
+          tipoPago: 'crd', 
+          usuario: user?.email || 'Usuario', 
+          fecha: fechaCortaISO, 
           timestamp: timestampCompleto,
-          escanerId: escanerActualActualizado?.id || null,
-          nombreEvento: escanerActualActualizado?.evento || null,
-          escanerFecha: escanerActualActualizado?.fechaFormato || null,
-        };
+          escanerId: escanerActual?.id || null, 
+          nombreEvento: escanerActual?.evento || null, 
+          escanerFecha: escanerActual?.fechaFormato || null,
+          creadoPorUid: user?.uid || 'sistema',
+          creadoPorNombre: userData?.nombre || user?.email || 'Usuario',
+        });
+        ventasIds.push(ventaDocRef.id);
+      });
 
-        const docRef = await addDoc(salidaRef, ventaDoc);
-        ventasIds.push(docRef.id);
-      }
-
-      const creditoRef = collection(db, 'cuentas', cuentaId.toString(), 'creditos');
-      
-      const creditoDoc = {
-        clienteNombre: creditoClienteNombre,
-        monto: totales.total,
+      // 🏦 4. CREAR DOCUMENTO DE CRÉDITO
+      const creditoRef = doc(collection(db, 'cuentas', cuentaId.toString(), 'creditos'));
+      batch.set(creditoRef, {
+        clienteNombre: creditoClienteNombre, 
+        monto: totales.total, 
         fechaPTP: fechaPTPSegura, 
-        notas: creditoNotas,
+        notas: creditoNotas, 
         estado: 'pendiente',
-        ventasIds: ventasIds,
+        ventasIds: ventasIds, 
         timestamp: timestampCompleto, 
-        creadorEmail: user.email,
-        creadoPorUid: user.uid,
-        creadoPorNombre: userData?.nombre || user.email,
-      };
+        creadorEmail: user?.email || 'Usuario', 
+        creadoPorUid: user?.uid || 'sistema', 
+        creadoPorNombre: userData?.nombre || user?.email || 'Usuario',
+      });
+
+      // 🎉 5. ÉXITO Y LIMPIEZA INMEDIATA DE UI
+      setCarrito([]); 
+      setDescuentoPorcentaje(''); 
+      setCliente(''); 
+      setTipoPago('efectivo'); 
+      setModalCreditoVisible(false);
+      if (isMountedRef.current) setLoading(false);
       
-      await addDoc(creditoRef, creditoDoc);
+      Alert.alert(
+        '✅ Crédito registrado', 
+        `Cliente: ${creditoClienteNombre}\nMonto: $${totales.total.toFixed(2)}\nVence: ${fechaPTPSegura}`
+      );
 
-      if (escanerActualActualizado) {
-        const escanerActualizadoFinal = {
-          ...escanerActualActualizado,
-          cantidad: (escanerActualActualizado.cantidad || 0) + carrito.length,
-          ventaTotal: (escanerActualActualizado.ventaTotal || 0) + totales.total,
-        };
-        await AsyncStorage.setItem('escanerActual', JSON.stringify(escanerActualizadoFinal));
-        setEscanerActual(escanerActualizadoFinal);
-      }
+      // 🚀 6. EJECUTAR EL BATCH
+      batch.commit().catch(err => console.log('Sincronización en segundo plano:', err));
 
-      if (isMountedRef.current) {
-        const [año, mes, dia] = fechaPTPSegura.split('-');
-        const fechaLegible = `${dia}/${mes}/${año}`;
-        
-        Alert.alert(
-          '✅ Crédito registrado',
-          `Cliente: ${creditoClienteNombre}\nMonto: $${totales.total.toFixed(2)}\nVence: ${fechaLegible}`,
-          [{
-              text: 'OK',
-              onPress: () => {
-                if (isMountedRef.current) {
-                  setCarrito([]);
-                  setDescuentoPorcentaje('');
-                  setCliente('');
-                  setTipoPago('efectivo');
-                  setModalCreditoVisible(false);
-                  setLoading(false);
-                }
-              },
-          }]
-        );
-      }
     } catch (error) {
-      if (isMountedRef.current) {
-        Alert.alert('Error', 'Error al registrar crédito: ' + error.message);
-        setLoading(false);
-      }
+      console.error('❌ Error registrando crédito:', error);
+      Alert.alert('Error', 'Fallo al procesar. Detalles: ' + error.message);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -717,20 +683,22 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
   const renderCarritoItem = ({ item }) => (
     <View style={[styles.carritoItem, { borderBottomColor: themeColors.border }]}>
       <View style={styles.carritoItemInfo}>
-        <Text style={[styles.carritoItemNombre, { color: themeColors.text }]}>{item.nombre}</Text>
+        <Text style={[styles.carritoItemNombre, { color: themeColors.text }]}>
+          {item.nombre} {item.consumoBono ? '⭐' : ''}
+        </Text>
         <Text style={[styles.carritoItemPrecio, { color: themeColors.textSecondary }]}>
           ${item.precioVenta} × {item.cantidad} = ${(item.precioVenta * item.cantidad).toFixed(2)}
         </Text>
       </View>
       <View style={styles.carritoItemControles}>
-        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.id || item.codigo, item.cantidad - 1)}>
+        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.idCarrito, item.cantidad - 1)}>
           <Text style={styles.btnCantidad}><Ionicons name="remove" size={28} color={themeColors.textSecondary} /></Text>
         </TouchableOpacity>
         <Text style={[styles.cantidadCarrito, { color: themeColors.text }]}>{item.cantidad}</Text>
-        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.id || item.codigo, item.cantidad + 1)}>
+        <TouchableOpacity onPress={() => actualizarCantidadCarrito(item.idCarrito, item.cantidad + 1)}>
           <Text style={styles.btnCantidad}><Ionicons name="add" size={28} color={COLORS.turquesa} /></Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => eliminarDelCarrito(item.id || item.codigo)} style={styles.btnEliminar}>
+        <TouchableOpacity onPress={() => eliminarDelCarrito(item.idCarrito)} style={styles.btnEliminar}>
           <Text style={styles.btnEliminarText}>✕</Text>
         </TouchableOpacity>
       </View>
@@ -972,7 +940,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
               />
             </View>
 
-            {/* FILA EN 2 COLUMNAS: DESCUENTO + BONO INFLUENCER */}
+            {/* INPUT DE DESCUENTO GENERAL */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'top', marginBottom: 15 }}>
               
               {/* Columna 1: Descuento */}
@@ -980,9 +948,8 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   style={[
                     GLOBAL_STYLES.inputBase,
                     { 
-                      flex: 1,
-                      marginRight: 6,
                       height: 50,
+                      width: '100%',
                       backgroundColor: themeColors.bgSecondary,
                       color: themeColors.text,
                       borderColor: themeColors.border,
@@ -990,13 +957,13 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                       paddingHorizontal: 15,
                     }
                   ]}
-                  placeholder="Descuento (%)"
+                  placeholder="Descuento al subtotal (%)"
                   placeholderTextColor={themeColors.textSecondary}
                   keyboardType="numeric"
                   value={descuentoPorcentaje}
                   onChangeText={setDescuentoPorcentaje}
                 />
-              {/* Columna 2: Bono Influencer */}
+              {/* Columna 2: Bono Influencer  || SE QUITA PARA PONER EL BONO EN POR PRODUCTO
               <TouchableOpacity
                 style={{
                   flex: 1,
@@ -1029,7 +996,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                 >
                   {esConsumoBono ? "Bono Activo" : "Bono Influencer"}
                 </Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
 
             </View>
           </>
@@ -1164,50 +1131,105 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
       </ScrollView>
 
-      {/* Modal: Seleccionar cantidad */}
-      <Modal visible={modalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedProductModal && (
-              <>
-                <Text style={styles.modalTitle}>{selectedProductModal.nombre}</Text>
-                <View style={styles.modalPrecioBox}>
-                  <Text style={styles.modalPrecioLabel}>Precio unitario:</Text>
-                  <Text style={styles.modalPrecioValue}>${selectedProductModal.precioVenta}</Text>
-                </View>
-                <View style={styles.modalStockBox}>
-                  <Text style={styles.modalStockLabel}>Stock disponible:</Text>
-                  <Text style={styles.modalStockValue}>{selectedProductModal.cantidad} unidades</Text>
-                </View>
-                <View style={styles.modalFormGroup}>
-                  <Text style={styles.modalLabel}>Cantidad:</Text>
-                  <View style={styles.cantidadInputGroup}>
-                    <TouchableOpacity onPress={() => setCantidadModal(Math.max(1, parseInt(cantidadModal) - 1).toString())} style={styles.cantidadBtn}>
-                      <Text style={styles.cantidadBtnText}><Ionicons name="remove-circle" size={34} color={ COLORS.turquesa } /></Text>
-                    </TouchableOpacity>
-                    <TextInput style={styles.cantidadInput} value={cantidadModal} onChangeText={setCantidadModal} keyboardType="number-pad" />
-                    <TouchableOpacity onPress={() => { const nueva = parseInt(cantidadModal) + 1; if (nueva <= selectedProductModal.cantidad) setCantidadModal(nueva.toString()); }} style={styles.cantidadBtn}>
-                      <Text style={styles.cantidadBtnText}><Ionicons name="add-circle" size={34} color={ COLORS.turquesa } /></Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.modalTotalBox}>
-                  <Text style={styles.modalTotalLabel}>Total:</Text>
-                  <Text style={styles.modalTotalValue}>${(selectedProductModal.precioVenta * parseInt(cantidadModal)).toFixed(2)}</Text>
-                </View>
-                <View style={GLOBAL_STYLES.modalButtons}>
-                  <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={() => setModalVisible(false)}>
-                    <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf]} onPress={agregarAlCarrito}>
-                    <Text style={GLOBAL_STYLES.btnText}>Agregar</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
+  {/* MODAL DE SELECCIÓN DE PRODUCTO */}
+<Modal visible={modalVisible} transparent={true} animationType="none" onRequestClose={() => setModalVisible(false)}>
+  <TouchableOpacity style={GLOBAL_STYLES.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
+    <TouchableOpacity activeOpacity={1} style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bg }]} onPress={Keyboard.dismiss}>
+      {selectedProductModal && (
+        <>
+          {/* ✨ 1. CONTENEDOR DE IMAGEN RESTAURADO ✨ */}
+          <View style={styles.modalImageContainer}>
+            {imagenes[selectedProductModal.codigo || selectedProductModal.id] ? (
+              <Image source={imagenes[selectedProductModal.codigo || selectedProductModal.id]} style={styles.modalImage} />
+            ) : (
+              <View style={styles.modalImagePlaceholder}>
+                <Text style={styles.modalImagePlaceholderText}>
+                  <FontAwesome6 name="box" size={18} color="black" />
+                </Text>
+              </View>
             )}
           </View>
-        </View>
-      </Modal>
+            
+          <View style={styles.modalInnerBody}>
+            
+            {/* 2. FILA SUPERIOR: TÍTULO Y BONO */}
+            <View style={styles.modalHeaderColumns}>
+              <View style={styles.modalLeftColumn}>
+                <Text style={[GLOBAL_STYLES.modalTitle, styles.modalProductNameText, { color: themeColors.text }]} numberOfLines={2}>
+                  {selectedProductModal.nombre}
+                </Text>
+                <Text style={styles.modalProductStock}>
+                  Stock actual: {selectedProductModal.stockTotal !== undefined ? selectedProductModal.stockTotal : selectedProductModal.cantidad} unidades
+                </Text>
+              </View>
+
+              <View style={styles.modalRightColumn}>
+                <TouchableOpacity 
+                  style={styles.bonoCheckboxBtn} 
+                  onPress={() => setSelectedProductModal(prev => ({ ...prev, bonoInfluencer: !prev.bonoInfluencer }))} 
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name={selectedProductModal.bonoInfluencer ? "checkmark-circle" : "ellipse-outline"} 
+                    size={30} 
+                    color={selectedProductModal.bonoInfluencer ? COLORS.morado : '#A0AEC0'} 
+                  />
+                </TouchableOpacity>
+                <Text style={[styles.bonoLabelText, selectedProductModal.bonoInfluencer && styles.bonoLabelTextActive]}>
+                  Bono Influencer
+                </Text>
+              </View>
+            </View> 
+
+            {/* 3. LÍNEA DIVISORIA (Mismo margen que Entradas) */}
+            <GradientDivider marginVertical={22} />
+
+            {/* 4. SECCIÓN DE CANTIDADES */}
+            <View style={[styles.cantidadSection, { backgroundColor: darkMode ? '#333' : COLORS.gris }]}>
+              
+              <Text style={[GLOBAL_STYLES.modalLabel, styles.cantidadLabel, { color: themeColors.text }]}>
+                CANTIDAD A VENDER
+              </Text>
+              
+              <View style={styles.cantidadControls}>
+                <TouchableOpacity 
+                  style={styles.cantidadBtn} 
+                  onPress={() => { 
+                    if (parseInt(cantidadModal) > 1) setCantidadModal((parseInt(cantidadModal) - 1).toString()); 
+                  }}
+                >
+                  <Ionicons name="remove" size={28} color={COLORS.blanco} />
+                </TouchableOpacity>
+                
+                <View style={styles.cantidadDisplay}>
+                  <Text style={styles.cantidadValue}>{cantidadModal}</Text>
+                </View>
+                
+                <TouchableOpacity 
+                  style={styles.cantidadBtn} 
+                  onPress={() => setCantidadModal((parseInt(cantidadModal) + 1).toString())}
+                >
+                  <Ionicons name="add" size={28} color={COLORS.blanco} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 5. BOTONES DE ACCIÓN */}
+            <View style={GLOBAL_STYLES.modalButtons}>
+              <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={() => setModalVisible(false)}>
+                <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf]} onPress={agregarAlCarrito}>
+                <Text style={GLOBAL_STYLES.btnText}>Aceptar</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </>
+      )}
+    </TouchableOpacity>
+  </TouchableOpacity>
+</Modal>
 
       {/* Modal: Datos del crédito */}
       <Modal visible={modalCreditoVisible} transparent={true} animationType="slide" onRequestClose={() => setModalCreditoVisible(false)}>
@@ -1335,7 +1357,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', 
     alignItems: 'center', 
     paddingVertical: 12, 
-    borderBottomWidth: 1, 
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   carritoItemInfo: { 
     flex: 1, 
@@ -1393,6 +1416,10 @@ const styles = StyleSheet.create({
   disabledBtn: { 
     opacity: 0.5, 
   },
+
+  // ==========================================
+  // ESTILOS BASE DEL MODAL
+  // ==========================================
   modalOverlay: { 
     flex: 1, 
     backgroundColor: 'rgba(0,0,0,0.5)', 
@@ -1412,75 +1439,135 @@ const styles = StyleSheet.create({
     marginBottom: 15, 
     textAlign: 'center', 
   },
-  modalPrecioBox: { 
-    backgroundColor: '#f5f5f5', 
-    padding: 12, 
-    borderRadius: 8, 
-    marginBottom: 12, 
-  },
-  modalPrecioLabel: { 
-    fontSize: 12, 
-    color: '#666', 
-    marginBottom: 4, 
-  },
-  modalPrecioValue: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: COLORS.turquesa, 
-  },
-  modalStockBox: { 
-    backgroundColor: '#f5f5f5', 
-    padding: 12, 
-    borderRadius: 8, 
-    marginBottom: 15, 
-  },
-  modalStockLabel: { 
-    fontSize: 12, 
-    color: '#666', 
-    marginBottom: 4, 
-  },
-  modalStockValue: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: COLORS.negro, 
-  },
-  modalFormGroup: { 
-    marginBottom: 15, 
-  },
   modalLabel: { 
     fontSize: 14, 
     fontWeight: '600', 
     color: COLORS.negro, 
     marginBottom: 10, 
   },
-  cantidadInputGroup: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    gap: 5,
+
+  // ==========================================
+  // ESTILOS NUEVOS DEL MODAL DE SELECCIÓN (Unificados con Entradas)
+  // ==========================================
+  modalImageContainer: {
+    width: '100%',
+    height: 220,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 10,
   },
-//   cantidadBtn: {
-//     backgroundColor: COLORS.turquesa,
-//     width: 44,
-//     height: 44,
-//     borderRadius: 8,
-//     justifyContent: 'center',
-//     alignItems: 'center',
- // },
-//   cantidadBtnText: {
-//     fontSize: 24,
-//     color: COLORS.blanco,
-//     fontWeight: 'bold',
- // },
-  cantidadInput: { 
-    paddingHorizontal: 12,
-    paddingVertical: 10, 
-    fontSize: 26,
-    fontWeight: 'bold', 
-    color: COLORS.negro, 
-    minWidth: 50,
-    textAlign: 'center', 
+  modalImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
   },
+  modalImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.gris,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalImagePlaceholderText: {
+    fontSize: 80,
+  },
+  modalInnerBody: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 25,
+  },
+  modalHeaderColumns: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  modalLeftColumn: {
+    flex: 1,
+    paddingRight: 10,
+    justifyContent: 'center',
+  },
+  modalRightColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 90,
+  },
+  modalProductNameText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 8,
+    marginBottom: 5,
+    textAlign: 'left',
+    paddingVertical: 0,
+    marginVertical: 0,
+  },
+  modalProductStock: {
+    fontSize: 13,
+    color: COLORS.negro,
+    fontWeight: '600',
+    textAlign: 'left',
+  },
+  bonoCheckboxBtn: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  bonoLabelText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.negro,
+    textAlign: 'center',
+  },
+  bonoLabelTextActive: {
+    color: COLORS.morado,
+    fontWeight: 'bold',
+  },
+  cantidadSection: {
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+  },
+  cantidadLabel: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 15,
+  },
+  cantidadControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  cantidadBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 25,
+    backgroundColor: COLORS.turquesa,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cantidadDisplay: {
+    width: 40,
+    height: 40,
+    backgroundColor: COLORS.gris,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cantidadValue: {
+    fontSize: 24,
+    fontWeight: '400',
+    color: COLORS.negro,
+  },
+
+  // ==========================================
+  // ESTILOS RESTANTES (Intercambios, Escáner, Viejos Modales)
+  // ==========================================
   modalTotalBox: { 
     backgroundColor: '#f5f5f5',
     padding: 12, 
@@ -1677,42 +1764,13 @@ const styles = StyleSheet.create({
     fontWeight: '700', 
     color: COLORS.morado, 
   },
-  // --- FILA DOBLE COLUMNA PARA MODAL ---
-  rowFormContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.global,
-  },
-  halfInputContainer: {
-    flex: 1,
-    marginRight: 6,
-    backgroundColor: COLORS.blanco,
-  },
-  inputHalf: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: SPACING.content_padding,
-    height: 48,
-    fontSize: FONT_SIZES.normal,
-  },
+  
+  // Elementos de la grid si los sigues usando individualmente
   productImage: { 
     width: '80%', 
     height: 80, 
     resizeMode: 'contain', 
     marginBottom: 8, 
-  },
-  productImagePlaceholder: { 
-    width: '100%', 
-    height: 80, 
-    borderRadius: 6, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginBottom: 8, 
-  },
-  productImagePlaceholderText: { 
-    fontSize: 32, 
   },
   productInfo: { 
     paddingHorizontal: 2, 
@@ -1743,6 +1801,7 @@ const styles = StyleSheet.create({
     bottom: 3, 
     right: 3, 
     borderRadius: 15, 
+
   },
   // YEMINA ME DIJO QUE CAMBIARA LOS ESTILOS DE LOS INTERCAMBIOS 
   // PERO NO QUISE HACERLO ASI QUE LOS DEJO AQUI POR SI ACASO SE 

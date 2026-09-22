@@ -568,9 +568,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                       <Text style={[styles.dashboardValueStocks, { color: themeColors.text }]}>{stats.bajoStock} productos</Text>
                     </View>
                   </View>
-                  <View style={styles.dashboardBtnTextBtn}>
+                 {/* <View style={styles.dashboardBtnTextBtn}>
                   <Text style={[styles.dashboardArrow, { color: COLORS.turquesa, borderColor: COLORS.turquesa }]}>→</Text>
-                  </View>
+                  </View>*/}
                 </TouchableOpacity>
             </View>
 
@@ -586,9 +586,9 @@ export default function HomeScreen({ onNavigate, darkMode, themeColors }) {
                       <Text style={[styles.dashboardValueStocks, { color: themeColors.text }]}>{stats.productosSinStock} productos</Text>
                     </View>
                   </View>
-                  <View style={styles.dashboardBtnTextBtn}>
+                  {/*<View style={styles.dashboardBtnTextBtn}>
                   <Text style={[styles.dashboardArrow, { color: COLORS.turquesa, borderColor: COLORS.turquesa }]}>→</Text>
-                  </View>
+                  </View>*/}
                 </TouchableOpacity>
             </View>
           </View>
@@ -1080,8 +1080,7 @@ const styles = StyleSheet.create({
     padding: SPACING.content_padding,
   },
   welcomeSection: {
-    marginTop: 10,
-    marginBottom: 10,
+    marginBottom: 5,
   },
   welcomeTitle: {
     fontSize: FONT_SIZES.titulo,

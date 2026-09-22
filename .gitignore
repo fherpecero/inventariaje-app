@@ -6,6 +6,10 @@ serviceAccountFirebase.json
 node_modules/
 *.tar.gz
 *.zip
+*.apk
+*.aab
+.idea/
+.vscode/
 npm-debug.log
 yarn-error.log
 firebase-debug.log

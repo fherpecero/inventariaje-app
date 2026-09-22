@@ -43,6 +43,8 @@ export default function SettingsScreen({
     cuenta?.trialStartDate
   );
 
+  const hasPremiumPowers = effectiveTier === 'premium' || effectiveTier === 'special_k';
+
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -222,7 +224,7 @@ export default function SettingsScreen({
               {/* 👑 ICONO DEL TIER */}
               <Text style={styles.tierEmoji}>
                 {effectiveTier === 'special_k' ? (
-                  <MaterialCommunityIcons name="shield-crown-outline" size={24} color={COLORS.morado} />
+                   '👑'
                 ) : effectiveTier === 'premium' ? (
                   '💎'
                 ) : (
@@ -323,8 +325,8 @@ export default function SettingsScreen({
 
           {/* Alertas */}
           <TouchableOpacity
-            style={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
-            onPress={() => { effectiveTier === 'premium' ? onNavigate('alertas') : onNavigate('upgrade'); }}
+            style ={[GLOBAL_STYLES.cardStandard, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}
+            onPress={() => { hasPremiumPowers ? onNavigate('alertas') : onNavigate('upgrade'); }}
             activeOpacity={0.7}
           >
             <View style={GLOBAL_STYLES.cardStandardContent}>

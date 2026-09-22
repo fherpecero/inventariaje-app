@@ -30,6 +30,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [creating, setCreating] = useState(false);
+  const [nombreInput, setNombreInput] = useState('');
 
   // ✅ USER SETTINGS MODAL
   const [userSettingsVisible, setUserSettingsVisible] = useState(false);
@@ -219,78 +220,91 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
   };
 
   const crearUsuarioYAgregarACuenta = async () => {
-    if (!isMountedRef.current) return;
+  if (!isMountedRef.current) return;
 
-    if (!emailInput.trim()) {
-      Alert.alert('Error', 'Ingresa un email válido');
-      return;
+  // 1️⃣ Nueva validación del nombre
+  if (!nombreInput.trim()) {
+    Alert.alert('Error', 'Ingresa el nombre del usuario');
+    return;
+  }
+  if (!emailInput.trim()) {
+    Alert.alert('Error', 'Ingresa un email válido');
+    return;
+  }
+  if (!passwordInput || passwordInput.length < 6) {
+    Alert.alert('Error', 'Contraseña mínimo 6 caracteres');
+    return;
+  }
+  const yaExiste = miembros.find((m) => m.email === emailInput.trim());
+  if (yaExiste) {
+    Alert.alert('Error', 'Este email ya está en la cuenta');
+    return;
+  }
+
+  if (isMountedRef.current) setCreating(true);
+
+  try {
+    let secondaryApp;
+    let secondaryAuth;
+    const apps = getApps();
+    const existingApp = apps.find(app => app.name === "SecondaryApp");
+
+    if (!existingApp) {
+      secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+      secondaryAuth = initializeAuth(secondaryApp, { persistence: inMemoryPersistence });
+    } else {
+      secondaryApp = existingApp;
+      secondaryAuth = getAuth(secondaryApp);
     }
-    if (!passwordInput || passwordInput.length < 6) {
-      Alert.alert('Error', 'Contraseña mínimo 6 caracteres');
-      return;
+
+    const secondaryDb = getFirestore(secondaryApp);
+
+    // Creamos en la app fantasma
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, emailInput.trim(), passwordInput);
+    const nuevoUID = userCredential.user.uid;
+    const nombreFinal = nombreInput.trim(); // 🚀 Tomamos el nombre escrito
+
+    // Actualizamos Auth Profile (Para la foto o uso interno de Firebase)
+    await updateProfile(userCredential.user, { displayName: nombreFinal });
+
+    // 2️⃣ Guardamos en Firestore (/usuarios)
+    const usuarioDocRef = doc(secondaryDb, 'usuarios', nuevoUID);
+    await setDoc(usuarioDocRef, {
+      uid: nuevoUID,
+      email: emailInput.trim(),
+      nombre: nombreFinal, // 🚀 Guardamos el nombre real
+      cuentaId: cuentaId,
+      rol: 'socio',
+      createdAt: new Date().toISOString(),
+    }, { merge: false });
+
+    // 3️⃣ El Admin inyecta al usuario en la cuenta (/cuentas)
+    const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
+    await updateDoc(cuentaRef, { miembros: arrayUnion(nuevoUID) });
+
+    await signOut(secondaryAuth);
+
+    if (isMountedRef.current) {
+      // 4️⃣ Actualizamos la lista local para ver el nombre de inmediato
+      setMiembros([
+        ...miembros,
+        { uid: nuevoUID, email: emailInput.trim(), nombre: nombreFinal, phone: '' },
+      ]);
+      
+      // Limpiamos los inputs
+      setNombreInput('');
+      setEmailInput('');
+      setPasswordInput('');
+      setModalVisible(false);
+
+      Alert.alert('Éxito', `Usuario ${nombreFinal} creado correctamente`);
     }
-    const yaExiste = miembros.find((m) => m.email === emailInput.trim());
-    if (yaExiste) {
-      Alert.alert('Error', 'Este email ya está en la cuenta');
-      return;
-    }
-
-    if (isMountedRef.current) setCreating(true);
-
-    try {
-      let secondaryApp;
-      let secondaryAuth;
-      const apps = getApps();
-      const existingApp = apps.find(app => app.name === "SecondaryApp");
-
-      if (!existingApp) {
-        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-        secondaryAuth = initializeAuth(secondaryApp, { persistence: inMemoryPersistence });
-      } else {
-        secondaryApp = existingApp;
-        secondaryAuth = getAuth(secondaryApp);
-      }
-
-      const secondaryDb = getFirestore(secondaryApp);
-
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, emailInput.trim(), passwordInput);
-      const nuevoUID = userCredential.user.uid;
-      const nombreUsuario = emailInput.split('@')[0];
-
-      await updateProfile(userCredential.user, { displayName: nombreUsuario });
-
-      const usuarioDocRef = doc(secondaryDb, 'usuarios', nuevoUID);
-      await setDoc(usuarioDocRef, {
-        uid: nuevoUID,
-        email: emailInput.trim(),
-        nombre: emailInput.split('@')[0],
-        cuentaId: cuentaId,
-        rol: 'socio',
-        createdAt: new Date().toISOString(),
-      }, { merge: false });
-
-      const cuentaRef = doc(db, 'cuentas', cuentaId.toString());
-      await updateDoc(cuentaRef, { miembros: arrayUnion(nuevoUID) });
-
-      await signOut(secondaryAuth);
-
-      if (isMountedRef.current) {
-        setMiembros([
-          ...miembros,
-          { uid: nuevoUID, email: emailInput.trim(), nombre: emailInput.split('@')[0], phone: '' },
-        ]);
-        setEmailInput('');
-        setPasswordInput('');
-        setModalVisible(false);
-
-        Alert.alert('Éxito', `Usuario ${emailInput} creado correctamente`);
-      }
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    } finally {
-      if (isMountedRef.current) setCreating(false);
-    }
-  };
+  } catch (error) {
+    Alert.alert('Error', error.message);
+  } finally {
+    if (isMountedRef.current) setCreating(false);
+  }
+};
 
   const renderMiembro = ({ item }) => (
     <TouchableOpacity
@@ -376,7 +390,20 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
               <FontAwesome6 name="user-plus" size={18} color={themeColors.text} /> Crear Usuario
             </Text>
             
-            <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Email del nuevo usuario:</Text>
+            {/* 🚀 NUEVO CAMPO: NOMBRE */}
+            <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text }]}>Nombre del nuevo usuario:</Text>
+            <TextInput
+              style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
+              placeholder="Ej. Ahsoka Tano"
+              placeholderTextColor={themeColors.textSecondary}
+              value={nombreInput}
+              onChangeText={setNombreInput}
+              editable={!creating}
+              autoCapitalize="words"
+            />
+
+            {/* CAMPO: EMAIL */}
+            <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Email del nuevo usuario:</Text>
             <TextInput
               style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
               placeholder="usuario@gmail.com"
@@ -388,6 +415,7 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
               autoCapitalize="none"
             />
 
+            {/* CAMPO: PASSWORD */}
             <Text style={[GLOBAL_STYLES.modalLabel, { color: themeColors.text, marginTop: 12 }]}>Contraseña temporal:</Text>
             <TextInput
               style={[GLOBAL_STYLES.inputBase, { backgroundColor: themeColors.input, color: themeColors.text, borderColor: themeColors.border }]}
@@ -402,7 +430,13 @@ export default function MembersScreen({ onNavigate, darkMode, themeColors }) {
             <View style={GLOBAL_STYLES.modalButtons}>
               <TouchableOpacity 
                 style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} 
-                onPress={() => setModalVisible(false)} 
+                onPress={() => {
+                  // Limpiamos todo al cancelar
+                  setNombreInput('');
+                  setEmailInput('');
+                  setPasswordInput('');
+                  setModalVisible(false);
+                }} 
                 disabled={creating}
               >
                 <Text style={GLOBAL_STYLES.btnTextDanger}>Cancelar</Text>

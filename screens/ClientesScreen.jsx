@@ -279,7 +279,7 @@ export default function ClientesScreen({ onNavigate, darkMode, themeColors }) {
   return (
     <View style={[GLOBAL_STYLES.container, { backgroundColor: themeColors.bg }]}>
       <ScreenHeader
-        title="Clientes"
+        title="Creditos"
         onPress={() => onNavigate('home')}
         themeColors={themeColors}
       />

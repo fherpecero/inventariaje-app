@@ -11,7 +11,10 @@ import {
   Alert,
   TextInput, 
   ScrollView,
-  Keyboard
+  Keyboard,
+  KeyboardAvoidingView, 
+  Platform,
+  Pressable
 } from 'react-native';
 import { imagenes } from '../productosData';
 import { collection, doc, writeBatch, onSnapshot, increment } from 'firebase/firestore';
@@ -167,13 +170,13 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       const entradaRef = doc(db, 'cuentas', cuentaId.toString(), 'entradas', folioUnico);
       const analyticsRef = doc(db, 'cuentas', cuentaId.toString(), 'analytics', folioUnico);
 
-      // 1. Reconstruir el pedido (Respetando tu lógica original)
+      // 1. Reconstruir el pedido
       const pedidoLimpio = pedido.map(item => ({
         ...item,
         bonoInfluencer: !!item.bonoInfluencer
       }));
 
-      // 2. ESQUEMA 100% IDÉNTICO (Inmune al bloqueo de Reglas de Seguridad)
+      // 2. ESQUEMA 100% IDÉNTICO
       const ordenEntrada = {
         folio: folioUnico,
         fecha: timestampCompleto, 
@@ -192,37 +195,35 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       batch.set(analyticsRef, { tipoMovimiento: 'ENTRADA_RESTOCK', ...ordenEntrada });
       
       // 3. LA LLAVE MAESTRA: DOT NOTATION EN BATCH.UPDATE
-      // Garantiza que increment() se ejecute en el servidor y no falle en silencio
       const inventarioUpdates = {
         updatedAt: timestampCompleto
       };
 
       pedido.forEach(item => {
-        const key = item.nombre;
-        // Modificamos quirúrgicamente solo los campos necesarios, protegiendo notas previas
+        const key = item.id || item.codigo;
         inventarioUpdates[`productos.${key}.cantidad`] = increment(Number(item.cantidad) || 1);
         inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
         inventarioUpdates[`productos.${key}.nombre`] = item.nombre || 'Producto Desconocido';
         inventarioUpdates[`productos.${key}.updatedAt`] = timestampCompleto;
       });
 
-      // Ejecutamos UPDATE en lugar de SET para procesar la notación de puntos
       batch.update(inventarioRef, inventarioUpdates);
 
-      // EJECUTAR BATCH
-      await batch.commit();
-
+      // 🔥 FIX OFFLINE: Liberamos la UI inmediatamente para que el usuario no sienta lag
       setPedido([]);
       setOrdenProveedor(''); 
       setCostoTotalFinal('');
       setPorcentajeDescuento(0);
       setModalResumenVisible(false);
       mostrarToast('Restock registrado correctamente', 'success');
+      if (isMountedRef.current) setLoading(false);
+
+      // Ejecutamos BATCH sin await bloqueante. Firebase lo guardará en caché y lo subirá cuando haya internet.
+      batch.commit().catch(err => console.log('Sincronización en segundo plano:', err));
 
     } catch (error) {
       console.error('❌ Error guardando restock:', error);
-      Alert.alert('Error de Permisos', 'Fallo al guardar. Detalles: ' + error.message);
-    } finally {
+      Alert.alert('Error', 'Fallo al procesar. Detalles: ' + error.message);
       if (isMountedRef.current) setLoading(false);
     }
   };
@@ -420,13 +421,25 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
 
       {/* MODAL DE RESUMEN FINANCIERO */}
       <Modal visible={modalResumenVisible} animationType="slide" transparent={true} onRequestClose={() => setModalResumenVisible(false)}>
-        <TouchableOpacity style={GLOBAL_STYLES.modalOverlay} activeOpacity={1} onPress={() => setModalResumenVisible(false)}>
+  
+      {/* 1. KeyboardAvoidingView empuja la pantalla en iOS/Android */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        
+        {/* 2. Fondo oscuro: Cierra el teclado Y el modal */}
+        <Pressable 
+          style={GLOBAL_STYLES.modalOverlay} 
+          onPress={() => {
+            Keyboard.dismiss();
+            setModalResumenVisible(false);
+          }}
+        >
           
-          {/* 🚨 FIX SCROLL: Eliminamos TouchableOpacity y usamos View. onStartShouldSetResponder evita que el toque cierre el modal, pero permite scrollear */}
-          <View 
+          {/* 3. Tarjeta Blanca: Oculta el teclado si tocan una parte en blanco sin cerrar el modal */}
+          <Pressable 
             style={[GLOBAL_STYLES.modalContent, styles.modalResumenWidth, { backgroundColor: themeColors.bg }]} 
-            onStartShouldSetResponder={() => true}
+            onPress={() => Keyboard.dismiss()}
           >
+            
             <Text style={[GLOBAL_STYLES.modalTitle, styles.modalResumenTitle, { color: themeColors.text }]}>
               Resumen de Restock
             </Text>
@@ -503,8 +516,9 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={GLOBAL_STYLES.btnText}>Confirmar</Text>}
               </TouchableOpacity>
             </View>
-          </View>
-        </TouchableOpacity>
+          </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

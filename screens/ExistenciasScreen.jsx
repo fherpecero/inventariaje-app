@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 import { imagenes } from '../productosData';
 import { doc, getDoc, updateDoc } from 'firebase/firestore'; // onSnapshot eliminado
@@ -336,15 +337,31 @@ export default function ExistenciasScreen({
       />
 
       <Modal visible={modalNotasVisible} transparent={true} animationType="fade" onRequestClose={closeModalNotas}>
-        <Pressable style={GLOBAL_STYLES.modalOverlay} onPress={closeModalNotas}>
-          <Pressable style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bgSecondary }]} onPress={(e) => e.stopPropagation()}>
+      
+      {/* 1. KeyboardAvoidingView para evitar que el teclado tape el input */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        
+        {/* 2. Capa oscura exterior: Cierra el teclado Y el modal si tocan afuera */}
+        <Pressable 
+          style={GLOBAL_STYLES.modalOverlay} 
+          onPress={() => {
+            Keyboard.dismiss();
+            closeModalNotas();
+          }}
+        >
+          
+          {/* 3. Tarjeta blanca interior: Cierra SOLO el teclado si tocan un espacio en blanco */}
+          <Pressable 
+            style={[GLOBAL_STYLES.modalContent, { backgroundColor: themeColors.bgSecondary }]} 
+            onPress={Keyboard.dismiss}
+          >
             {selectedProduct && (
               <>
                 <View style={styles.modalHeader}>
                   <Text style={[GLOBAL_STYLES.modalTitle, styles.modalTitleMargin, { color: themeColors.text }]}>
                     {selectedProduct.nombre}
                   </Text>
-                  <TouchableOpacity onPress={closeModalNotas}>
+                  <TouchableOpacity onPress={() => { Keyboard.dismiss(); closeModalNotas(); }}>
                     <Text style={[styles.modalCloseBtn, { color: themeColors.textSecondary }]}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -362,7 +379,9 @@ export default function ExistenciasScreen({
                     </Text>
                     {notasEdicion.length > 0 && (
                       <TouchableOpacity onPress={limpiarNotas} style={styles.btnLimpiarNotas}>
-                        <Text style={styles.btnLimpiarNotasText}><FontAwesome6 name="trash-can" size={12} color={themeColors.textSecondary} /> Limpiar</Text>
+                        <Text style={styles.btnLimpiarNotasText}>
+                          <FontAwesome6 name="trash-can" size={12} color={themeColors.textSecondary} /> Limpiar
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -383,11 +402,18 @@ export default function ExistenciasScreen({
                 </View>
 
                 <View style={GLOBAL_STYLES.modalButtons}>
-                  <TouchableOpacity style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} onPress={closeModalNotas}>
+                  <TouchableOpacity 
+                    style={[GLOBAL_STYLES.btnDanger, GLOBAL_STYLES.modalBtnHalf]} 
+                    onPress={() => { Keyboard.dismiss(); closeModalNotas(); }}
+                  >
                     <Text style={GLOBAL_STYLES.btnText}>Cancelar</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, isSaving && GLOBAL_STYLES.disabledBtn]} onPress={guardarNotas} disabled={isSaving}>
+                  <TouchableOpacity 
+                    style={[GLOBAL_STYLES.btnSuccess, GLOBAL_STYLES.modalBtnHalf, isSaving && GLOBAL_STYLES.disabledBtn]} 
+                    onPress={() => { Keyboard.dismiss(); guardarNotas(); }} 
+                    disabled={isSaving}
+                  >
                     <Text style={GLOBAL_STYLES.btnText}>
                       {isSaving ? '⏳' : 'Guardar'}
                     </Text>
@@ -397,7 +423,8 @@ export default function ExistenciasScreen({
             )}
           </Pressable>
         </Pressable>
-      </Modal>
+      </KeyboardAvoidingView>
+    </Modal>
     </View>
   );
 }
