@@ -1,5 +1,18 @@
 # Changelog - Inventariaje App
 
+##### [2.5.5] - 2026-09-22
+**🚀 Hotfix: Restauración de Imágenes de Productos, Estabilidad de UI y Unificación de Catálogo**
+
+**🖼️ Correcciones en Renderizado de Imágenes**
+* **Resolución Multicapa de Imágenes:** Se fortaleció la triangulación de resolución en las pantallas (`ExistenciasScreen`, `SalidaScreen` y sus modales), buscando dinámicamente por `item.imagen`, `imagenes[codigo]`, `imagenes[nombre]` y el helper `getImagenProducto(codigo)`.
+* **Restauración de Estilos de Placeholder (`SalidaScreen.jsx`):** Se restauraron las propiedades de `productImagePlaceholder` y `productImagePlaceholderText` que habían sido eliminadas, evitando que los contenedores de productos sin imagen colapsaran a alto 0px y generaran espacios en blanco.
+* **Escalado Correcto (`ExistenciasScreen.jsx`):** Se ajustó el `resizeMode` a `'contain'` en las tarjetas de existencias para que los envases, bolsas y frascos se muestren completos sin ser recortados en la parte superior e inferior.
+* **Corrección de Ícono en Modales:** Se reemplazó el contenedor con conflicto tipográfico por el ícono unificado `📦`, previniendo errores de alineación y recortes en Android/iOS.
+
+**📦 Actualizaciones en Catálogo e Inventario**
+* **Nuevo Producto en Catálogo:** Registrado el producto **VITARLY L** (`782706461230`) en `context/productCatalog.jsx` y `productosData.js`.
+* **Unificación de Llaves de Transacción:** Sincronizado el registro de movimientos en Firestore para usar `item.nombre` como llave maestra en el inventario.
+
 ##### [2.5.3] - 2026-09-14
 **🚀 Core Refactor: Single Source of Truth & Analytics Optimization**
 

@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 import { imagenes } from '../productosData';
+import { getImagenProducto } from '../context/productCatalog';
 import { doc, getDoc, updateDoc } from 'firebase/firestore'; // onSnapshot eliminado
 import { db } from '../config/firebase';
 import { AuthContext } from '../context/AuthContext';
@@ -184,7 +185,7 @@ export default function ExistenciasScreen({
   // 5. RENDERIZADO DE PRODUCTO
   // =====================================================================
   const renderProducto = ({ item }) => {
-    const imagen = imagenes[item.codigo] || null;
+    const imagen = item.imagen || imagenes[item.codigo] || imagenes[item.nombre] || getImagenProducto(item.codigo) || null;
     const tieneNota = item.notas && item.notas.trim() !== '';
 
     return (
@@ -205,7 +206,7 @@ export default function ExistenciasScreen({
               <Image source={imagen} style={styles.imagen} />
             ) : (
               <View style={styles.imagenPlaceholder}>
-                <FontAwesome6 name="box" size={24} color={themeColors.textSecondary} />
+                <Text>📦</Text>
               </View>
             )}
           </View>
@@ -430,7 +431,7 @@ export default function ExistenciasScreen({
 }
 
 // =====================================================================
-// 7. HOJA DE ESTILOS PURIFICADA
+// 7. HOJA DE ESTILOS
 // =====================================================================
 const styles = StyleSheet.create({
   filtrosContainer: {
@@ -484,7 +485,7 @@ const styles = StyleSheet.create({
   imagen: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   imagenPlaceholder: {
     width: '100%',

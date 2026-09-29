@@ -151,8 +151,9 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
     }
   };
 
+
   // =====================================================================
-  // 4. TRANSACCIÓN BASE DE DATOS (DOT NOTATION + ESQUEMA EXACTO)
+  // 4. TRANSACCIÓN BASE DE DATOS (DOT NOTATION + ESQUEMA SANITIZADO)
   // =====================================================================
   const registrarEntradaInventario = async () => {
     if (pedido.length === 0) return;
@@ -170,13 +171,19 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       const entradaRef = doc(db, 'cuentas', cuentaId.toString(), 'entradas', folioUnico);
       const analyticsRef = doc(db, 'cuentas', cuentaId.toString(), 'analytics', folioUnico);
 
-      // 1. Reconstruir el pedido
+      // 1. RECONSTRUCCIÓN Y LIMPIEZA EXTREMA DEL PEDIDO (Deprecación de basura)
+      // Extraemos quirúrgicamente solo los datos transaccionales, dejando atrás propiedades pesadas y de UI
       const pedidoLimpio = pedido.map(item => ({
-        ...item,
-        bonoInfluencer: !!item.bonoInfluencer
+        codigo: item.codigo || 'SIN_CODIGO',
+        nombre: item.nombre,
+        cantidad: Number(item.cantidad) || 1,
+        categoria: item.categoria || 'Sin categoría',
+        bonoInfluencer: !!item.bonoInfluencer,
+        precioCostoStandard: Number(item.precioCostoStandard || item.precioCosto || 0),
+        costoUnitarioAplicado: Number(item.costoUnitarioAplicado || item.precioCosto || 0)
       }));
 
-      // 2. ESQUEMA 100% IDÉNTICO
+      // 2. ESQUEMA 100% IDÉNTICO (Inmune a las Reglas de Seguridad)
       const ordenEntrada = {
         folio: folioUnico,
         fecha: timestampCompleto, 
@@ -200,7 +207,9 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
       };
 
       pedido.forEach(item => {
-        const key = item.id || item.codigo;
+        // 🚨 FIX CRÍTICO: Forzamos que la llave en la base de datos sea el NOMBRE para unificar el catálogo
+        const key = item.nombre; 
+        
         inventarioUpdates[`productos.${key}.cantidad`] = increment(Number(item.cantidad) || 1);
         inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
         inventarioUpdates[`productos.${key}.nombre`] = item.nombre || 'Producto Desconocido';
@@ -232,7 +241,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
   // 5. RENDERIZADO (Adaptado al Tema Minimalista)
   // =====================================================================
   const renderProducto = ({ item }) => {
-    const imagen = imagenes[item.codigo] || null;
+    const imagen = item.imagen || imagenes[item.codigo] || imagenes[item.nombre] || getImagenProducto(item.codigo) || null;
 
     return (
       <TouchableOpacity
@@ -255,7 +264,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           <Image source={imagen} style={styles.productImage} />
         ) : (
           <View style={[styles.productImagePlaceholder, { backgroundColor: themeColors.input }]}>
-            <Text style={styles.productImagePlaceholderText}><FontAwesome6 name="box" size={20} color="black" /></Text>
+            <Text style={{ fontSize: 24 }}>📦</Text>
           </View>
         )}
 
@@ -323,7 +332,7 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
           <FlatList
             data={productosFiltrados.length > 0 ? productosFiltrados : allProducts}
             renderItem={renderProducto}
-            keyExtractor={(item) => item.codigo}
+            keyExtractor={(item, index) => item.codigo ? item.codigo.toString() : (item.nombre ? item.nombre : index.toString())}
             numColumns={3}
             columnWrapperStyle={styles.row}
             scrollEnabled={true}
@@ -340,11 +349,14 @@ export default function EntradaScreen({ onNavigate, darkMode, themeColors }) {
             {selectedProduct && (
               <>
                 <View style={styles.modalImageContainer}>
-                  {imagenes[selectedProduct.codigo] ? (
-                    <Image source={imagenes[selectedProduct.codigo]} style={styles.modalImage} />
+                  {(selectedProduct.imagen || imagenes[selectedProduct.codigo] || imagenes[selectedProduct.nombre] || getImagenProducto(selectedProduct.codigo)) ? (
+                    <Image 
+                      source={selectedProduct.imagen || imagenes[selectedProduct.codigo] || imagenes[selectedProduct.nombre] || getImagenProducto(selectedProduct.codigo)}
+                      style={styles.modalImage} 
+                    />
                   ) : (
                     <View style={styles.modalImagePlaceholder}>
-                      <Text style={styles.modalImagePlaceholderText}><FontAwesome6 name="box" size={18} color="black" /></Text>
+                       <Text style={styles.modalImagePlaceholderText}>📦</Text>
                     </View>
                   )}
                 </View>

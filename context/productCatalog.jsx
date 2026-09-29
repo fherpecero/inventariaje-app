@@ -458,6 +458,20 @@ export const PRODUCT_CATALOG = {
     updatedAt: new Date('2026-06-11'),
     createdBy: 'populate-catalog'
   },
+ '782706461230': {
+     codigo: '782706461230',
+     nombre: 'VITARLY L',
+     descripcion: '1 BOLSA CON 60 CÁPSULAS',
+     categoria: 'capsulas',
+     precioCostoStandard: 350,
+     precioVentaStandard: 700,
+     stock: 0,
+     activo: true,
+     imagen: require('../assets/productos/782706461230.webp'),
+     createdAt: new Date('2026-06-11'),
+     updatedAt: new Date('2026-06-11'),
+     createdBy: 'populate-catalog'
+   },
   '789234444444': {
     codigo: '789234444444',
     nombre: 'NOURISH +',

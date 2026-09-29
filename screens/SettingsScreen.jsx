@@ -348,9 +348,9 @@ export default function SettingsScreen({
             <FontAwesome6 name="circle-info" size={18} color={themeColors.text} /> Información
           </Text>
           <View style={[styles.featureBox, { backgroundColor: themeColors.bgSecondary, borderColor: themeColors.border }]}>
-            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.3</Text>
+            <Text style={[styles.versionTitle, { color: COLORS.turquesa }]}>Versión Actual: v2.5.5</Text>
             <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Compilada: 07/09/2026</Text>
-            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: Centralizacion de calculso para analytics |RN optimizadas y aplicadas |Bug Fix </Text>
+            <Text style={[styles.versionDesc, { color: themeColors.textSecondary }]}>Última actualización: Motor de Imágenes| UI Polish & Bug Fixes| Hotfix: Estabilidad Visual, Placeholders y Renderizado de Imágenes</Text>
           </View>
         </View>
 

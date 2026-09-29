@@ -24,7 +24,7 @@ import SearchBar from '../components/SearchBar';
 import AutocompleteSearchSocios from '../components/AutocompleteSearchSocios';
 import DropdownProductoRecibir from '../components/DropdownProductoRecibir';
 import { COLORS, FONT_SIZES, SPACING, ScreenHeader, GLOBAL_STYLES, HEADER, GradientDivider } from '../context/theme';
-import { getProductosActivos } from '../context/productCatalog'; 
+import { getProductosActivos, getImagenProducto } from '../context/productCatalog';
 
 LogBox.ignoreLogs([
   'DateTimePicker: `onChange` is deprecated',
@@ -424,18 +424,19 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       const inventarioUpdates = { updatedAt: timestampCompleto };
 
       carrito.forEach((item) => {
-        const key = item.id || item.codigo; // Llave maestra
+        const key = item.nombre;
         
         // Usamos increment con valor negativo para restar sin necesidad de internet
         inventarioUpdates[`productos.${key}.cantidad`] = increment(-item.cantidad);
         
-        if (esConsumoBono) {
+        if (item.consumoBono) {
           inventarioUpdates[`productos.${key}.piezasConDescuento`] = increment(-item.cantidad);
         }
         
         inventarioUpdates[`productos.${key}.codigo`] = item.codigo || 'SIN_CODIGO';
         inventarioUpdates[`productos.${key}.nombre`] = item.nombre;
-        inventarioUpdates[`productos.${key}.consumoBono`] = esConsumoBono || false;
+        // Guardamos el historial de si ESTA pieza específica usó bono
+        inventarioUpdates[`productos.${key}.consumoBono`] = item.consumoBono || false;
         inventarioUpdates[`productos.${key}.updatedAt`] = timestampCompleto;
       });
 
@@ -493,7 +494,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       setDescuentoPorcentaje('');
       setCliente('');
       setTipoPago('efectivo');
-      setEsConsumoBono(false);
       if (isMountedRef.current) setLoading(false);
       
       Alert.alert(
@@ -509,7 +509,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
       Alert.alert('Error', 'Fallo al procesar. Detalles: ' + error.message);
       if (isMountedRef.current) {
         setLoading(false);
-        setEsConsumoBono(false);
       }
     }
   };
@@ -628,7 +627,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
 
   const renderProductoGrid = ({ item }) => {
     const codigoReal = item.codigo || item.id;
-    const imagen = imagenes[codigoReal];
+    const imagen = item.imagen || imagenes[codigoReal] || imagenes[item.codigo] || imagenes[item.nombre] || getImagenProducto(codigoReal) || null;
     const sinStock = item.cantidad === 0;
 
     return (
@@ -655,9 +654,7 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
           <Image source={imagen} style={styles.productImage} />
         ) : (
           <View style={[styles.productImagePlaceholder, { backgroundColor: themeColors.input }]}>
-            <Text style={styles.productImagePlaceholderText}>
-              <FontAwesome6 name="box" size={20} color={themeColors.textSecondary} />
-            </Text>
+            <Text style={styles.productImagePlaceholderText}>📦</Text>
           </View>
         )}
         <View style={styles.productInfo}>
@@ -963,40 +960,6 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
                   value={descuentoPorcentaje}
                   onChangeText={setDescuentoPorcentaje}
                 />
-              {/* Columna 2: Bono Influencer  || SE QUITA PARA PONER EL BONO EN POR PRODUCTO
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  marginLeft: 6,
-                  height: 50,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: esConsumoBono ? COLORS.turquesa : themeColors.border,
-                  backgroundColor: esConsumoBono ? COLORS.turquesa : themeColors.bgSecondary,
-                  paddingHorizontal: 15,
-                }}
-                onPress={() => setEsConsumoBono(!esConsumoBono)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={esConsumoBono ? "star" : "star-outline"}
-                  size={18}
-                  color={esConsumoBono ? COLORS.blanco : themeColors.textSecondary}
-                />
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: '600',
-                    marginLeft: 6,
-                    color: esConsumoBono ? COLORS.blanco : themeColors.textSecondary,
-                  }}
-                >
-                  {esConsumoBono ? "Bono Activo" : "Bono Influencer"}
-                </Text>
-              </TouchableOpacity> */}
 
             </View>
           </>
@@ -1139,13 +1102,14 @@ export default function SalidaScreen({ onNavigate, darkMode, themeColors }) {
         <>
           {/* ✨ 1. CONTENEDOR DE IMAGEN RESTAURADO ✨ */}
           <View style={styles.modalImageContainer}>
-            {imagenes[selectedProductModal.codigo || selectedProductModal.id] ? (
-              <Image source={imagenes[selectedProductModal.codigo || selectedProductModal.id]} style={styles.modalImage} />
+            {(selectedProductModal.imagen || imagenes[selectedProductModal.codigo || selectedProductModal.id] || imagenes[selectedProductModal.nombre] || getImagenProducto(selectedProductModal.codigo || selectedProductModal.id)) ? (
+              <Image
+                source={selectedProductModal.imagen || imagenes[selectedProductModal.codigo || selectedProductModal.id] || imagenes[selectedProductModal.nombre] || getImagenProducto(selectedProductModal.codigo || selectedProductModal.id)}
+                style={styles.modalImage}
+              />
             ) : (
               <View style={styles.modalImagePlaceholder}>
-                <Text style={styles.modalImagePlaceholderText}>
-                  <FontAwesome6 name="box" size={18} color="black" />
-                </Text>
+                <Text style={styles.modalImagePlaceholderText}>📦</Text>
               </View>
             )}
           </View>
@@ -1771,6 +1735,17 @@ const styles = StyleSheet.create({
     height: 80, 
     resizeMode: 'contain', 
     marginBottom: 8, 
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: 80,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  productImagePlaceholderText: {
+    fontSize: 24,
   },
   productInfo: { 
     paddingHorizontal: 2, 
